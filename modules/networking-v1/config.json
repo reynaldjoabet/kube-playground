@@ -1,0 +1,33 @@
+{
+  "generatorName": "scala-sttp4-jsoniter",
+  "inputSpec": "modules/networking-v1/networking-v1.json",
+  "outputDir": "modules/networking-v1/src/main/scala",
+  "templateDir": "modules/custom-templates",
+  "mainPackage": "",
+  "apiPackage": "networking.v1.api",
+  "modelPackage": "networking.v1.models",
+  "invokerPackage": "networking.v1",
+  "globalProperties": {
+    "apis": "",
+    "models": "",
+    "supportingFiles": ""
+  },
+  "modelPropertyNaming": "camelCase",
+  "ensureUniqueParams": "true",
+  "sortParamsByRequiredFlag": "true",
+  "sortModelPropertiesByRequiredFlag": "true",
+  "allowUnicodeIdentifiers": "false",
+  "prependFormOrBodyParameters": "false",
+  "enumUnknownDefaultCase": "true",
+  "disallowAdditionalPropertiesIfNotPresent": "false",
+  "separateErrorChannel": "true",
+  "sttpClientVersion": "4.0.15",
+  "jsoniterVersion": "2.38.8",
+  "additionalProperties": {
+    "artifactVersion": "1.0.0",
+    "sourceFolder": "",
+    "apiNameSuffix": "Api",
+    "dateLibrary": "java8",
+    "hideGenerationTimestamp": "true"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "generatorName": "scala-sttp4-jsoniter",
+  "inputSpec": "modules/autoscaling-v2/autoscaling-v2.json",
+  "outputDir": "modules/autoscaling-v2/src/main/scala",
+  "templateDir": "modules/custom-templates",
+  "mainPackage": "",
+  "apiPackage": "autoscaling.v2.api",
+  "modelPackage": "autoscaling.v2.models",
+  "invokerPackage": "autoscaling.v2",
+  "globalProperties": {
+    "apis": "",
+    "models": "",
+    "supportingFiles": ""
+  },
+  "modelPropertyNaming": "camelCase",
+  "ensureUniqueParams": "true",
+  "sortParamsByRequiredFlag": "true",
+  "sortModelPropertiesByRequiredFlag": "true",
+  "allowUnicodeIdentifiers": "false",
+  "prependFormOrBodyParameters": "false",
+  "enumUnknownDefaultCase": "true",
+  "disallowAdditionalPropertiesIfNotPresent": "false",
+  "separateErrorChannel": "true",
+  "sttpClientVersion": "4.0.15",
+  "jsoniterVersion": "2.38.8",
+  "additionalProperties": {
+    "artifactVersion": "1.0.0",
+    "sourceFolder": "",
+    "apiNameSuffix": "Api",
+    "dateLibrary": "java8",
+    "hideGenerationTimestamp": "true"
+  }
+}

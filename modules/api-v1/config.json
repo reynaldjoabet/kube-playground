@@ -1,0 +1,33 @@
+{
+  "generatorName": "scala-sttp4-jsoniter",
+  "inputSpec": "modules/api-v1/api-v1.json",
+  "outputDir": "modules/api-v1/src/main/scala",
+  "templateDir": "modules/custom-templates",
+  "mainPackage": "",
+  "apiPackage": "api.v1.api",
+  "modelPackage": "api.v1.models",
+  "invokerPackage": "api.v1",
+  "globalProperties": {
+    "apis": "",
+    "models": "",
+    "supportingFiles": ""
+  },
+  "modelPropertyNaming": "camelCase",
+  "ensureUniqueParams": "true",
+  "sortParamsByRequiredFlag": "true",
+  "sortModelPropertiesByRequiredFlag": "true",
+  "allowUnicodeIdentifiers": "false",
+  "prependFormOrBodyParameters": "false",
+  "enumUnknownDefaultCase": "true",
+  "disallowAdditionalPropertiesIfNotPresent": "false",
+  "separateErrorChannel": "true",
+  "sttpClientVersion": "4.0.15",
+  "jsoniterVersion": "2.38.8",
+  "additionalProperties": {
+    "artifactVersion": "1.0.0",
+    "sourceFolder": "",
+    "apiNameSuffix": "Api",
+    "dateLibrary": "java8",
+    "hideGenerationTimestamp": "true"
+  }
+}
