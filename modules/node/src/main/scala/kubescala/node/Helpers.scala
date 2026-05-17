@@ -13,15 +13,14 @@ import scala.deriving.*
 import scala.compiletime.*
 import java.io.File
 import java.util.UUID
-import java.time.{LocalDate, LocalDateTime, OffsetDateTime}
-import java.net.URI
+import java.time.{LocalDate, OffsetDateTime}
 import com.github.plokhotnyuk.jsoniter_scala.core.{
   JsonValueCodec,
   writeToString
 }
 
 type Primitive = String | Short | Int | Long | Float | Double | BigDecimal |
-  Boolean | UUID | LocalDate | LocalDateTime | OffsetDateTime | URI
+  Boolean | UUID | LocalDate | OffsetDateTime
 
 enum Authorization:
   case NoAuthorization
@@ -190,7 +189,7 @@ object FormSerializable:
         else
           Seq(
             paramName -> values.mkString(" ")
-          ) // Sttp will encode space as +, from https://swagger.io/docs/specification/v3_0/serialization/#query-parameters it is not clear if it should be[...]
+          ) // Sttp will encode space as +, from https://swagger.io/docs/specification/v3_0/serialization/#query-parameters it is not clear if it should be + or %20
       case FormStyleFormat.PIPEDELIMITED =>
         inline if explode then values.map(s => (paramName, s.toString))
         else Seq(paramName -> values.mkString("|"))

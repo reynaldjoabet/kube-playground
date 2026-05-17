@@ -21,7 +21,7 @@ case class PodSpec(
       scala.None,
     /* If specified, the pod's scheduling constraints */
     @named("affinity") affinity: Option[Affinity] = scala.None,
-    /* AutomountServiceAccountToken indicates whether a service account token should be automatically mounted. */
+    /* AutomountServiceAccountToken indicates whether a ServiceAccount token should be automatically mounted. */
     @named("automountServiceAccountToken") automountServiceAccountToken: Option[
       Boolean
     ] = scala.None,

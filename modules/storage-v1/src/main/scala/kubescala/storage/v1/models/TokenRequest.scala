@@ -11,7 +11,7 @@ package kubescala.storage.v1.models
 
 import com.github.plokhotnyuk.jsoniter_scala.macros.named
 
-/** TokenRequest contains parameters of a service account token.
+/** TokenRequest contains parameters of a ServiceAccount token.
   */
 case class TokenRequest(
     /* audience is the intended audience of the token in \"TokenRequestSpec\". It will default to the audiences of kube apiserver. */

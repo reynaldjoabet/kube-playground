@@ -10,7 +10,7 @@
                 "tags": [
                     "openid"
                 ],
-                "description": "get service account issuer OpenID JSON Web Key Set (contains public token verification keys)",
+                "description": "get ServiceAccount issuer OpenID JSON Web Key Set (contains public token verification keys)",
                 "operationId": "getServiceAccountIssuerOpenIDKeyset",
                 "responses": {
                     "200": {

@@ -27068,7 +27068,7 @@
                 }
             },
             "io.k8s.api.authentication.v1.TokenRequest": {
-                "description": "TokenRequest requests a token for a given service account.",
+                "description": "TokenRequest requests a token for a given ServiceAccount.",
                 "type": "object",
                 "required": [
                     "spec"
@@ -33036,7 +33036,7 @@
                         ]
                     },
                     "automountServiceAccountToken": {
-                        "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+                        "description": "AutomountServiceAccountToken indicates whether a ServiceAccount token should be automatically mounted.",
                         "type": "boolean"
                     },
                     "containers": {
@@ -35064,7 +35064,7 @@
                         "type": "string"
                     },
                     "automountServiceAccountToken": {
-                        "description": "AutomountServiceAccountToken indicates whether pods running as this service account should have an API token automatically mounted. Can be overridden at the pod level.",
+                        "description": "AutomountServiceAccountToken indicates whether pods running as this ServiceAccount should have an API token automatically mounted. Can be overridden at the pod level.",
                         "type": "boolean"
                     },
                     "imagePullSecrets": {
@@ -35094,7 +35094,7 @@
                         ]
                     },
                     "secrets": {
-                        "description": "Secrets is a list of the secrets in the same namespace that pods running using this ServiceAccount are allowed to use. Pods are only limited to this list if this service account has a \"kubernetes.io/enforce-mountable-secrets\" annotation set to \"true\". The \"kubernetes.io/enforce-mountable-secrets\" annotation is deprecated since v1.32. Prefer separate namespaces to isolate access to mounted secrets. This field should not be used to find auto-generated service account token secrets for use outside of pods. Instead, tokens can be requested directly using the TokenRequest API, or service account token secrets can be manually created. More info: https://kubernetes.io/docs/concepts/configuration/secret",
+                        "description": "Secrets is a list of the secrets in the same namespace that pods running using this ServiceAccount are allowed to use. Pods are only limited to this list if this ServiceAccount has a \"kubernetes.io/enforce-mountable-secrets\" annotation set to \"true\". The \"kubernetes.io/enforce-mountable-secrets\" annotation is deprecated since v1.32. Prefer separate namespaces to isolate access to mounted secrets. This field should not be used to find auto-generated ServiceAccount token secrets for use outside of pods. Instead, tokens can be requested directly using the TokenRequest API, or ServiceAccount token secrets can be manually created. More info: https://kubernetes.io/docs/concepts/configuration/secret",
                         "type": "array",
                         "items": {
                             "default": {},
@@ -35166,7 +35166,7 @@
                 ]
             },
             "io.k8s.api.core.v1.ServiceAccountTokenProjection": {
-                "description": "ServiceAccountTokenProjection represents a projected service account token volume. This projection can be used to insert a service account token into the pods runtime filesystem for use against APIs (Kubernetes API Server or otherwise).",
+                "description": "ServiceAccountTokenProjection represents a projected ServiceAccount token volume. This projection can be used to insert a ServiceAccount token into the pods runtime filesystem for use against APIs (Kubernetes API Server or otherwise).",
                 "type": "object",
                 "required": [
                     "path"
@@ -35177,7 +35177,7 @@
                         "type": "string"
                     },
                     "expirationSeconds": {
-                        "description": "expirationSeconds is the requested duration of validity of the service account token. As the token approaches expiration, the kubelet volume plugin will proactively rotate the service account token. The kubelet will start trying to rotate the token if the token is older than 80 percent of its time to live or if the token is older than 24 hours.Defaults to 1 hour and must be at least 10 minutes.",
+                        "description": "expirationSeconds is the requested duration of validity of the ServiceAccount token. As the token approaches expiration, the kubelet volume plugin will proactively rotate the ServiceAccount token. The kubelet will start trying to rotate the token if the token is older than 80 percent of its time to live or if the token is older than 24 hours.Defaults to 1 hour and must be at least 10 minutes.",
                         "type": "integer",
                         "format": "int64"
                     },

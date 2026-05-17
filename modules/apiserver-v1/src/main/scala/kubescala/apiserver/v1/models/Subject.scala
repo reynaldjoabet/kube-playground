@@ -13,7 +13,7 @@ import com.github.plokhotnyuk.jsoniter_scala.macros.named
 
 /** Subject matches the originator of a request, as identified by the request
   * authentication system. There are three ways of matching an originator; by
-  * user, group, or service account.
+  * user, group, or ServiceAccount.
   */
 case class Subject(
     /* `kind` indicates which one of the other fields is non-empty. Required */

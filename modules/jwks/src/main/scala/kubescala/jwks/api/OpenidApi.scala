@@ -74,7 +74,7 @@ case class OpenidApi[Auth <: kubescala.jwks.Authorization] private (
   ): OpenidApi[kubescala.jwks.Authorization.BearerToken] =
     copy(authConfig = kubescala.jwks.Authorization.BearerToken(token))
 
-  /** get service account issuer OpenID JSON Web Key Set (contains public token
+  /** get ServiceAccount issuer OpenID JSON Web Key Set (contains public token
     * verification keys)
     *
     * Expected answers: code 200 : String (OK) code 401 : (Unauthorized)
