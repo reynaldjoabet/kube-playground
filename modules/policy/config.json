@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/policy/policy.json",
   "outputDir": "modules/policy/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "policy.api",
   "modelPackage": "policy.models",

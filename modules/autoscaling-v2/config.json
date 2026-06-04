@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/autoscaling-v2/autoscaling-v2.json",
   "outputDir": "modules/autoscaling-v2/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "autoscaling.v2.api",
   "modelPackage": "autoscaling.v2.models",

@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/rbac-v1/rbac-v1.json",
   "outputDir": "modules/rbac-v1/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "rbac.v1.api",
   "modelPackage": "rbac.v1.models",

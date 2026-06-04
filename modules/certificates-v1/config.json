@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/certificates-v1/certificates-v1.json",
   "outputDir": "modules/certificates-v1/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "certificates.v1.api",
   "modelPackage": "certificates.v1.models",

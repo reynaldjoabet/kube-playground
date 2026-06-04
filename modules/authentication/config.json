@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/authentication/authentication.json",
   "outputDir": "modules/authentication/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "authentication.api",
   "modelPackage": "authentication.models",

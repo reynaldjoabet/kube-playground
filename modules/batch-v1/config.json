@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/batch-v1/batch-v1.json",
   "outputDir": "modules/batch-v1/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "batch.v1.api",
   "modelPackage": "batch.v1.models",

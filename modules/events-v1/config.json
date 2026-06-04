@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/events-v1/events-v1.json",
   "outputDir": "modules/events-v1/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "events.v1.api",
   "modelPackage": "events.v1.models",

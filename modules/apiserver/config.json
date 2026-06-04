@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/apiserver/apiserver.json",
   "outputDir": "modules/apiserver/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "apiserver.api",
   "modelPackage": "apiserver.models",

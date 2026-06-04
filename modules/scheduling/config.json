@@ -2,7 +2,6 @@
   "generatorName": "scala-sttp4-jsoniter",
   "inputSpec": "modules/scheduling/scheduling.json",
   "outputDir": "modules/scheduling/src/main/scala",
-  "templateDir": "modules/custom-templates",
   "mainPackage": "",
   "apiPackage": "scheduling.api",
   "modelPackage": "scheduling.models",
