@@ -26,7 +26,7 @@ lazy val root = (project in file("."))
       sttpCore,
       sttpJsoniter,
       http4sBackend,
-      `http4s-dsl`,
+      http4sDsl,
       emberServer,
       fs2,
       chimney,
@@ -44,7 +44,6 @@ lazy val root = (project in file("."))
       munit
     )
   )
-  // .dependsOn(`k8-codegen` % "compile->compile")
   .enablePlugins(BuildInfoPlugin)
   .settings(
     buildInfoKeys := Seq[BuildInfoKey](

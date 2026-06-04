@@ -1,5 +1,4 @@
 # kube-playground
-
 Scala client for the Kubernetes API
 
 Typed Kubernetes Client for creating, reading, updating, removing, listing and watching resources on a Kubernetes cluster

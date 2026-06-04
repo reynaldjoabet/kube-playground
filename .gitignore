@@ -35,3 +35,6 @@ web/.DS_Store
 .scala-build/
 
 # target folder pattern matches recursively, so target (and all other modules/*/target/ directories) will be excluded from git.
+
+.claude/
+.mcp.json
