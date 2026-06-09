@@ -697,3 +697,222 @@ As shown in the graphic above, the API server calls the AKS webhook server and p
 - The API performs an authorization decision based on the Kubernetes Role/RoleBinding.
 - Once authorized, the API server returns a response to `kubectl`.
 - `kubectl` provides feedback to the user.
+
+
+```sh
+$ k get svc
+NAME         TYPE           CLUSTER-IP    EXTERNAL-IP      PORT(S)        AGE
+kubernetes   ClusterIP      10.0.0.1      <none>           443/TCP        24m
+whereami     LoadBalancer   10.0.159.58   51.144.176.251   80:30064/TCP   11m
+
+$ k get ep whereami
+NAME       ENDPOINTS                      AGE
+whereami   10.13.76.26:80,10.13.76.7:80   37m
+
+$ k get pod -o wide
+NAME                       READY     STATUS    RESTARTS   AGE       IP            NODE                       NOMINATED NODE
+whereami-564765b89-j7bpw   1/1       Running   0          46m       10.13.76.7    aks-nodepool1-31351229-0   <none>
+whereami-564765b89-qfq2k   1/1       Running   0          46m       10.13.76.26   aks-nodepool1-31351229-0   <none>lb=$(az network lb list -g $noderg -o tsv --query [0].name)
+```
+
+As you can see, the service is of type LoadBalancer. That means that there should be an Azure Load Balancer in our resource group
+
+```sh
+-A KUBE-FW-7G2JV7LNOR6DDNIY -m comment --comment "default/whereami: loadbalancer IP" -j KUBE-MARK-MASQ
+-A KUBE-FW-7G2JV7LNOR6DDNIY -m comment --comment "default/whereami: loadbalancer IP" -j KUBE-SVC-7G2JV7LNOR6DDNIY
+-A KUBE-FW-7G2JV7LNOR6DDNIY -m comment --comment "default/whereami: loadbalancer IP" -j KUBE-MARK-DROP
+```
+
+The first rule marks the packet for Masquerading (iptables naming convention for source NAT). Marking a packet is a ‘non-terminating’ rule in iptables. That means that further rules in the chain are processed.
+
+The second one has a target of `KUBE-SVC-7G2JV7LNOR6DDNIY`. Note that there is a third rule that would mark the packets to be dropped, should the previous rule not hit any terminating rule. Let’s have a look at this target:
+
+```sh
+-A KUBE-SVC-7G2JV7LNOR6DDNIY -m comment --comment "default/whereami:" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-6HBOEI5FVFTJNRJ3
+-A KUBE-SVC-7G2JV7LNOR6DDNIY -m comment --comment "default/whereami:" -j KUBE-SEP-IJTMGMPNVALZGJZD
+```
+
+These are the `EndPoint` rules, you will see here as many as endpoints in your service. Note that there is a probability associated to each endpoint, this is how iptables load balances the traffic. Finally, let’s have a look at the first of those endpoint chains:
+
+```sh
+-A KUBE-SEP-6HBOEI5FVFTJNRJ3 -s 10.13.76.26/32 -m comment --comment "default/whereami:" -j KUBE-MARK-MASQ
+-A KUBE-SEP-6HBOEI5FVFTJNRJ3 -p tcp -m comment --comment "default/whereami:" -m tcp -j DNAT --to-destination 10.13.76.26:80
+```
+
+The first rule will mark return traffic coming from the pod to be masqueraded (NATted), the second is what actually redirects the traffic to the corresponding endpoint (pod), in this case the one with IP address `10.13.76.26.`
+
+Let us have a look at what this port marking is about:
+```sh
+sudo iptables -t nat -L KUBE-MARK-MASQ
+Chain KUBE-MARK-MASQ (19 references)
+target     prot opt source               destination
+MARK       all  --  anywhere             anywhere             MARK or 0x4000
+```
+```sh
+sudo iptables -L -t nat -v | grep -i masquerade
+    0     0 MASQUERADE  all  --  any    !docker0  172.17.0.0/16        anywhere
+ 3260  203K MASQUERADE  all  --  any    any     anywhere            !10.0.0.0/8           destination IP range ! 168.63.129.16-168.63.129.16 ADDRTYPE match dst-type !LOCAL
+    4   208 MASQUERADE  all  --  any    any     anywhere             anywhere             /* kubernetes service traffic requiring SNAT */ mark match 0x4000/0x4000
+```    
+
+As you can see, the `KUBE-MARK-MASQ` rule sets a mark doing a logical OR with `0x4000` (one bit) with the packet marking. This marking will be then checked by the masquerading to SNAT the traffic
+
+[a-day-in-the-life-of-a-packet-in-azure-kubernetes-service-with-the-azure-cni](https://blog.cloudtrooper.net/2019/01/21/a-day-in-the-life-of-a-packet-in-azure-kubernetes-service-with-the-azure-cni/)
+
+```sh
+KUBE-SERVICES → KUBE-FW-<hash> → KUBE-SVC-<hash> → KUBE-SEP-<hash>
+                     ↑
+              extra step exists ONLY for LoadBalancer traffic
+```
+ClusterIP traffic skips `KUBE-FW` entirely and goes straight to `KUBE-SVC`:
+```sh
+KUBE-SERVICES → KUBE-SVC-<hash> → KUBE-SEP-<hash>
+```
+So the `FW` chain is the difference between "internal service traffic" and "external traffic that arrived via the cloud LB".
+
+The three jobs `KUBE-FW` does
+
+1. Source range enforcement (the primary reason it's named "FW")
+
+If your Service has:
+```sh
+spec:
+  type: LoadBalancer
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+    - 192.168.0.0/16
+```    
+
+The chain becomes:
+```sh
+KUBE-FW-XXX
+  -s 10.0.0.0/8     -j KUBE-SVC-XXX     # allowed
+  -s 192.168.0.0/16 -j KUBE-SVC-XXX     # allowed
+  -j KUBE-MARK-DROP                      # anything else → DROP
+```  
+
+2. Masquerade marking for cross-node traffic
+
+When external traffic hits Node A's LoadBalancer NodePort but the selected pod is on Node B, the packet must cross nodes. The source IP must be replaced with Node A's IP (so the reply comes back through Node A and conntrack can reverse the DNAT). The mark set in` KUBE-FW` flags this.
+
+3. The "anchor" for the cloud LB's public IP
+
+The LoadBalancer's public VIP gets a dedicated rule in KUBE-SERVICES:
+
+`-A KUBE-SERVICES -d <LB-public-IP>/32 --dport 80 -j KUBE-FW-XXX`
+
+`KUBE-FW-XXX` is what that VIP-specific traffic jumps to. ClusterIP traffic for the same service jumps to a different chain (`KUBE-SVC-XXX` directly), even though they ultimately reach the same endpoints. This separation lets the two paths apply different policy.
+
+## Private Link
+This is a fantastic feature, many organizations have been waiting for this for a long time. Now that say your Azure Storage account is accessible via a private IP address, what if you want to restrict traffic to it, so that not everybody in your organization has IP connectivity to it?
+
+
+Azure has a rich set of global load balancers that help you distribute your application across many regions: `Azure Front Door` for web apps, `Azure Traffic Manager` as a DNS-based global load balancer for any IP-based application, and the `Global Load Balancer`, which doesn’t rely on DNS
+
+`anycast load balancing works very differently than other load balancing mechanisms. `
+
+![alt text](image-9.png)
+
+A virtual IP (VIP) address is defined in the load balancer, which attracts the traffic to it. The load balancer will typically proxy the connections and create another backend connection to one of the application servers.
+
+However, this implies that the load balancer will be located in a specific region. When your load balancer needs to be distributed across multiple locations, DNS is often used as an alternative technology:
+
+![alt text](image-10.png)
+
+This approach is completely different to the canonical load balancing concept: the client can reach all application servers, each having a different IP address. 
+
+Azure Traffic Manager is Microsoft’s offer for DNS-based load balancing, but unfortunately it only supports public applications
+
+
+There is a third approach for global load balancing, and that is leaving the load balancing decision entirely to the network, as the following image shows:
+
+![alt text](image-11.png)
+
+The same application virtual IP address is advertised from different regions into the routing protocol. When a request enters the network with the application’s IP address as the destination, this routing protocol will decide which of the three regions is closest, and will send the client to that destination server
+
+
+Azure Front Door and the Global Load Balancer also use anycast under the hood
+
+[](https://blog.cloudtrooper.net/2026/04/20/private-global-load-balancing-in-azure-with-anycast-no-bgp/)
+
+[](https://blog.cloudtrooper.net/2025/02/17/private-link-reality-bites-service-endpoints-vs-private-link/)
+
+[](https://blog.cloudtrooper.net/2022/11/29/azure-hub-and-spoke-2-0/)
+
+[](https://blog.cloudtrooper.net/2021/11/11/what-language-does-the-azure-gateway-load-balancer-speak/)
+
+[](https://book.systemsapproach.org/foundation.html)
+
+![alt text](image-13.png)
+
+There are two layers of hub-and-spoke here:
+- *Regional hub (per region — two shown)*:
+```sh
+Transit VNet (the regional hub)
+   │  ├── SDWAN appliance pair (for on-premises traffic)
+   │  └── Firewall appliance pair (for internet traffic)
+   │
+   ├── VNet Peering ──> Prod Pod Collection VNet  (spoke)
+   └── VNet Peering ──> Non-Prod Pod Collection VNet  (spoke)
+```   
+*Global hub (Virtual WAN at the bottom)*:
+```sh
+vHub (Canada Central) ─┬─ Full mesh ─┬─ vHub (West Europe)
+                       └─ Full mesh ─┴─ vHub (Australia East)
+                                     ... etc.
+```                                     
+Every spoke VNet (Prod + Non-Prod, in every region) connects to its local vHub, and all vHubs are full-meshed globally. `So a pod in Canada can talk to a pod in Australia via the Microsoft backbone without going through public internet`.
+
+### The Transit VNet — two parallel ingress paths
+
+This is the most important design decision in the diagram. The Transit VNet has two completely separate appliance pairs, each with its own role:
+
+| Path | Used for | Appliances |
+|------|----------|------------|
+| SDWAN (Cisco) | Traffic to/from on-premises datacenters | Cisco SDWAN — Untrusted/Trusted zones with a load balancer between |
+| Firewall (Palo Alto VM-Series) | Traffic to/from the public internet | Palo Alto firewall — Untrusted/Mgmt/Trusted zones with a load balancer |
+
+Each pair is `active/active` (two boxes shown for HA), fronted by an internal load balancer so a failure of one doesn't drop traffic. The load balancer also handles connection persistence so return traffic comes back through the same appliance (critical for stateful firewall/NAT).
+
+### The Spoke VNets — subnet segmentation
+Each Pod Collection VNet has four subnets, each with its own `NSG (Network Security Group)`:
+
+```sh
+Prod Pod Collection VNet
+├── FrontEnd Subnet   — LB, NSG, Route Table   (ingress controllers, public-facing)
+├── App Subnet        — NSG                    (business logic pods)
+├── Data Subnet       — NSG                    (databases, stateful workloads)
+└── Services Subnet   — NSG                    (shared platform: monitoring, logging, etc.)
+```
+The pattern is tiered isolation:
+
+| Subnet | Can talk to | Reachable from |
+|--------|-------------|----------------|
+| FrontEnd | App | Internet (via Transit VNet firewall) |
+| App | Data, Services | FrontEnd only |
+| Data | (nothing outbound) | App only |
+| Services | App, Data | App only |
+
+This is enforced by NSGs on each subnet. So a compromised FrontEnd pod can't reach the database directly — it has to go through an App pod, which is the only path NSG allows.
+
+The Route Table on FrontEnd Subnet is particularly important — it likely has a default route pointing back to the Transit VNet's firewall, forcing all egress through the security appliances.
+
+
+## Private Endpoint 
+A Private Endpoint is a physical network interface (NIC) that lives right inside your own Virtual Network (VNet).
+
+What it does: It assigns a private IP address from your VNet to an external cloud service (like a database or a storage account).
+
+Example: You have an Azure SQL Database. Normally, you access it over the public internet. By creating a Private Endpoint, that database gets an IP address like 10.0.0.5 inside your VNet
+
+`Private Link is the actual service that allows you to link your newly created Private Endpoint to your specific Azure Storage account, preventing anyone else from accessing it over the internet.`
+
+`Private Link is the feature. Private Endpoint is the private IP/NIC you deploy to use that feature.`
+
+For example, say you have an Azure Storage Account.
+
+Without Private Link, clients may reach it through its public endpoint, depending on configuration.
+
+With Private Link, you create a Private Endpoint in your VNet. That private endpoint gets a private IP, such as 10.0.1.5, and traffic from your VNet to the storage account goes privately through Microsoft’s backbone network rather than the public internet. Microsoft describes Private Link as access to Azure PaaS and hosted services “over a private endpoint,” with traffic travelling on the Microsoft backbone
+
+A Private Endpoint is specifically a network interface that connects privately to a service powered by Azure Private Link. It uses a private IP address from your subnet and maps traffic to the target service.
