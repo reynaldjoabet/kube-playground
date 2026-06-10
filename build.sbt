@@ -1,6 +1,6 @@
 import Dependencies.*
 
-ThisBuild / scalaVersion := "3.3.7"
+ThisBuild / scalaVersion := "3.3.8"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalacOptions ++= Seq(
@@ -15,7 +15,7 @@ ThisBuild / scalacOptions ++= Seq(
   //   "-Wunused:implicits",
   //   "-Wunused:params",
   //   "-Wvalue-discard",
-  // "-language:strictEquality",
+  "-language:strictEquality",
   "-Xmax-inlines:100000"
 )
 
@@ -102,7 +102,7 @@ lazy val root = (project in file("."))
   )
 
 val commonSettings = Seq(
-  scalaVersion := "3.3.7",
+  scalacOptions := Seq.empty,
   openApiInputSpec := (baseDirectory.value / (name.value + ".json")).getPath,
   openApiModelNamePrefix := "",
   openApiModelNameSuffix := "",
@@ -114,6 +114,7 @@ val commonSettings = Seq(
   openApiGenerateMetadata := SettingDisabled,
   // Use the module-local config.json
   openApiConfigFile := (baseDirectory.value / "config.json").getPath,
+  openApiIgnoreFileOverride := ((ThisBuild / baseDirectory).value / ".openapi-generator-ignore").getPath,
 
   // Put generated sources where SBT expects managed sources
   openApiOutputDir := ((Compile / baseDirectory).value / "src/main/scala").getAbsolutePath,
