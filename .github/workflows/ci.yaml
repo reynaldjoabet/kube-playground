@@ -6,30 +6,34 @@ on:
   pull_request:
     branches: [main]
 
-# Security: Apply the principle of least privilege
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: Build Java ${{ matrix.java }} on ${{ matrix.os }}
+    name: Build Java ${{ matrix.java }} (${{ matrix.distribution }}) on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30 
-    
+    timeout-minutes: 30
+
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
         java: [17, 21]
+        distribution: [temurin, corretto]
         os: [ubuntu-latest]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6 
+        uses: actions/checkout@v7
 
-      - name: Set up Java ${{ matrix.java }}
+      - name: Set up Java ${{ matrix.java }} (${{ matrix.distribution }})
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: ${{ matrix.distribution }}
           java-version: ${{ matrix.java }}
           cache: 'sbt'
           check-latest: false
@@ -38,8 +42,16 @@ jobs:
             **/project/build.properties
             **/project/*.scala
             **/project/**/*.scala
+
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
-      - name: Run Tests
-        run: sbt test
+      - name: Lint, compile, and test
+        run: sbt -v --server "scalafmtSbtCheck; scalafmtCheckAll; Test/compile; test"
+
+      # Alternatively, run as separate steps:
+      # - name: Check formatting
+      #   run: sbt -v --server "scalafmtSbtCheck; scalafmtCheckAll"
+      #
+      # - name: Compile and test
+      #   run: sbt -v --server "Test/compile; test"
