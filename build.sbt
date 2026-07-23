@@ -111,9 +111,9 @@ val commonSettings = Seq(
   openApiInvokerPackage := s"kubescala.${name.value.replace("-", ".")}",
   // openApiRemoveOperationIdPrefix := Some(true),
   openApiGenerateMetadata := SettingDisabled,
-  // Use the module-local config.json
+  // Use the module-local config.json and ignore file
   openApiConfigFile := (baseDirectory.value / "config.json").getPath,
-  openApiIgnoreFileOverride := ((ThisBuild / baseDirectory).value / "modules" / ".openapi-generator-ignore").getPath,
+  openApiIgnoreFileOverride := (baseDirectory.value / ".openapi-generator-ignore").getPath,
 
   // Put generated sources where SBT expects managed sources
   openApiOutputDir := ((Compile / baseDirectory).value / "src/main/scala").getAbsolutePath,
@@ -131,10 +131,7 @@ val commonSettings = Seq(
   // (allInputFiles / changedInputFiles) are @transient, i.e. deliberately
   // excluded from cache input. A Def.cachedTask would therefore keep serving
   // a stale client whenever the spec changed, so we always regenerate.
-  //
-  // build.sbt/README.md are skipped at the source via
-  // modules/.openapi-generator-ignore; this filter is a defensive backstop
-  // so only .scala ever reaches sourceGenerators below.
+
   generate := Def.uncached {
     openApiGenerate.value
   },
