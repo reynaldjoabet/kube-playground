@@ -111,9 +111,9 @@ val commonSettings = Seq(
   openApiInvokerPackage := s"kubescala.${name.value.replace("-", ".")}",
   // openApiRemoveOperationIdPrefix := Some(true),
   openApiGenerateMetadata := SettingDisabled,
-  // Use the module-local config.json and ignore file
+  // Use the module-local config.json
   openApiConfigFile := (baseDirectory.value / "config.json").getPath,
-  openApiIgnoreFileOverride := (baseDirectory.value / ".openapi-generator-ignore").getPath,
+  openApiIgnoreFileOverride := ((ThisBuild / baseDirectory).value / "modules" / ".openapi-generator-ignore").getPath,
 
   // Put generated sources where SBT expects managed sources
   openApiOutputDir := ((Compile / baseDirectory).value / "src/main/scala").getAbsolutePath,

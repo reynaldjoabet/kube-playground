@@ -1,0 +1,18 @@
+# OpenAPI Generator Ignore
+# Files listed here are NOT generated/overwritten by the generator.
+# Syntax mirrors .gitignore.
+
+# Don't emit scalafmt config or an sbt project/build.sbt per generated
+# module -- formatting and build are owned at the repo root. Also skip
+# README.md; it's not part of the compiled sources.
+#
+# NOTE: This file is shared by all modules, so it sits above each
+# module's output dir (modules/<name>/src/main/scala). Patterns are
+# matched relative to THIS file's directory, so a single `*` steps down
+# into each module by name before anchoring on its actual output root
+# -- this only matches at the root of each project, not at any nested
+# depth underneath it (which a `**/` prefix would also match).
+*/src/main/scala/.scalafmt.conf
+*/src/main/scala/project/
+*/src/main/scala/README.md
+*/src/main/scala/build.sbt
