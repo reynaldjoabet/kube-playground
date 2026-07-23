@@ -110,7 +110,6 @@ val commonSettings = Seq(
   openApiModelPackage := s"kubescala.${name.value.replace("-", ".")}" + ".models",
   openApiInvokerPackage := s"kubescala.${name.value.replace("-", ".")}",
   // openApiRemoveOperationIdPrefix := Some(true),
-  openApiGenerateMetadata := Some(false),
   openApiGenerateMetadata := SettingDisabled,
   // Use the module-local config.json
   openApiConfigFile := (baseDirectory.value / "config.json").getPath,
@@ -123,20 +122,42 @@ val commonSettings = Seq(
   openApiValidateSpec := SettingDisabled,
   // Fail fast on bad specs (optional but recommended)
   // openApiValidateSpec := Some(true),
-  // Compile / sourceGenerators += openApiGenerate.taskValue,
-  (Compile / compile) := ((Compile / compile) dependsOn generate).value,
-  // (Compile/compile) := ((compile in Compile) dependsOn openApiGenerate).value
 
-  // Define the simple generate command to generate full client codes
-  generate := {
-    val _ = openApiGenerate.value
-
-    // Delete the generated build.sbt file so that it is not used for our sbt config
-    val buildSbtFile = file(openApiOutputDir.value) / "build.sbt"
-    if (buildSbtFile.exists()) {
-      buildSbtFile.delete()
-    }
+  // Define the simple generate command to generate full client codes.
+  //
+  // Must stay uncached. sbt 2 caches `:=` task results by default, but the
+  // cache key is built from the task's `.value` inputs, and nothing here
+  // hashes the OpenAPI spec's *contents* -- sbt's own file-input keys
+  // (allInputFiles / changedInputFiles) are @transient, i.e. deliberately
+  // excluded from cache input. A Def.cachedTask would therefore keep serving
+  // a stale client whenever the spec changed, so we always regenerate.
+  //
+  // build.sbt/README.md are skipped at the source via
+  // modules/.openapi-generator-ignore; this filter is a defensive backstop
+  // so only .scala ever reaches sourceGenerators below.
+  generate := Def.uncached {
+    openApiGenerate.value
   },
+  // Wired in as a sourceGenerator, NOT as `compile.dependsOn(generate)`.
+  // sbt collects `sources` by globbing src/main/scala in a task separate from
+  // `compile`, and dependsOn only sequences generate ahead of `compile` --
+  // not ahead of that glob. So on a clean checkout the glob would run first,
+  // find nothing, and the module would compile 0 sources, leaving its
+  // api/models off the classpath and failing every downstream import that
+  // depends on it -- and locally you'd never notice, since the previous run's
+  // files are still on disk and the glob always finds those. A sourceGenerator
+  // feeds `sources` directly, so sbt has to run it first.
+  //
+  // No separate glob needed: generate is typed Seq[File] (see
+  // Dependencies.scala), so its own return value -- the exact file list
+  // openApiGenerate just wrote -- IS what sourceGenerators needs.
+  Compile / sourceGenerators += generate.taskValue,
+  // openApiOutputDir *is* src/main/scala, so the generator above already
+  // covers everything sbt would otherwise pick up as unmanaged sources.
+  // Dropping the unmanaged dir makes the generator the single source of
+  // truth instead of having sbt separately glob a directory that's empty on
+  // a clean checkout.
+  Compile / unmanagedSourceDirectories := Seq.empty,
   libraryDependencies ++= Seq(
     sttpJsoniter,
     jsoniter,
