@@ -169,7 +169,7 @@ lazy val admissionRegistration =
     .settings(
       name := "admissionregistration"
     )
-    .settings(commonSettings: _*)
+    .settings(commonSettings *)
 
 lazy val admissionRegistrationV1 =
   (project in file("modules/admission-registration-v1"))
@@ -177,21 +177,21 @@ lazy val admissionRegistrationV1 =
     .settings(
       name := "admissionregistration-v1"
     )
-    .settings(commonSettings: _*)
+    .settings(commonSettings *)
 
 lazy val api = (project in file("modules/api"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "api"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 val apiV1 = (project in file("modules/api-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "api-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val apiextensions = (project in file("modules/apiextensions"))
   .enablePlugins(OpenApiGeneratorPlugin)
@@ -204,7 +204,7 @@ lazy val apiextensionsV1 = (project in file("modules/apiextensions-v1"))
   .settings(
     name := "apiextensions-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val apis = (project in file("modules/apis"))
   .enablePlugins(OpenApiGeneratorPlugin)
@@ -217,7 +217,7 @@ lazy val apis = (project in file("modules/apis"))
 //   .settings(
 //     name := "apis-v1"
 //   )
-//   .settings(commonSettings: _*)
+//   .settings(commonSettings*)
 
 lazy val apiserver =
   (project in file("modules/apiserver"))
@@ -225,7 +225,7 @@ lazy val apiserver =
     .settings(
       name := "apiserver"
     )
-    .settings(commonSettings: _*)
+    .settings(commonSettings *)
 
 lazy val apiserverV1 =
   (project in file("modules/apiserver-v1"))
@@ -233,195 +233,195 @@ lazy val apiserverV1 =
     .settings(
       name := "apiserver-v1"
     )
-    .settings(commonSettings: _*)
+    .settings(commonSettings *)
 
 lazy val apps = (project in file("modules/apps"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "apps"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val appsV1 = (project in file("modules/apps-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "apps-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val authentication = (project in file("modules/authentication"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "authentication"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val authenticationV1 = (project in file("modules/authentication-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "authentication-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val authorization = (project in file("modules/authorization"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "authorization"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val authorizationV1 = (project in file("modules/authorization-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "authorization-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val autoscaling = (project in file("modules/autoscaling"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "autoscaling"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val autoscalingV1 = (project in file("modules/autoscaling-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "autoscaling-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val autoscalingV2 = (project in file("modules/autoscaling-v2"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "autoscaling-v2"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val batch = (project in file("modules/batch"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "batch"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val batchV1 = (project in file("modules/batch-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "batch-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val certificates = (project in file("modules/certificates"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "certificates"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val certificatesV1 = (project in file("modules/certificates-v1"))
   .settings(
     name := "certificates-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val coordination = (project in file("modules/coordination"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "coordination"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val coordinationV1 = (project in file("modules/coordination-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "coordination-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val discovery = (project in file("modules/discovery"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "discovery"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 val discoveryV1 = (project in file("modules/discovery-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "discovery-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 val events = (project in file("modules/events"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "events"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val eventsV1 = (project in file("modules/events-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "events-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val jwks = (project in file("modules/jwks"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "jwks"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 val networking = (project in file("modules/networking"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "networking"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val networkingV1 = (project in file("modules/networking-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "networking-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 val node = (project in file("modules/node"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "node"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val nodeV1 = (project in file("modules/node-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "node-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val policy = (project in file("modules/policy"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "policy"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val policyV1 = (project in file("modules/policy-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "policy-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val rbac = (project in file("modules/rbac"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "rbac"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val rbacV1 =
   (project in file("modules/rbac-v1"))
@@ -429,25 +429,25 @@ lazy val rbacV1 =
     .settings(
       name := "rbac-v1"
     )
-    .settings(commonSettings: _*)
+    .settings(commonSettings *)
 lazy val scheduling = (project in file("modules/scheduling"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "scheduling"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 lazy val schedulingV1 = (project in file("modules/scheduling-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "scheduling-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 lazy val storage = (project in file("modules/storage"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "storage"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
 
 lazy val storageV1 = (project in file("modules/storage-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
@@ -455,4 +455,4 @@ lazy val storageV1 = (project in file("modules/storage-v1"))
   .settings(
     name := "storage-v1"
   )
-  .settings(commonSettings: _*)
+  .settings(commonSettings *)
