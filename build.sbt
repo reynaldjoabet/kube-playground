@@ -3,24 +3,37 @@ import Dependencies.*
 ThisBuild / scalaVersion := "3.3.8"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalacOptions ++= Seq(
-  // "-no-indent",
-  "-deprecation", // Warns about deprecated APIs
-  "-feature", // Warns about advanced language features
+ThisBuild / scalacOptions := Seq(
+  "-encoding",
+  "UTF-8",
+  "-no-indent",
+  "-deprecation",
+  "-feature",
   "-unchecked",
-  // "-Wunused:imports",
-  //   "-Wunused:privates",
-  //   "-Wunused:locals",
-  //   "-Wunused:explicits",
-  //   "-Wunused:implicits",
-  //   "-Wunused:params",
-  //   "-Wvalue-discard",
-  "-language:strictEquality",
-  "-Xmax-inlines:100000"
+  "-source:3.3",
+  "-java-output-version:17",
+  "-Werror",
+  "-Wshadow:all",
+  "-Wvalue-discard",
+  "-Wnonunit-statement",
+  "-Xlint:all",
+  "-Ysafe-init",
+  "-Xcheck-macros",
+  "-Xmax-inlines:64"
+)
+
+Global / onChangedBuildSource := ReloadOnSourceChanges
+
+val generatedScalacOptions = Seq(
+  "-encoding",
+  "UTF-8",
+  "-java-output-version:17",
+  "-Xmax-inlines:64"
 )
 
 lazy val root = (project in file("."))
   .settings(
+    semanticdbEnabled := true,
     name := "kube-playground",
     libraryDependencies ++= Seq(
       sttpCore,
@@ -102,7 +115,7 @@ lazy val root = (project in file("."))
   )
 
 val commonSettings = Seq(
-  scalacOptions := Seq.empty,
+  scalacOptions := generatedScalacOptions,
   openApiInputSpec := (baseDirectory.value / (name.value + ".json")).getPath,
   openApiModelNamePrefix := "",
   openApiModelNameSuffix := "",
