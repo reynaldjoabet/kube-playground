@@ -13,7 +13,6 @@ ThisBuild / scalacOptions := Seq(
   "-source:3.3",
   "-java-output-version:17",
   "-Werror",
-  "-Wshadow:all",
   "-Wvalue-discard",
   "-Wnonunit-statement",
   "-Xlint:all",
@@ -66,8 +65,7 @@ lazy val root = (project in file("."))
       sbtVersion
     ),
     buildInfoPackage := "com.kubescala.generated",
-    buildInfoObject := "KubeScalaBuildInfo",
-    scalacOptions ++= Seq("-no-indent")
+    buildInfoObject := "KubeScalaBuildInfo"
   )
   .dependsOn(
     admissionRegistration,
