@@ -1,7 +1,7 @@
 import Dependencies.*
 
 ThisBuild / scalaVersion := "3.3.8"
-ThisBuild / version := "0.1.0-SNAPSHOT"
+ThisBuild / version      := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalacOptions := Seq(
   "-encoding",
@@ -31,8 +31,8 @@ val generatedScalacOptions = Seq(
 
 lazy val root = (project in file("."))
   .settings(
-    semanticdbEnabled := true,
-    name := "kube-playground",
+    semanticdbEnabled    := true,
+    name                 := "kube-playground",
     libraryDependencies ++= Seq(
       sttpCore,
       sttpJsoniter,
@@ -64,7 +64,7 @@ lazy val root = (project in file("."))
       sbtVersion
     ),
     buildInfoPackage := "com.kubescala.generated",
-    buildInfoObject := "KubeScalaBuildInfo"
+    buildInfoObject  := "KubeScalaBuildInfo"
   )
   .dependsOn(
     admissionRegistration,
@@ -112,25 +112,25 @@ lazy val root = (project in file("."))
   )
 
 val commonSettings = Seq(
-  scalacOptions := generatedScalacOptions,
-  openApiInputSpec := (baseDirectory.value / (name.value + ".json")).getPath,
+  scalacOptions          := generatedScalacOptions,
+  openApiInputSpec       := (baseDirectory.value / (name.value + ".json")).getPath,
   openApiModelNamePrefix := "",
   openApiModelNameSuffix := "",
-  openApiApiPackage := s"kubescala.${name.value.replace("-", ".")}" + ".api",
-  openApiModelPackage := s"kubescala.${name.value.replace("-", ".")}" + ".models",
-  openApiInvokerPackage := s"kubescala.${name.value.replace("-", ".")}",
+  openApiApiPackage      := s"kubescala.${name.value.replace("-", ".")}" + ".api",
+  openApiModelPackage    := s"kubescala.${name.value.replace("-", ".")}" + ".models",
+  openApiInvokerPackage  := s"kubescala.${name.value.replace("-", ".")}",
   // openApiRemoveOperationIdPrefix := Some(true),
   openApiGenerateMetadata := SettingDisabled,
   // Use the module-local config.json, but a single shared ignore file one
   // level up (modules/.openapi-generator-ignore) that all modules read
-  openApiConfigFile := (baseDirectory.value / "config.json").getPath,
+  openApiConfigFile         := (baseDirectory.value / "config.json").getPath,
   openApiIgnoreFileOverride := (baseDirectory.value.getParentFile / ".openapi-generator-ignore").getPath,
 
   // Put generated sources where SBT expects managed sources
-  openApiOutputDir := ((Compile / baseDirectory).value / "src/main/scala").getAbsolutePath,
+  openApiOutputDir          := ((Compile / baseDirectory).value / "src/main/scala").getAbsolutePath,
   openApiGenerateModelTests := SettingDisabled,
-  openApiGenerateApiTests := SettingDisabled,
-  openApiValidateSpec := SettingDisabled,
+  openApiGenerateApiTests   := SettingDisabled,
+  openApiValidateSpec       := SettingDisabled,
   // Fail fast on bad specs (optional but recommended)
   // openApiValidateSpec := Some(true),
 
@@ -166,7 +166,7 @@ val commonSettings = Seq(
   // truth instead of having sbt separately glob a directory that's empty on
   // a clean checkout.
   Compile / unmanagedSourceDirectories := Seq.empty,
-  libraryDependencies ++= Seq(
+  libraryDependencies                 ++= Seq(
     sttpJsoniter,
     jsoniter,
     jsoniterMacros,
@@ -441,18 +441,21 @@ lazy val rbacV1 =
       name := "rbac-v1"
     )
     .settings(commonSettings *)
+
 lazy val scheduling = (project in file("modules/scheduling"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "scheduling"
   )
   .settings(commonSettings *)
+
 lazy val schedulingV1 = (project in file("modules/scheduling-v1"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
     name := "scheduling-v1"
   )
   .settings(commonSettings *)
+
 lazy val storage = (project in file("modules/storage"))
   .enablePlugins(OpenApiGeneratorPlugin)
   .settings(
