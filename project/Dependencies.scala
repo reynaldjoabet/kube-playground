@@ -20,18 +20,18 @@ object Dependencies {
     val jsonRpc = "0.2.0"
 
     // --- JSON ---
-    val jsoniter = "2.39.1"
+    val jsoniter = "2.40.1"
     val circe    = "0.14.15"
 
     // --- FP ---
-    val catsEffect      = "3.7.0"
+    val catsEffect      = "3.7.1"
     val fs2             = "3.13.0"
     val fs2Kafka        = "4.0.0"
     val chimney         = "1.11.0"
     val iron            = "3.3.1"
     val hedgehog        = "0.13.0"
     val scalacheck      = "1.19.0"
-    val munit           = "1.3.4"
+    val munit           = "1.3.5"
     val munitCatsEffect = "2.2.0"
 
     // --- DB ---
@@ -54,7 +54,7 @@ object Dependencies {
     // --- Logging ---
     val scribe  = "3.19.0"
     val slf4j   = "2.0.18"
-    val logback = "1.6.1"
+    val logback = "1.6.3"
 
     // --- Cache ---
     val caffeine = "3.2.4"
