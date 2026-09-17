@@ -14,7 +14,7 @@ object Dependencies {
     val zioKafka   = "3.6.0"
 
     // --- HTTP ---
-    val http4s  = "0.23.36"
+    val http4s  = "0.23.37"
     val sttp4   = "4.0.26"
     val tapir   = "1.13.18"
     val jsonRpc = "0.2.0"
@@ -25,13 +25,13 @@ object Dependencies {
 
     // --- FP ---
     val catsEffect      = "3.7.1"
-    val fs2             = "3.13.0"
+    val fs2             = "3.14.0"
     val fs2Kafka        = "4.0.0"
     val chimney         = "1.11.0"
     val iron            = "3.3.1"
     val hedgehog        = "0.13.0"
     val scalacheck      = "1.19.0"
-    val munit           = "1.3.5"
+    val munit           = "1.3.6"
     val munitCatsEffect = "2.2.0"
 
     // --- DB ---
@@ -53,7 +53,7 @@ object Dependencies {
 
     // --- Logging ---
     val scribe  = "3.19.0"
-    val slf4j   = "2.0.18"
+    val slf4j   = "2.0.19"
     val logback = "1.6.3"
 
     // --- Cache ---
