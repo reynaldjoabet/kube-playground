@@ -31,21 +31,22 @@ lazy val root = (project in file("."))
   .settings(
     semanticdbEnabled    := true,
     name                 := "kube-playground",
-    libraryDependencies ++=
-      Dependencies.sttp.core ++
-        Dependencies.sttp.jsoniter ++
-        Dependencies.sttp.http4sBackend ++
-        Dependencies.http4s.core ++
-        Dependencies.fs2 ++
-        Dependencies.chimney ++
-        Dependencies.catsEffect ++
-        Dependencies.config.pureconfig ++
-        Dependencies.logging.slf4j ++
-        Dependencies.logging.logback ++
-        Dependencies.logging.scribe ++
-        Dependencies.json.jsoniter ++
-        Dependencies.json.jsoniterCirce ++
-        Dependencies.testing.munit
+    libraryDependencies ++= Seq(
+      Dependencies.http.sttp.core,
+      Dependencies.http.sttp.jsoniter,
+      Dependencies.http.sttp.backends.http4s,
+      Dependencies.core.fs2,
+      Dependencies.domain.chimney,
+      Dependencies.core.catsEffect,
+      Dependencies.config.pureconfig.core,
+      Dependencies.logging.slf4j,
+      Dependencies.logging.logback,
+      Dependencies.logging.scribe.core,
+      Dependencies.logging.scribe.slf4j,
+      Dependencies.logging.scribe.cats,
+      Dependencies.json.jsoniter.circe,
+      Dependencies.testing.munit
+    ) ++ Dependencies.http.http4s.core ++ Dependencies.json.jsoniter.core
   )
   .enablePlugins(BuildInfoPlugin)
   .settings(
@@ -159,9 +160,8 @@ val commonSettings = Seq(
   // a clean checkout.
   Compile / unmanagedSourceDirectories := Seq.empty,
   libraryDependencies                 ++=
-    Dependencies.sttp.jsoniter ++
-      Dependencies.json.jsoniter ++
-      Dependencies.json.jsoniterCirce
+    Seq(Dependencies.http.sttp.jsoniter, Dependencies.json.jsoniter.circe) ++
+      Dependencies.json.jsoniter.core
 )
 
 lazy val admissionRegistration =
