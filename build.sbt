@@ -31,27 +31,21 @@ lazy val root = (project in file("."))
   .settings(
     semanticdbEnabled    := true,
     name                 := "kube-playground",
-    libraryDependencies ++= Seq(
-      sttpCore,
-      sttpJsoniter,
-      http4sBackend,
-      http4sDsl,
-      emberServer,
-      fs2,
-      chimney,
-      emberClient,
-      catsEffect,
-      pureconfig,
-      slf4j,
-      logback,
-      scribe,
-      scribeSlf4j,
-      scribeCats,
-      jsoniter,
-      jsoniterMacros,
-      jsoniterCirce,
-      munit
-    )
+    libraryDependencies ++=
+      Dependencies.sttp.core ++
+        Dependencies.sttp.jsoniter ++
+        Dependencies.sttp.http4sBackend ++
+        Dependencies.http4s.core ++
+        Dependencies.fs2 ++
+        Dependencies.chimney ++
+        Dependencies.catsEffect ++
+        Dependencies.config.pureconfig ++
+        Dependencies.logging.slf4j ++
+        Dependencies.logging.logback ++
+        Dependencies.logging.scribe ++
+        Dependencies.json.jsoniter ++
+        Dependencies.json.jsoniterCirce ++
+        Dependencies.testing.munit
   )
   .enablePlugins(BuildInfoPlugin)
   .settings(
@@ -164,12 +158,10 @@ val commonSettings = Seq(
   // truth instead of having sbt separately glob a directory that's empty on
   // a clean checkout.
   Compile / unmanagedSourceDirectories := Seq.empty,
-  libraryDependencies                 ++= Seq(
-    sttpJsoniter,
-    jsoniter,
-    jsoniterMacros,
-    jsoniterCirce
-  )
+  libraryDependencies                 ++=
+    Dependencies.sttp.jsoniter ++
+      Dependencies.json.jsoniter ++
+      Dependencies.json.jsoniterCirce
 )
 
 lazy val admissionRegistration =
