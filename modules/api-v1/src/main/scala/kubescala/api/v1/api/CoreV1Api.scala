@@ -105,7 +105,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -130,7 +130,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -153,7 +153,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -178,7 +178,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -199,7 +199,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -222,7 +222,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -249,11 +249,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/attach"
-        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -281,12 +281,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/exec"
-        .addParams(FormSerializable.serialize("command", command, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("command", command, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -309,7 +309,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/portforward"
-        .addParams(FormSerializable.serialize("ports", ports, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("ports", ports, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -332,7 +332,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -357,7 +357,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -380,7 +380,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -405,7 +405,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -426,7 +426,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -449,7 +449,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -472,7 +472,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.HEAD, requestURL)
@@ -497,7 +497,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.HEAD, requestURL)
@@ -520,7 +520,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.HEAD, requestURL)
@@ -545,7 +545,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.HEAD, requestURL)
@@ -566,7 +566,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.HEAD, requestURL)
@@ -589,7 +589,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.HEAD, requestURL)
@@ -612,7 +612,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.OPTIONS, requestURL)
@@ -637,7 +637,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.OPTIONS, requestURL)
@@ -660,7 +660,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.OPTIONS, requestURL)
@@ -685,7 +685,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.OPTIONS, requestURL)
@@ -706,7 +706,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.OPTIONS, requestURL)
@@ -729,7 +729,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.OPTIONS, requestURL)
@@ -752,7 +752,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -777,7 +777,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -800,7 +800,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -825,7 +825,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -846,7 +846,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -869,7 +869,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -896,11 +896,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/attach"
-        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -928,12 +928,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/exec"
-        .addParams(FormSerializable.serialize("command", command, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("command", command, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stderr", stderr, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdin", stdin, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stdout", stdout, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("tty", tty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -956,7 +956,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/portforward"
-        .addParams(FormSerializable.serialize("ports", ports, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("ports", ports, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -979,7 +979,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1004,7 +1004,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1027,7 +1027,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1052,7 +1052,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1073,7 +1073,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1096,7 +1096,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1119,7 +1119,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -1144,7 +1144,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -1167,7 +1167,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -1192,7 +1192,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -1213,7 +1213,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy"
-        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -1236,7 +1236,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val pathPathParam = PathSerializable.serialize("path", path, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/proxy/${pathPathParam}"
-        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("path", path2, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -1261,10 +1261,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def createCoreV1Namespace(namespace: Namespace, pretty: Option[String] = scala.None, dryRun: Option[String] = scala.None, fieldManager: Option[String] = scala.None, fieldValidation: Option[String] = scala.None): sttp.client4.Request[Either[ResponseException[String], Namespace]] =
     val requestURL =
       uri"$baseUrl/api/v1/namespaces"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1292,10 +1292,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/bindings"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1323,10 +1323,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1354,10 +1354,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1385,10 +1385,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1416,10 +1416,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1447,10 +1447,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1478,10 +1478,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1511,10 +1511,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/binding"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1544,10 +1544,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/eviction"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1575,10 +1575,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1606,10 +1606,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1637,10 +1637,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1668,10 +1668,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1699,10 +1699,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1730,10 +1730,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1763,10 +1763,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts/${namePathParam}/token"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1792,10 +1792,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def createCoreV1Node(node: Node, pretty: Option[String] = scala.None, dryRun: Option[String] = scala.None, fieldManager: Option[String] = scala.None, fieldValidation: Option[String] = scala.None): sttp.client4.Request[Either[ResponseException[String], Node]] =
     val requestURL =
       uri"$baseUrl/api/v1/nodes"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1821,10 +1821,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def createCoreV1PersistentVolume(persistentVolume: PersistentVolume, pretty: Option[String] = scala.None, dryRun: Option[String] = scala.None, fieldManager: Option[String] = scala.None, fieldValidation: Option[String] = scala.None): sttp.client4.Request[Either[ResponseException[String], PersistentVolume]] =
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -1861,21 +1861,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -1912,21 +1912,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -1963,21 +1963,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2014,21 +2014,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2065,21 +2065,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2116,21 +2116,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2167,21 +2167,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2218,21 +2218,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2269,21 +2269,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2320,21 +2320,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2371,21 +2371,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2422,21 +2422,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2471,21 +2471,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def deleteCoreV1CollectionNode(pretty: Option[String] = scala.None, continue: Option[String] = scala.None, dryRun: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, gracePeriodSeconds: Option[Int] = scala.None, ignoreStoreReadErrorWithClusterBreakingPotential: Option[Boolean] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, orphanDependents: Option[Boolean] = scala.None, propagationPolicy: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, deleteOptions: Option[DeleteOptions] = scala.None): sttp.client4.Request[Either[ResponseException[String], Status]] =
     val requestURL =
       uri"$baseUrl/api/v1/nodes"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2520,21 +2520,21 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def deleteCoreV1CollectionPersistentVolume(pretty: Option[String] = scala.None, continue: Option[String] = scala.None, dryRun: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, gracePeriodSeconds: Option[Int] = scala.None, ignoreStoreReadErrorWithClusterBreakingPotential: Option[Boolean] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, orphanDependents: Option[Boolean] = scala.None, propagationPolicy: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, deleteOptions: Option[DeleteOptions] = scala.None): sttp.client4.Request[Either[ResponseException[String], Status]] =
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2563,12 +2563,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2599,12 +2599,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2635,12 +2635,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2671,12 +2671,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2707,12 +2707,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2743,12 +2743,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2779,12 +2779,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2815,12 +2815,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2851,12 +2851,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2887,12 +2887,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2923,12 +2923,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2959,12 +2959,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -2995,12 +2995,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -3029,12 +3029,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -3063,12 +3063,12 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("gracePeriodSeconds", gracePeriodSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("ignoreStoreReadErrorWithClusterBreakingPotential", ignoreStoreReadErrorWithClusterBreakingPotential, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("orphanDependents", orphanDependents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("propagationPolicy", propagationPolicy, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.DELETE, requestURL)
@@ -3115,18 +3115,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1ComponentStatus(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], ComponentStatusList]] =
     val requestURL =
       uri"$baseUrl/api/v1/componentstatuses"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3156,18 +3156,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1ConfigMapForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], ConfigMapList]] =
     val requestURL =
       uri"$baseUrl/api/v1/configmaps"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3197,18 +3197,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1EndpointsForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], EndpointsList]] =
     val requestURL =
       uri"$baseUrl/api/v1/endpoints"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3238,18 +3238,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1EventForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], EventList]] =
     val requestURL =
       uri"$baseUrl/api/v1/events"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3279,18 +3279,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1LimitRangeForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], LimitRangeList]] =
     val requestURL =
       uri"$baseUrl/api/v1/limitranges"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3320,18 +3320,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1Namespace(pretty: Option[String] = scala.None, allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], NamespaceList]] =
     val requestURL =
       uri"$baseUrl/api/v1/namespaces"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3363,18 +3363,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3406,18 +3406,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3449,18 +3449,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3492,18 +3492,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3535,18 +3535,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3578,18 +3578,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3621,18 +3621,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3664,18 +3664,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3707,18 +3707,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3750,18 +3750,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3793,18 +3793,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3836,18 +3836,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3877,18 +3877,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1Node(pretty: Option[String] = scala.None, allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], NodeList]] =
     val requestURL =
       uri"$baseUrl/api/v1/nodes"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3918,18 +3918,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1PersistentVolume(pretty: Option[String] = scala.None, allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], PersistentVolumeList]] =
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -3959,18 +3959,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1PersistentVolumeClaimForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], PersistentVolumeClaimList]] =
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumeclaims"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4000,18 +4000,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1PodForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], PodList]] =
     val requestURL =
       uri"$baseUrl/api/v1/pods"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4041,18 +4041,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1PodTemplateForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], PodTemplateList]] =
     val requestURL =
       uri"$baseUrl/api/v1/podtemplates"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4082,18 +4082,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1ReplicationControllerForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], ReplicationControllerList]] =
     val requestURL =
       uri"$baseUrl/api/v1/replicationcontrollers"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4123,18 +4123,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1ResourceQuotaForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], ResourceQuotaList]] =
     val requestURL =
       uri"$baseUrl/api/v1/resourcequotas"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4164,18 +4164,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1SecretForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], SecretList]] =
     val requestURL =
       uri"$baseUrl/api/v1/secrets"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4205,18 +4205,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1ServiceAccountForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], ServiceAccountList]] =
     val requestURL =
       uri"$baseUrl/api/v1/serviceaccounts"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4246,18 +4246,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def listCoreV1ServiceForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], ServiceList]] =
     val requestURL =
       uri"$baseUrl/api/v1/services"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -4284,11 +4284,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4316,11 +4316,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4350,11 +4350,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4384,11 +4384,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4418,11 +4418,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4452,11 +4452,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4486,11 +4486,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4520,11 +4520,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4554,11 +4554,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4588,11 +4588,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/ephemeralcontainers"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4622,11 +4622,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/resize"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4656,11 +4656,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4690,11 +4690,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4724,11 +4724,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4758,11 +4758,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}/scale"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4792,11 +4792,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4826,11 +4826,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4860,11 +4860,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4894,11 +4894,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4928,11 +4928,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4962,11 +4962,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -4996,11 +4996,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -5028,11 +5028,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -5060,11 +5060,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -5092,11 +5092,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -5124,11 +5124,11 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("force", force, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PATCH, requestURL)
@@ -5150,7 +5150,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/componentstatuses/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5171,7 +5171,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5192,7 +5192,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5215,7 +5215,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5238,7 +5238,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5261,7 +5261,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5284,7 +5284,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5307,7 +5307,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5330,7 +5330,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5353,7 +5353,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5376,7 +5376,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/ephemeralcontainers"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5408,16 +5408,16 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/log"
-        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("follow", follow, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("insecureSkipTLSVerifyBackend", insecureSkipTLSVerifyBackend, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limitBytes", limitBytes, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("previous", previous, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sinceSeconds", sinceSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("stream", stream, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("tailLines", tailLines, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timestamps", timestamps, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("container", container, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("follow", follow, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("insecureSkipTLSVerifyBackend", insecureSkipTLSVerifyBackend, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limitBytes", limitBytes, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("previous", previous, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sinceSeconds", sinceSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("stream", stream, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("tailLines", tailLines, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timestamps", timestamps, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5440,7 +5440,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/resize"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5463,7 +5463,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5486,7 +5486,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5509,7 +5509,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5532,7 +5532,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}/scale"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5555,7 +5555,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5578,7 +5578,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5601,7 +5601,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5624,7 +5624,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5647,7 +5647,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5670,7 +5670,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5693,7 +5693,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5714,7 +5714,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5735,7 +5735,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5756,7 +5756,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5777,7 +5777,7 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -5803,10 +5803,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -5833,10 +5833,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}/finalize"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -5863,10 +5863,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -5895,10 +5895,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/configmaps/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -5927,10 +5927,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/endpoints/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -5959,10 +5959,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/events/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -5991,10 +5991,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/limitranges/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6023,10 +6023,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6055,10 +6055,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6087,10 +6087,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6119,10 +6119,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/ephemeralcontainers"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6151,10 +6151,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/resize"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6183,10 +6183,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/pods/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6215,10 +6215,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/podtemplates/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6247,10 +6247,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6279,10 +6279,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}/scale"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6311,10 +6311,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6343,10 +6343,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6375,10 +6375,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6407,10 +6407,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/secrets/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6439,10 +6439,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6471,10 +6471,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/serviceaccounts/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6503,10 +6503,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/namespaces/${namespacePathParam}/services/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6533,10 +6533,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6563,10 +6563,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/nodes/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6593,10 +6593,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6623,10 +6623,10 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/persistentvolumes/${namePathParam}/status"
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.PUT, requestURL)
@@ -6657,18 +6657,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1ConfigMapListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/configmaps"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6698,18 +6698,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1EndpointsListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/endpoints"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6739,18 +6739,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1EventListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/events"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6780,18 +6780,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1LimitRangeListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/limitranges"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6823,18 +6823,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6864,18 +6864,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1NamespaceList(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6909,18 +6909,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/configmaps/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6952,18 +6952,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/configmaps"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -6997,18 +6997,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/endpoints/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7040,18 +7040,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/endpoints"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7085,18 +7085,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/events/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7128,18 +7128,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/events"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7173,18 +7173,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/limitranges/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7216,18 +7216,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/limitranges"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7261,18 +7261,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/persistentvolumeclaims/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7304,18 +7304,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/persistentvolumeclaims"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7349,18 +7349,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/pods/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7392,18 +7392,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/pods"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7437,18 +7437,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/podtemplates/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7480,18 +7480,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/podtemplates"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7525,18 +7525,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/replicationcontrollers/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7568,18 +7568,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/replicationcontrollers"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7613,18 +7613,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/resourcequotas/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7656,18 +7656,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/resourcequotas"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7701,18 +7701,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/secrets/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7744,18 +7744,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/secrets"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7789,18 +7789,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/services/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7834,18 +7834,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/serviceaccounts/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7877,18 +7877,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/serviceaccounts"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7920,18 +7920,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/namespaces/${namespacePathParam}/services"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -7963,18 +7963,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/nodes/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8004,18 +8004,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1NodeList(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/nodes"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8047,18 +8047,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
     val namePathParam = PathSerializable.serialize("name", name, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/api/v1/watch/persistentvolumes/${namePathParam}"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8088,18 +8088,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1PersistentVolumeClaimListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/persistentvolumeclaims"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8129,18 +8129,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1PersistentVolumeList(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/persistentvolumes"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8170,18 +8170,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1PodListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/pods"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8211,18 +8211,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1PodTemplateListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/podtemplates"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8252,18 +8252,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1ReplicationControllerListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/replicationcontrollers"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8293,18 +8293,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1ResourceQuotaListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/resourcequotas"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8334,18 +8334,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1SecretListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/secrets"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8375,18 +8375,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1ServiceAccountListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/serviceaccounts"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)
@@ -8416,18 +8416,18 @@ case class CoreV1Api[Auth <: kubescala.api.v1.Authorization] private (baseUrl: S
   def watchCoreV1ServiceListForAllNamespaces(allowWatchBookmarks: Option[Boolean] = scala.None, continue: Option[String] = scala.None, fieldSelector: Option[String] = scala.None, labelSelector: Option[String] = scala.None, limit: Option[Int] = scala.None, pretty: Option[String] = scala.None, resourceVersion: Option[String] = scala.None, resourceVersionMatch: Option[String] = scala.None, sendInitialEvents: Option[Boolean] = scala.None, shardSelector: Option[String] = scala.None, timeoutSeconds: Option[Int] = scala.None, watch: Option[Boolean] = scala.None): sttp.client4.Request[Either[ResponseException[String], WatchEvent]] =
     val requestURL =
       uri"$baseUrl/api/v1/watch/services"
-        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("allowWatchBookmarks", allowWatchBookmarks, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("continue", continue, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldSelector", fieldSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("labelSelector", labelSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("limit", limit, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersion", resourceVersion, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("resourceVersionMatch", resourceVersionMatch, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("sendInitialEvents", sendInitialEvents, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("shardSelector", shardSelector, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("timeoutSeconds", timeoutSeconds, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("watch", watch, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.GET, requestURL)

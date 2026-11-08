@@ -73,10 +73,10 @@ case class AuthorizationV1Api[Auth <: kubescala.authorization.v1.Authorization] 
     val namespacePathParam = PathSerializable.serialize("namespace", namespace, PathStyleFormat.SIMPLE, false)
     val requestURL =
       uri"$baseUrl/apis/authorization.k8s.io/v1/namespaces/${namespacePathParam}/localsubjectaccessreviews"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -102,10 +102,10 @@ case class AuthorizationV1Api[Auth <: kubescala.authorization.v1.Authorization] 
   def createAuthorizationV1SelfSubjectAccessReview(selfSubjectAccessReview: SelfSubjectAccessReview, dryRun: Option[String] = scala.None, fieldManager: Option[String] = scala.None, fieldValidation: Option[String] = scala.None, pretty: Option[String] = scala.None): sttp.client4.Request[Either[ResponseException[String], SelfSubjectAccessReview]] =
     val requestURL =
       uri"$baseUrl/apis/authorization.k8s.io/v1/selfsubjectaccessreviews"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -131,10 +131,10 @@ case class AuthorizationV1Api[Auth <: kubescala.authorization.v1.Authorization] 
   def createAuthorizationV1SelfSubjectRulesReview(selfSubjectRulesReview: SelfSubjectRulesReview, dryRun: Option[String] = scala.None, fieldManager: Option[String] = scala.None, fieldValidation: Option[String] = scala.None, pretty: Option[String] = scala.None): sttp.client4.Request[Either[ResponseException[String], SelfSubjectRulesReview]] =
     val requestURL =
       uri"$baseUrl/apis/authorization.k8s.io/v1/selfsubjectrulesreviews"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
@@ -160,10 +160,10 @@ case class AuthorizationV1Api[Auth <: kubescala.authorization.v1.Authorization] 
   def createAuthorizationV1SubjectAccessReview(subjectAccessReview: SubjectAccessReview, dryRun: Option[String] = scala.None, fieldManager: Option[String] = scala.None, fieldValidation: Option[String] = scala.None, pretty: Option[String] = scala.None): sttp.client4.Request[Either[ResponseException[String], SubjectAccessReview]] =
     val requestURL =
       uri"$baseUrl/apis/authorization.k8s.io/v1/subjectaccessreviews"
-        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true): _*)
-        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true): _*)
+        .addParams(FormSerializable.serialize("dryRun", dryRun, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldManager", fieldManager, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("fieldValidation", fieldValidation, FormStyleFormat.FORM, true)*)
+        .addParams(FormSerializable.serialize("pretty", pretty, FormStyleFormat.FORM, true)*)
 
     basicRequest
       .method(Method.POST, requestURL)
