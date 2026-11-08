@@ -2,7 +2,7 @@
     "openapi": "3.0.0",
     "info": {
         "title": "Kubernetes",
-        "version": "1.34"
+        "version": "1.37"
     },
     "paths": {
         "/apis/authentication.k8s.io/": {
@@ -76,12 +76,7 @@
                         "description": "a map of client CIDR to server address that is serving this group. This is to help clients reach servers in the most network-efficient way possible. Clients can use the appropriate server address as per the CIDR that they match. In case of multiple matches, clients should use the longest matching CIDR. The server returns only those CIDRs that it thinks that the client can match. For example: the master will return an internal IP CIDR only, if the client reaches the server using an internal IP. Server looks at X-Forwarded-For header or X-Real-Ip header or request.RemoteAddr (in that order) to get the client IP.",
                         "type": "array",
                         "items": {
-                            "default": {},
-                            "allOf": [
-                                {
-                                    "$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.ServerAddressByClientCIDR"
-                                }
-                            ]
+                            "$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.ServerAddressByClientCIDR"
                         },
                         "x-kubernetes-list-type": "atomic"
                     },
@@ -89,12 +84,7 @@
                         "description": "versions are the versions supported in this group.",
                         "type": "array",
                         "items": {
-                            "default": {},
-                            "allOf": [
-                                {
-                                    "$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.GroupVersionForDiscovery"
-                                }
-                            ]
+                            "$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.GroupVersionForDiscovery"
                         },
                         "x-kubernetes-list-type": "atomic"
                     }
