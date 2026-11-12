@@ -1,0 +1,15 @@
+# A Service for something OUTSIDE the cluster: a managed Postgres.
+#
+# ExternalName has no selector, no ClusterIP and no EndpointSlice. CoreDNS answers
+# postgres.moneystack.svc.cluster.local with a CNAME to externalName, and the app connects there.
+# The app's DB_HOST stays "postgres" whichever database is behind it: swap this for a ClusterIP
+# Service in front of an in-cluster Postgres (e.g. CloudNativePG's <cluster>-rw) without touching
+# the Deployment.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: moneystack
+spec:
+  type: ExternalName
+  externalName: moneystack-db.internal.example.com

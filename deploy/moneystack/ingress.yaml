@@ -1,0 +1,37 @@
+# ALTERNATIVE to httproute.yaml: the same routing as an Ingress, for clusters with an Ingress
+# controller (ingress-nginx, HAProxy, Traefik) instead of a Gateway. Use one or the other.
+#
+#   kubectl apply -f deploy/moneystack/ingress.yaml
+#
+# What changes compared with the HTTPRoute:
+#   - No shared Gateway object: the listener, TLS and routing live together in this one object.
+#     The load balancer comes from the ingress controller's own LoadBalancer Service, created when
+#     the controller was installed, and shared by every Ingress of class "nginx".
+#   - The TLS Secret must be in THIS namespace (spec.tls can't point at another namespace), so each
+#     app namespace needs its own copy of the certificate.
+#   - The /health rewrite from httproute.yaml has no Ingress field. It would need a controller-
+#     specific annotation, so here /health is simply reachable from outside.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: moneystack
+  namespace: moneystack
+  annotations:
+    # ingress-nginx: redirect HTTP to HTTPS (an annotation, not a field; other controllers differ).
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [money.example.com]
+      secretName: money-example-com
+  rules:
+    - host: money.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: moneystack # same Service as the HTTPRoute uses
+                port:
+                  number: 80

@@ -1,0 +1,76 @@
+# The platform team's part: ONE Gateway that every app shares.
+#
+# Applying this makes Envoy Gateway create, in envoy-gateway-system:
+#   - a Deployment of Envoy Pods (the reverse proxy)
+#   - a Service of type LoadBalancer in front of them ("Service ①")
+# The cloud controller manager then creates ONE cloud load balancer for that Service. Both apps
+# below (moneystack, lattice-oidc) are reached through it; neither gets a load balancer of its own.
+#
+# The lab already has exactly this Gateway (ingress-and-gateway-api.md §3.3 and §3.7), so the lab
+# steps in deploy/README.md don't apply this file.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  # Which controller implements Gateways of this class (installed with Helm, see §3.2).
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public
+  namespace: infra
+spec:
+  gatewayClassName: envoy
+  listeners:
+    # Plain HTTP, only so the redirect below can send everyone to HTTPS.
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.example.com"
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              gateway-access: public # an app namespace must carry this label to attach
+    # HTTPS for every *.example.com host: money.example.com, login.example.com, ...
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.example.com"
+      tls:
+        mode: Terminate # the Gateway decrypts; apps receive plain HTTP
+        certificateRefs:
+          - kind: Secret
+            name: wildcard-example-com # e.g. issued by cert-manager, kept in this namespace
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              gateway-access: public
+---
+# HTTP -> HTTPS for every host, owned by the platform team. App routes attach with
+# sectionName: https, so this catch-all keeps the whole :80 listener (see §3.7 for why).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: to-https
+  namespace: infra
+spec:
+  parentRefs:
+    - name: public
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: moneystack
+  labels:
+    # Lets this namespace's HTTPRoutes attach to Gateway infra/public (its allowedRoutes selector).
+    # Without it the route is rejected with NotAllowedByListeners.
+    gateway-access: public
+    pod-security.kubernetes.io/enforce: restricted

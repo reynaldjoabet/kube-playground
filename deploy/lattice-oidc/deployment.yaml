@@ -1,0 +1,90 @@
+# A trimmed copy of lattice-oidc's own deploy/kubernetes/base/deployment.yaml, kept to what the
+# Service and routes depend on: the labels, the named port and the probes. The full one adds the
+# autoscaler, PodDisruptionBudget, topology spread, NetworkPolicy and generated config; use it for
+# a real deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lattice
+  namespace: lattice
+spec:
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lattice
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lattice
+        app.kubernetes.io/component: server
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: lattice
+          image: ghcr.io/reynaldusername/lattice-oidc:0.1.0-SNAPSHOT # sbt --client Docker/publish
+          args: ["-Dconfig.file=/etc/lattice/production.conf"]
+          ports:
+            - name: http
+              containerPort: 9000 # Play's default
+          envFrom:
+            - configMapRef:
+                name: lattice-env # PUBLIC_BASE_URL, ALLOWED_HOST, DATABASE_URL, ...
+            - secretRef:
+                name: lattice-secrets
+          # The probes hit the Pod IP with Host: <pod IP>:9000. Lattice's AllowedHostsFilter would
+          # reject that with 400, so these routes carry "+ anyhost" in conf/routes.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/lattice
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: lattice-config # production.conf
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

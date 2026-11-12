@@ -1,0 +1,84 @@
+# The Pods. The Service (service.yaml) finds them by the label app.kubernetes.io/component: api.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moneystack
+  namespace: moneystack
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: moneystack
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: moneystack
+        app.kubernetes.io/component: api
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: moneystack
+          # The repository doesn't build an image yet (no sbt-native-packager). Push one and set it
+          # here, or with `kustomize edit set image moneystack=...`.
+          image: moneystack:dev
+          ports:
+            - name: http # the Service's targetPort refers to this name, not the number
+              containerPort: 8080 # HTTP_PORT's default (README)
+          env:
+            - name: HTTP_PORT
+              value: "8080"
+            - name: DB_HOST
+              value: postgres # the ExternalName Service in postgres-service.yaml
+            - name: DB_NAME
+              value: moneystack
+            - name: DB_USER
+              value: moneystack
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: moneystack-db
+                  key: password
+          # /health/ready answers 503 until Postgres responds, so a Pod enters the Service's
+          # EndpointSlice (and so the Gateway's list of Pod IPs) only once it can serve.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+          startupProbe: # JVM start plus Flyway migrations (DB_MIGRATE_ON_START=true)
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          lifecycle:
+            # Keep serving while the Pod's removal from the EndpointSlice reaches Envoy.
+            preStop:
+              sleep:
+                seconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

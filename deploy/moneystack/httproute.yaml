@@ -1,0 +1,43 @@
+# The app team's part with Gateway API: "money.example.com -> Service moneystack".
+#
+# It attaches to the shared Gateway (deploy/platform/gateway.yaml), so moneystack gets no load
+# balancer of its own: the Gateway's one LB carries its traffic alongside lattice-oidc's.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: moneystack
+  namespace: moneystack
+spec:
+  parentRefs:
+    - name: public
+      namespace: infra
+      sectionName: https # HTTPS only; the platform's to-https route owns :80
+  hostnames:
+    - money.example.com
+  rules:
+    # Keep the health endpoints off the internet: probes reach them on the Pod IP directly, never
+    # through the Gateway. Rewritten to a path moneystack doesn't serve, so it answers 404.
+    # (Gateway API has no "deny" action; this uses only the standard URLRewrite filter.)
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /health
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /not-found
+      backendRefs:
+        - name: moneystack
+          port: 80
+    # Everything else: /accountant/..., /budget/..., /portfolio/..., /investor/...
+    # One app serves all of them, so one rule and one Service. Splitting them across rules only
+    # pays off when they become separate Deployments (then each gets its own Service here).
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: moneystack # a Service in THIS namespace
+          port: 80 # the Service's port, not the container's 8080

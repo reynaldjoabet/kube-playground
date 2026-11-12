@@ -1,0 +1,23 @@
+# The app's Service: a stable name for "the moneystack Pods".
+#
+#   ClusterIP  -> reachable only inside the cluster (other Pods: http://moneystack.moneystack.svc)
+#   selector   -> the Pods' labels; the EndpointSlice controller turns this into a list of Pod IPs
+#   port 80    -> what callers and the HTTPRoute/Ingress backendRef use
+#   targetPort -> the container's named port "http" (8080)
+#
+# The Gateway does NOT send traffic through this Service's ClusterIP. Envoy reads the Service's
+# EndpointSlice and connects to Pod IP:8080 directly (ingress-and-gateway-api.md §4).
+apiVersion: v1
+kind: Service
+metadata:
+  name: moneystack
+  namespace: moneystack
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: moneystack
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

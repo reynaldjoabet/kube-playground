@@ -1,0 +1,41 @@
+# lattice-oidc's own route (deploy/kubernetes/overlays/production/httproute.yaml), attached to
+# the lab's shared Gateway infra/public instead of gateway-system/public.
+#
+# Same Gateway as moneystack: the listener matches *.example.com, and the hostname below picks
+# this route. One cloud LB, one TLS certificate, two apps.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: lattice
+  namespace: lattice
+spec:
+  parentRefs:
+    - name: public
+      namespace: infra
+      sectionName: https
+  hostnames:
+    - login.example.com
+  rules:
+    # /metrics is for Prometheus, which scrapes Pod IPs directly. From the internet it's rewritten
+    # to a path Lattice doesn't serve, so it answers 404.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /metrics
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /not-found
+      backendRefs:
+        - name: lattice
+          port: 80
+    # Sign-in pages, /authorize, /token, /.well-known/openid-configuration, ...
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: lattice
+          port: 80

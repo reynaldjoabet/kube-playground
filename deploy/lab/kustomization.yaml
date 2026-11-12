@@ -1,0 +1,68 @@
+# Runs both apps' Services and routes on the minikube lab, with a stand-in image.
+#
+# Neither real app can start here: moneystack has no image yet and needs Postgres; lattice-oidc
+# needs Authlete credentials, Postgres and Redis. The routing doesn't care what the Pods run, so
+# this swaps each container for agnhost netexec on the SAME port (8080 / 9000), with the same
+# labels, named port, Service and HTTPRoute. /hostname returns the Pod's name, which shows which
+# Service's Pods answered.
+#
+#   kubectl apply -k deploy/lab
+#   kubectl delete -k deploy/lab
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../moneystack
+  - ../lattice-oidc
+
+images:
+  - name: moneystack
+    newName: registry.k8s.io/e2e-test-images/agnhost
+    newTag: "2.53"
+  - name: ghcr.io/reynaldusername/lattice-oidc
+    newName: registry.k8s.io/e2e-test-images/agnhost
+    newTag: "2.53"
+
+patches:
+  # netexec serves no /health/*, and the apps' env, secrets and config don't exist here.
+  - target: {kind: Deployment, name: moneystack}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value: ["netexec", "--http-port=8080"]
+      - op: remove
+        path: /spec/template/spec/containers/0/env
+      - op: remove
+        path: /spec/template/spec/containers/0/readinessProbe
+      - op: remove
+        path: /spec/template/spec/containers/0/livenessProbe
+      - op: remove
+        path: /spec/template/spec/containers/0/startupProbe
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+  - target: {kind: Deployment, name: lattice}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value: ["netexec", "--http-port=9000"]
+      - op: remove
+        path: /spec/template/spec/containers/0/envFrom
+      - op: remove
+        path: /spec/template/spec/containers/0/readinessProbe
+      - op: remove
+        path: /spec/template/spec/containers/0/livenessProbe
+      - op: remove
+        path: /spec/template/spec/containers/0/startupProbe
+      - op: remove
+        path: /spec/template/spec/containers/0/volumeMounts
+      - op: remove
+        path: /spec/template/spec/volumes
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}

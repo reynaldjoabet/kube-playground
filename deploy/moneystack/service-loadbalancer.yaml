@@ -1,0 +1,28 @@
+# ALTERNATIVE without Ingress or Gateway: give moneystack its own cloud load balancer.
+#
+#   kubectl apply -f deploy/moneystack/service-loadbalancer.yaml
+#
+# A second Service selecting the same Pods, with type LoadBalancer. The cloud controller manager
+# creates a cloud LB for it: listen on :80, forward to every node's nodePort, kube-proxy forwards
+# to a moneystack Pod. Compared with the HTTPRoute:
+#   - one more cloud LB, one more IP, one more bill (lattice-oidc would need its own as well)
+#   - no host or path routing, no /health rewrite: every path on :80 reaches the app
+#   - no TLS unless the app does it, or a provider annotation makes the LB terminate it
+#     (e.g. Hetzner load-balancer.hetzner.cloud/protocol: https + http-certificates)
+apiVersion: v1
+kind: Service
+metadata:
+  name: moneystack-public
+  namespace: moneystack
+spec:
+  type: LoadBalancer
+  # Only these client ranges may connect; the CCM programs it into the cloud LB or firewall.
+  # loadBalancerSourceRanges: ["203.0.113.0/24"]
+  selector:
+    app.kubernetes.io/name: moneystack
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 80 # the cloud LB listens here
+      targetPort: http # the container's 8080
+      # nodePort: allocated automatically (30000-32767); the cloud LB targets it

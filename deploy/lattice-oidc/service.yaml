@@ -1,0 +1,26 @@
+# The same Service lattice-oidc ships (deploy/kubernetes/base/service.yaml).
+#
+# It has two kinds of caller, which reach the Pods differently:
+#
+#   browsers  -> cloud LB -> Envoy (Gateway) -> Pod IP:9000      this Service is only a lookup
+#   moneystack, other APIs inside the cluster
+#             -> http://lattice.lattice.svc/api/introspection
+#             -> ClusterIP -> kube-proxy -> Pod IP:9000          this Service is in the path
+#
+# trafficDistribution: PreferClose applies to the second kind only: kube-proxy prefers a Pod in
+# the caller's zone. Envoy picks Pods by its own policy and ignores it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: lattice
+  namespace: lattice
+spec:
+  type: ClusterIP
+  trafficDistribution: PreferClose
+  selector:
+    app.kubernetes.io/name: lattice
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

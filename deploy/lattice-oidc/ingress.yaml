@@ -1,0 +1,31 @@
+# ALTERNATIVE to httproute.yaml, for a cluster with an Ingress controller. Use one or the other.
+#
+# Two things to keep from the HTTPRoute version that Ingress can't express in its spec:
+#   - /metrics: no rewrite field. ingress-nginx can't do it without a snippet annotation (disabled
+#     by default since IngressNightmare), so use lattice's NetworkPolicy and the metrics bearer
+#     token, or a separate Ingress with a controller-specific annotation.
+#   - X-Forwarded-For: ingress-nginx sets it. Lattice trusts it only from the private ranges in
+#     play.http.forwarded.trustedProxies, which covers the controller Pods' IPs.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lattice
+  namespace: lattice
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [login.example.com]
+      secretName: login-example-com # must be in namespace lattice
+  rules:
+    - host: login.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lattice
+                port:
+                  number: 80

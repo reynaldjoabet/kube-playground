@@ -1,0 +1,13 @@
+# moneystack behind the shared Gateway (the default). ingress.yaml and service-loadbalancer.yaml
+# are alternatives, applied on their own, so they're not listed here.
+#
+#   kubectl create secret generic moneystack-db -n moneystack --from-literal=password=...
+#   kubectl apply -k deploy/moneystack
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - postgres-service.yaml
+  - httproute.yaml

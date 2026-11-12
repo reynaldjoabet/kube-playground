@@ -1,0 +1,10 @@
+# lattice-oidc behind the shared Gateway. ingress.yaml is an alternative, applied on its own.
+# lattice-env, lattice-secrets and lattice-config come from lattice-oidc's own overlay
+# (deploy/kubernetes/overlays/production); this directory is about Services and routing.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - httproute.yaml
