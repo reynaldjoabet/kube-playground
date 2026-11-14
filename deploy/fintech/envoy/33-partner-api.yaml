@@ -1,0 +1,161 @@
+# api.domain.com/v1: the public partner API (JSON over HTTPS), OAuth2 client credentials.
+#
+# The route only says WHERE each path goes. The SecurityPolicy below says WHO may call it: every
+# method + path needs one specific scope, checked at the edge, and anything not listed is denied
+# (defaultAction: Deny), so a new endpoint is closed until someone adds its scope rule.
+#
+# Expects Services: customers, accounts (namespace partner-api, port 80); ledger (namespace ledger,
+# port 80, allowed by the ReferenceGrant at the bottom). Paths are passed on unchanged, /v1 included.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: partner-v1, namespace: partner-api}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-api}]
+  hostnames: [api.domain.com]
+  rules:
+    - name: customers # customers, KYC/KYB intents and documents, screenings
+      matches: [{path: {type: PathPrefix, value: /v1/customers}}]
+      timeouts: {request: 60s, backendRequest: 55s} # multipart document uploads
+      backendRefs: [{name: customers, port: 80}]
+    - name: products
+      matches: [{path: {type: PathPrefix, value: /v1/products}}]
+      backendRefs: [{name: accounts, port: 80}]
+    - name: statements # PDF/CSV generation can be slow
+      matches: [{path: {type: RegularExpression, value: "/v1/accounts/[A-Za-z0-9_-]+/statements"}}]
+      timeouts: {request: 60s, backendRequest: 55s}
+      backendRefs: [{name: accounts, port: 80}]
+    - name: accounts # open, list, get, update, close, balance
+      matches: [{path: {type: PathPrefix, value: /v1/accounts}}]
+      backendRefs: [{name: accounts, port: 80}]
+    - name: beneficiaries
+      matches: [{path: {type: PathPrefix, value: /v1/beneficiaries}}]
+      backendRefs: [{name: accounts, port: 80}]
+    - name: ledger # double-entry source of truth, in its own namespace
+      matches: [{path: {type: PathPrefix, value: /v1/ledger}}]
+      backendRefs: [{name: ledger, namespace: ledger, port: 80}]
+---
+# Authentication (partner tokens) + one scope per method and path. Rules are checked in order; the
+# first whose operation AND principal both match decides. A request whose path matches but whose
+# token lacks the scope matches no rule and falls through to defaultAction: Deny (403).
+# IDs ([A-Za-z0-9_-]+) can't contain ':' or '/', so /v1/customers/{id}:close never matches the
+# plain /v1/customers/{id} rules.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: partner-scopes, namespace: partner-api}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: partner-v1}]
+  jwt:
+    providers:
+      - name: partners
+        issuer: https://auth.domain.com
+        audiences: [api.domain.com]
+        remoteJWKS: {uri: "https://auth.domain.com/.well-known/jwks.json"}
+        claimToHeaders: [{claim: client_id, header: x-client-id}] # which partner, for the services and rate limits
+  authorization:
+    defaultAction: Deny
+    rules:
+      # ---- Customers ----
+      - name: customers-create
+        action: Allow
+        operation: {methods: [POST], path: {type: Exact, value: /v1/customers}}
+        principal: {jwt: {provider: partners, scopes: [customers.write]}}
+      - name: customers-update
+        action: Allow
+        operation: {methods: [PATCH], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+"}}
+        principal: {jwt: {provider: partners, scopes: [customers.write]}}
+      - name: customers-close
+        action: Allow
+        operation: {methods: [POST], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+:close"}}
+        principal: {jwt: {provider: partners, scopes: [customers.write]}}
+      - name: customers-get
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+"}}
+        principal: {jwt: {provider: partners, scopes: [customers.read]}}
+      # ---- KYC/KYB ----
+      - name: kyc-start
+        action: Allow
+        operation: {methods: [POST], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+/kyc-intents"}}
+        principal: {jwt: {provider: partners, scopes: [kyc.write]}}
+      - name: kyc-documents
+        action: Allow
+        operation: {methods: [POST], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+/kyc-intents/[A-Za-z0-9_-]+/documents"}}
+        principal: {jwt: {provider: partners, scopes: [kyc.write]}}
+      - name: kyc-get
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+/kyc-intents/[A-Za-z0-9_-]+"}}
+        principal: {jwt: {provider: partners, scopes: [kyc.read]}}
+      - name: screenings-get
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/customers/[A-Za-z0-9_-]+/screenings"}}
+        principal: {jwt: {provider: partners, scopes: [kyc.read]}}
+      # ---- Products ----
+      - name: products-get
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/products(/[A-Za-z0-9_-]+)?"}}
+        principal: {jwt: {provider: partners, scopes: [products.read]}}
+      # ---- Accounts, balances, statements ----
+      - name: accounts-open
+        action: Allow
+        operation: {methods: [POST], path: {type: Exact, value: /v1/accounts}}
+        principal: {jwt: {provider: partners, scopes: [accounts.write]}}
+      - name: accounts-update
+        action: Allow
+        operation: {methods: [PATCH], path: {type: RegularExpression, value: "/v1/accounts/[A-Za-z0-9_-]+"}}
+        principal: {jwt: {provider: partners, scopes: [accounts.write]}}
+      - name: accounts-close
+        action: Allow
+        operation: {methods: [POST], path: {type: RegularExpression, value: "/v1/accounts/[A-Za-z0-9_-]+:close"}}
+        principal: {jwt: {provider: partners, scopes: [accounts.write]}}
+      - name: accounts-read # list (?customer_id=), get, balance, statements
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/accounts(/[A-Za-z0-9_-]+(/balance|/statements)?)?"}}
+        principal: {jwt: {provider: partners, scopes: [accounts.read]}}
+      # ---- Beneficiaries ----
+      - name: beneficiaries-create
+        action: Allow
+        operation: {methods: [POST], path: {type: Exact, value: /v1/beneficiaries}}
+        principal: {jwt: {provider: partners, scopes: [beneficiaries.write]}}
+      - name: beneficiaries-list
+        action: Allow
+        operation: {methods: [GET], path: {type: Exact, value: /v1/beneficiaries}}
+        principal: {jwt: {provider: partners, scopes: [beneficiaries.read]}}
+      # ---- Ledger ----
+      - name: ledger-transactions
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/ledger/accounts/[A-Za-z0-9_-]+/transactions"}}
+        principal: {jwt: {provider: partners, scopes: [ledger.read]}}
+      - name: ledger-journal-get
+        action: Allow
+        operation: {methods: [GET], path: {type: RegularExpression, value: "/v1/ledger/journals/[A-Za-z0-9_-]+"}}
+        principal: {jwt: {provider: partners, scopes: [ledger.read]}}
+      # ledger.post is "internal or privileged partners": issue that scope only to those clients.
+      # To also pin it to their networks, add clientCIDRs to these two principals.
+      - name: ledger-post
+        action: Allow
+        operation: {methods: [POST], path: {type: Exact, value: /v1/ledger/journals}}
+        principal: {jwt: {provider: partners, scopes: [ledger.post]}}
+      - name: ledger-reverse
+        action: Allow
+        operation: {methods: [POST], path: {type: RegularExpression, value: "/v1/ledger/journals/[A-Za-z0-9_-]+:reverse"}}
+        principal: {jwt: {provider: partners, scopes: [ledger.post]}}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: partner-limits, namespace: partner-api}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: partner-v1}]
+  mergeType: StrategicMerge
+  rateLimit:
+    type: Local # per Envoy replica; an exact per-partner quota needs type: Global (Redis)
+    local:
+      rules:
+        - clientSelectors: [{headers: [{name: x-client-id, type: Distinct}]}]
+          limit: {requests: 1200, unit: Minute}
+---
+# The ledger team allows partner-api's routes to send to its Service, and nothing else.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata: {name: allow-partner-api-routes, namespace: ledger}
+spec:
+  from: [{group: gateway.networking.k8s.io, kind: HTTPRoute, namespace: partner-api}]
+  to: [{group: "", kind: Service, name: ledger}]

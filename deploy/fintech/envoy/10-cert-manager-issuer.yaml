@@ -1,0 +1,38 @@
+# cert-manager issues every certificate the Gateways reference, through the annotation on each
+# Gateway (20-gateways.yaml). Needs cert-manager installed with Gateway API support switched on
+# (config: enableGatewayAPI: true). Not validated in the lab: cert-manager isn't installed there.
+#
+# HTTP-01 is enough because no listener uses a wildcard hostname. Each certificate lists exact
+# names (docs., auth., api., console.domain.com), so Let's Encrypt only has to fetch a token over
+# port 80. The challenge route cert-manager creates (Exact /.well-known/acme-challenge/<token>) is
+# more specific than the redirect route's catch-all, so it wins.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: platform@domain.com
+    privateKeySecretRef: {name: letsencrypt-prod-account}
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - {name: prod, namespace: infra, kind: Gateway, sectionName: http-apex}
+              - {name: prod, namespace: infra, kind: Gateway, sectionName: http}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-sandbox
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: platform@domain.com
+    privateKeySecretRef: {name: letsencrypt-sandbox-account}
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - {name: sandbox, namespace: infra, kind: Gateway, sectionName: http}

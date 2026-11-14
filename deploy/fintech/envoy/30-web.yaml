@@ -1,0 +1,33 @@
+# domain.com (marketing, no PII) and docs.domain.com (API docs & changelog). Static sites, no auth.
+# Expects Services "site" and "docs" in namespace web (port 80).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: site, namespace: web}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-apex}]
+  hostnames: [domain.com]
+  rules:
+    - filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains; preload"}
+              - {name: X-Content-Type-Options, value: nosniff}
+            remove: [Server, X-Powered-By]
+      backendRefs: [{name: site, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: docs, namespace: web}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-docs}]
+  hostnames: [docs.domain.com]
+  rules:
+    - filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains; preload"}
+              - {name: X-Content-Type-Options, value: nosniff}
+            remove: [Server, X-Powered-By]
+      backendRefs: [{name: docs, port: 80}]

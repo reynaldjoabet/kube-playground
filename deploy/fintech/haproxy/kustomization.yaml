@@ -1,0 +1,23 @@
+# kubectl apply -k deploy/fintech/haproxy
+# Needs: cert-manager (10-certificates.yaml), the backend Services listed in haproxy.cfg, and the
+# real public keys in jwt/. Optional: Stakater Reloader, to roll HAProxy when certificates renew.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-namespaces.yaml
+  - 10-certificates.yaml
+  - 20-haproxy.yaml
+  - 25-haproxy-sandbox.yaml
+  - 40-network-policies.yaml
+  - 50-rbac.yaml
+configMapGenerator:
+  # The names get a hash of the content, so any edit rolls the Deployments that mount them.
+  - name: haproxy-edge-config
+    namespace: edge
+    files: [haproxy.cfg]
+  - name: haproxy-sandbox-config
+    namespace: edge
+    files: [haproxy-sandbox.cfg]
+  - name: auth-jwt-keys
+    namespace: edge
+    files: [jwt/auth.pem, jwt/sandbox-auth.pem]

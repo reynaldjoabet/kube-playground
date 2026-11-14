@@ -1,0 +1,66 @@
+# sandbox.api.domain.com and sandbox.auth.domain.com, on their own Gateway (own proxy, IP and
+# certificate). Sandbox tokens come from the sandbox IdP, so a sandbox token is never accepted by
+# prod (different issuer), and the reverse.
+#
+# Expects, in namespace sandbox (port 80): auth-server (sandbox IdP) and the partner API's
+# services built for sandbox: customers, accounts, ledger.
+# Recommended: run sandbox in a separate cluster or account. Here it's a separate Gateway and
+# namespace, which isolates traffic but not the cluster.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: sandbox-auth, namespace: sandbox}
+spec:
+  parentRefs: [{name: sandbox, namespace: infra, sectionName: https-sandbox-auth}]
+  hostnames: [sandbox.auth.domain.com]
+  rules:
+    - backendRefs: [{name: auth-server, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: sandbox-api, namespace: sandbox}
+spec:
+  parentRefs: [{name: sandbox, namespace: infra, sectionName: https-sandbox-api}]
+  hostnames: [sandbox.api.domain.com]
+  rules:
+    - name: customers
+      matches: [{path: {type: PathPrefix, value: /v1/customers}}]
+      backendRefs: [{name: customers, port: 80}]
+    - name: accounts # products, accounts, beneficiaries
+      matches:
+        - {path: {type: PathPrefix, value: /v1/products}}
+        - {path: {type: PathPrefix, value: /v1/accounts}}
+        - {path: {type: PathPrefix, value: /v1/beneficiaries}}
+      backendRefs: [{name: accounts, port: 80}]
+    - name: ledger
+      matches: [{path: {type: PathPrefix, value: /v1/ledger}}]
+      backendRefs: [{name: ledger, port: 80}]
+---
+# Any valid sandbox token. To mirror prod's per-scope rules, copy the authorization block of
+# partner-scopes (33-partner-api.yaml) here with provider: sandbox-partners.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: sandbox-jwt, namespace: sandbox}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: sandbox-api}]
+  jwt:
+    providers:
+      - name: sandbox-partners
+        issuer: https://sandbox.auth.domain.com
+        audiences: [sandbox.api.domain.com]
+        remoteJWKS: {uri: "https://sandbox.auth.domain.com/.well-known/jwks.json"}
+        claimToHeaders: [{claim: client_id, header: x-client-id}]
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: sandbox-limits, namespace: sandbox}
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: sandbox-api}
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: sandbox-auth}
+  mergeType: StrategicMerge
+  rateLimit:
+    type: Local
+    local:
+      rules:
+        - clientSelectors: [{sourceCIDR: {type: Distinct, value: 0.0.0.0/0}}]
+          limit: {requests: 600, unit: Minute}

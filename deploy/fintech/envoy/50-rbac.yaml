@@ -1,0 +1,57 @@
+# Who may change what. The platform team (cluster-admin or similar) owns infra/: Gateways,
+# EnvoyProxy, ClientTrafficPolicy, the redirect route, and the namespaces and their labels.
+# App teams may only edit routes and route-level policies in their own namespace. No namespace
+# rights: the namespace label IS the permission to attach to a listener (§3.3, allowedRoutes).
+# No ReferenceGrant rights: a grant opens a team's Services to other namespaces.
+#
+# Group names (team-*) are placeholders for whatever your identity provider puts in the groups claim.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: edge-route-editor}
+rules:
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes, grpcroutes]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [gateway.envoyproxy.io]
+    resources: [securitypolicies, backendtrafficpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways, gatewayclasses]
+    verbs: [get, list, watch] # read-only: to see listener status and attachedRoutes
+---
+# Bound per namespace (RoleBinding), so the ClusterRole grants nothing outside it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-route-editor, namespace: app-api}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edge-route-editor}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-app}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-route-editor, namespace: partner-api}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edge-route-editor}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-partner}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-route-editor, namespace: console}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edge-route-editor}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-console}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-route-editor, namespace: auth}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edge-route-editor}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-identity}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-route-editor, namespace: web}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edge-route-editor}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-web}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-route-editor, namespace: sandbox}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: edge-route-editor}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-partner}]

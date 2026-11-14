@@ -1,0 +1,106 @@
+# api.domain.com, unversioned paths: the first-party API used by the mobile/web app.
+# (The public partner API lives under /v1 on the same host: 33-partner-api.yaml.)
+#
+# Two routes, so public and protected paths can never overlap:
+#   app         every path needs an end-user JWT (audience app.domain.com)
+#   app-public  kiosk lookups and the Plaid webhook: no JWT
+# Paths not listed in either route (for example /admin/...) match nothing on this host -> 404.
+#
+# Expects Services in namespace app-api, each port 80:
+#   cards, wallets, trading, crypto, fiat, bank-link (Plaid), kyc (ZeroHash), kiosks
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: app, namespace: app-api}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-api}]
+  hostnames: [api.domain.com]
+  rules:
+    - name: cards # GET /cards, /cards/{id}, /cards/{id}/transactions; POST issue/activate/block/unblock; PATCH limits/controls
+      matches: [{path: {type: PathPrefix, value: /cards}}]
+      backendRefs: [{name: cards, port: 80}]
+    - name: wallets # /wallets CRUD, balances, transactions
+      matches: [{path: {type: PathPrefix, value: /wallets}}]
+      backendRefs: [{name: wallets, port: 80}]
+    - name: transactions # GET /transactions/{transactionId}: owned by the wallets service
+      matches: [{path: {type: PathPrefix, value: /transactions}}]
+      backendRefs: [{name: wallets, port: 80}]
+    - name: trades # POST quote/buy/sell, GET /trades, /trades/{id}
+      matches: [{path: {type: PathPrefix, value: /trades}}]
+      backendRefs: [{name: trading, port: 80}]
+    - name: crypto # POST deposit/withdraw, GET /crypto/addresses/{walletId}
+      matches: [{path: {type: PathPrefix, value: /crypto}}]
+      backendRefs: [{name: crypto, port: 80}]
+    - name: fiat # POST deposit/withdraw, GET /fiat/accounts
+      matches: [{path: {type: PathPrefix, value: /fiat}}]
+      backendRefs: [{name: fiat, port: 80}]
+    - name: plaid # link-token, exchange-token, accounts
+      matches: [{path: {type: PathPrefix, value: /plaid}}]
+      backendRefs: [{name: bank-link, port: 80}]
+    - name: kyc # start, documents, selfie, status, result, resubmit (ZeroHash)
+      matches: [{path: {type: PathPrefix, value: /kyc}}]
+      timeouts: {request: 60s, backendRequest: 55s} # document and selfie uploads
+      backendRefs: [{name: kyc, port: 80}]
+    - name: kiosk-ops # POST /kiosks/{id}/deposit|withdraw, GET /kiosks/{id}/transactions
+      matches: [{path: {type: RegularExpression, value: "/kiosks/[^/]+/(deposit|withdraw|transactions)"}}]
+      backendRefs: [{name: kiosks, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: app-public, namespace: app-api}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-api}]
+  hostnames: [api.domain.com]
+  rules:
+    - name: kiosk-lookup # GET /kiosks, /kiosks/nearby?lat=&lng=, /kiosks/{id}
+      matches: [{method: GET, path: {type: RegularExpression, value: "/kiosks(/[^/]+)?"}}]
+      backendRefs: [{name: kiosks, port: 80}]
+    - name: plaid-webhook # Plaid calls this; the bank-link service MUST verify the Plaid-Verification JWT
+      matches: [{method: POST, path: {type: Exact, value: /webhooks/plaid}}]
+      backendRefs: [{name: bank-link, port: 80}]
+---
+# End-user authentication for every rule of route "app".
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: app-jwt, namespace: app-api}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: app}]
+  jwt:
+    providers:
+      - name: users
+        issuer: https://auth.domain.com
+        audiences: [app.domain.com]
+        remoteJWKS: {uri: "https://auth.domain.com/.well-known/jwks.json"}
+        claimToHeaders: [{claim: sub, header: x-user-id}] # the services read the user from here
+  # The gateway only proves WHO the user is. What they may do (own wallet only, KYC level needed
+  # for trades and withdrawals, card limits) is decided by each service.
+---
+# Per-user limits; money-out endpoints get a much lower one. Counted per Envoy replica.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: app-limits, namespace: app-api}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: app}]
+  mergeType: StrategicMerge # keep the Gateway's timeout, retry, circuit breaker, outlier ejection
+  rateLimit:
+    type: Local
+    local:
+      rules:
+        - clientSelectors: [{headers: [{name: x-user-id, type: Distinct}]}]
+          limit: {requests: 300, unit: Minute}
+        - clientSelectors:
+            - headers: [{name: x-user-id, type: Distinct}]
+              path: {type: RegularExpression, value: "/(crypto/withdraw|fiat/withdraw|trades/(buy|sell)|kiosks/[^/]+/withdraw)"}
+          limit: {requests: 10, unit: Minute}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: app-public-limits, namespace: app-api}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: app-public}]
+  mergeType: StrategicMerge
+  rateLimit:
+    type: Local
+    local:
+      rules:
+        - clientSelectors: [{sourceCIDR: {type: Distinct, value: 0.0.0.0/0}}]
+          limit: {requests: 120, unit: Minute}

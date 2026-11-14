@@ -1,0 +1,34 @@
+# The same backend namespaces as ../envoy, plus "edge" for the HAProxy Deployments.
+# No surface labels are needed here: with plain HAProxy, which host and path reach which Service
+# is decided in one file (haproxy.cfg), owned by the platform team, not by routes in each namespace.
+apiVersion: v1
+kind: Namespace
+metadata: {name: edge}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: web}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: auth}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: app-api}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: partner-api}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: ledger}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: console}
+---
+apiVersion: v1
+kind: Namespace
+metadata: {name: sandbox}

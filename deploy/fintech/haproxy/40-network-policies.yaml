@@ -1,0 +1,93 @@
+# Inside the cluster, only HAProxy's Pods may reach each surface, so nothing can skip the JWT,
+# scope and IP checks in haproxy.cfg. HAProxy connects to the Services' ClusterIPs; kube-proxy
+# then sends to a Pod, keeping HAProxy's Pod IP as the source, so these selectors match it.
+# Ports are the Pods' port (8080), as in ../envoy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-haproxy-edge-only, namespace: web}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-haproxy-edge-only, namespace: auth}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-haproxy-edge-only, namespace: app-api}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-haproxy-edge-only, namespace: partner-api}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-haproxy-edge-only, namespace: console}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+      ports: [{port: 8080}]
+---
+# The ledger: from HAProxy (partner /v1/ledger) and from the app and partner services, which post
+# journals internally.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: edge-and-internal-posters, namespace: ledger}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: app-api}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: partner-api}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-haproxy-sandbox-only, namespace: sandbox}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: edge}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: haproxy-sandbox}}
+      ports: [{port: 8080}]
+    - from: [{podSelector: {}}]
+      ports: [{port: 8080}]

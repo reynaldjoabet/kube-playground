@@ -1,0 +1,70 @@
+# HAProxy for sandbox: its own Deployment and LoadBalancer Service (own IP), config from
+# haproxy-sandbox.cfg, key from jwt/sandbox-auth.pem.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: haproxy-sandbox, namespace: edge}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haproxy-sandbox
+  namespace: edge
+  annotations:
+    secret.reloader.stakater.com/reload: "sandbox-api-domain-com,sandbox-auth-domain-com"
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: haproxy-sandbox}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: haproxy-sandbox}}
+    spec:
+      serviceAccountName: haproxy-sandbox
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {runAsNonRoot: true, runAsUser: 99, runAsGroup: 99, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: haproxy
+          image: docker.io/haproxy:3.0.5
+          args: ["haproxy", "-W", "-db", "-f", "/usr/local/etc/haproxy/haproxy-sandbox.cfg"]
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: https, containerPort: 8443}
+            - {name: health, containerPort: 8404}
+          readinessProbe: {httpGet: {path: /healthz, port: health}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: health}, periodSeconds: 10, failureThreshold: 3}
+          lifecycle: {preStop: {sleep: {seconds: 10}}}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: config, mountPath: /usr/local/etc/haproxy, readOnly: true}
+            - {name: certs, mountPath: /etc/haproxy/certs, readOnly: true}
+            - {name: jwt, mountPath: /etc/haproxy/jwt, readOnly: true}
+            - {name: run, mountPath: /var/run/haproxy}
+      volumes:
+        - {name: config, configMap: {name: haproxy-sandbox-config}}
+        - {name: jwt, configMap: {name: auth-jwt-keys}}
+        - {name: run, emptyDir: {medium: Memory}}
+        - name: certs
+          projected:
+            sources:
+              - secret: {name: sandbox-api-domain-com, items: [{key: tls.crt, path: sandbox.api.domain.com.pem}, {key: tls.key, path: sandbox.api.domain.com.pem.key}]}
+              - secret: {name: sandbox-auth-domain-com, items: [{key: tls.crt, path: sandbox.auth.domain.com.pem}, {key: tls.key, path: sandbox.auth.domain.com.pem.key}]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy-sandbox
+  namespace: edge
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector: {app.kubernetes.io/name: haproxy-sandbox}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+    - {name: https, port: 443, targetPort: https}

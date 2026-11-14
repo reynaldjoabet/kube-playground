@@ -1,0 +1,113 @@
+# HAProxy for prod: Deployment + LoadBalancer Service + PDB + HPA. The configuration comes from
+# haproxy.cfg via kustomization.yaml (a ConfigMap whose name changes with its content, so editing
+# haproxy.cfg rolls the Pods). Certificates come from cert-manager (10-certificates.yaml), and the
+# auth server's public key from jwt/auth.pem.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: haproxy-edge, namespace: edge}
+automountServiceAccountToken: false # HAProxy never talks to the Kubernetes API
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haproxy-edge
+  namespace: edge
+  annotations:
+    # Roll the Pods when a certificate Secret is renewed (needs Stakater Reloader installed).
+    secret.reloader.stakater.com/reload: "apex-domain-com,docs-domain-com,auth-domain-com,api-domain-com,console-domain-com"
+spec:
+  replicas: 3
+  strategy: {rollingUpdate: {maxSurge: 1, maxUnavailable: 0}}
+  selector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: haproxy-edge}}
+    spec:
+      serviceAccountName: haproxy-edge
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 99 # the image's haproxy user
+        runAsGroup: 99
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+      containers:
+        - name: haproxy
+          image: docker.io/haproxy:3.0.5
+          args: ["haproxy", "-W", "-db", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: https, containerPort: 8443}
+            - {name: health, containerPort: 8404}
+          readinessProbe: {httpGet: {path: /healthz, port: health}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: health}, periodSeconds: 10, failureThreshold: 3}
+          lifecycle:
+            preStop: {sleep: {seconds: 10}} # let the NLB stop sending before HAProxy stops listening
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /usr/local/etc/haproxy, readOnly: true}
+            - {name: certs, mountPath: /etc/haproxy/certs, readOnly: true}
+            - {name: jwt, mountPath: /etc/haproxy/jwt, readOnly: true}
+            - {name: run, mountPath: /var/run/haproxy}
+      volumes:
+        - name: config
+          configMap: {name: haproxy-edge-config}
+        - name: jwt
+          configMap: {name: auth-jwt-keys}
+        - name: run
+          emptyDir: {medium: Memory}
+        # One file pair per host: <host>.pem (certificate) + <host>.pem.key, which HAProxy pairs up
+        # (ssl-load-extra-files key) and picks by SNI.
+        - name: certs
+          projected:
+            sources:
+              - secret: {name: apex-domain-com, items: [{key: tls.crt, path: domain.com.pem}, {key: tls.key, path: domain.com.pem.key}]}
+              - secret: {name: docs-domain-com, items: [{key: tls.crt, path: docs.domain.com.pem}, {key: tls.key, path: docs.domain.com.pem.key}]}
+              - secret: {name: auth-domain-com, items: [{key: tls.crt, path: auth.domain.com.pem}, {key: tls.key, path: auth.domain.com.pem.key}]}
+              - secret: {name: api-domain-com, items: [{key: tls.crt, path: api.domain.com.pem}, {key: tls.key, path: api.domain.com.pem.key}]}
+              - secret: {name: console-domain-com, items: [{key: tls.crt, path: console.domain.com.pem}, {key: tls.key, path: console.domain.com.pem.key}]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy-edge
+  namespace: edge
+  annotations: # AWS example (AWS Load Balancer Controller); replace for other clouds
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local # the client's real IP reaches HAProxy (src), for the console allowlist
+  selector: {app.kubernetes.io/name: haproxy-edge}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+    - {name: https, port: 443, targetPort: https}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: haproxy-edge, namespace: edge}
+spec:
+  minAvailable: 2
+  selector: {matchLabels: {app.kubernetes.io/name: haproxy-edge}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: haproxy-edge, namespace: edge}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: haproxy-edge}
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 60}}

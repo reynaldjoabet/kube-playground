@@ -1,0 +1,30 @@
+# auth.domain.com: the OAuth2/OIDC authorization server (for example lattice-oidc, deploy/lattice-oidc).
+# It issues every token the other surfaces check:
+#   audience api.domain.com     partner apps (client credentials), scopes such as customers.read
+#   audience app.domain.com     end users of the mobile/web app
+#   audience console.domain.com console staff; must carry amr containing "mfa"
+# Expects Service "auth-server" in namespace auth (port 80). Its keys are published at
+# https://auth.domain.com/.well-known/jwks.json (adjust jwks paths in 32/33/34 if yours differ).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: auth, namespace: auth}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-auth}]
+  hostnames: [auth.domain.com]
+  rules:
+    - name: all
+      backendRefs: [{name: auth-server, port: 80}]
+---
+# Brute-force guard on the whole authorization server: per client IP, per Envoy replica.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: auth-limits, namespace: auth}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: auth}]
+  mergeType: StrategicMerge # keep the Gateway's timeout, circuit breaker and outlier ejection
+  rateLimit:
+    type: Local
+    local:
+      rules:
+        - clientSelectors: [{sourceCIDR: {type: Distinct, value: 0.0.0.0/0}}]
+          limit: {requests: 300, unit: Minute}

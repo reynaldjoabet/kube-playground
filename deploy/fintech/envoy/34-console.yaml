@@ -1,0 +1,109 @@
+# console.domain.com: the partner/admin console. MFA required.
+#
+# Three routes on the one host, chosen by longest path prefix, each with its own policy:
+#   console-login  /admin/auth/...  login, logout, session      office/VPN IPs only, rate-limited
+#   console-admin  /admin/...       the admin API                office/VPN IPs + staff JWT with MFA
+#   console-ui     /                the console's web app         office/VPN IPs only
+# Separate routes (rather than one route with an optional JWT) mean no rule ordering can ever let
+# an /admin request through on the UI's looser policy.
+#
+# Assumes staff sign in at auth.domain.com, which issues tokens with audience console.domain.com
+# and an "amr" claim containing "mfa" after a second factor. If admin-api runs its own cookie
+# sessions instead, replace the jwt block with an Envoy Gateway "oidc" block.
+# Fine-grained admin permissions (/admin/roles, /admin/permissions) stay in admin-api.
+#
+# Expects Services console-ui and admin-api in namespace console, port 80.
+# 203.0.113.0/24 and 198.51.100.0/24 are placeholders: put the office and VPN egress ranges here.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: console-ui, namespace: console}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-console}]
+  hostnames: [console.domain.com]
+  rules:
+    - matches: [{path: {type: PathPrefix, value: /}}]
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains; preload"}
+              - {name: X-Frame-Options, value: DENY}
+              - {name: X-Content-Type-Options, value: nosniff}
+            remove: [Server, X-Powered-By]
+      backendRefs: [{name: console-ui, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: console-admin, namespace: console}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-console}]
+  hostnames: [console.domain.com]
+  rules:
+    - matches: [{path: {type: PathPrefix, value: /admin}}] # users, kyc, wallets, transactions, compliance, roles, permissions
+      backendRefs: [{name: admin-api, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: console-login, namespace: console}
+spec:
+  parentRefs: [{name: prod, namespace: infra, sectionName: https-console}]
+  hostnames: [console.domain.com]
+  rules:
+    - matches: [{path: {type: PathPrefix, value: /admin/auth}}] # POST login, POST logout, GET session
+      backendRefs: [{name: admin-api, port: 80}]
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: console-ui-network, namespace: console}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: console-ui}]
+  authorization:
+    defaultAction: Deny
+    rules:
+      - {name: office-and-vpn, action: Allow, principal: {clientCIDRs: [203.0.113.0/24, 198.51.100.0/24]}}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: console-login-network, namespace: console}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: console-login}]
+  authorization:
+    defaultAction: Deny
+    rules:
+      - {name: office-and-vpn, action: Allow, principal: {clientCIDRs: [203.0.113.0/24, 198.51.100.0/24]}}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: console-admin-mfa, namespace: console}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: console-admin}]
+  jwt:
+    providers:
+      - name: staff
+        issuer: https://auth.domain.com
+        audiences: [console.domain.com]
+        remoteJWKS: {uri: "https://auth.domain.com/.well-known/jwks.json"}
+        claimToHeaders: [{claim: sub, header: x-staff-id}]
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: staff-with-mfa-from-office-or-vpn # every principal condition must hold
+        action: Allow
+        principal:
+          clientCIDRs: [203.0.113.0/24, 198.51.100.0/24]
+          jwt:
+            provider: staff
+            claims: [{name: amr, valueType: StringArray, values: [mfa]}]
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: console-login-limits, namespace: console}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: console-login}]
+  mergeType: StrategicMerge
+  rateLimit:
+    type: Local
+    local:
+      rules:
+        - clientSelectors: [{sourceCIDR: {type: Distinct, value: 0.0.0.0/0}}]
+          limit: {requests: 20, unit: Minute}

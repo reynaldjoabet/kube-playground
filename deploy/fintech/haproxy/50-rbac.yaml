@@ -1,0 +1,22 @@
+# With plain HAProxy every routing and access rule lives in haproxy.cfg, which becomes a ConfigMap
+# in namespace edge. So only the platform team gets write access to edge. App teams change edge
+# behaviour through a reviewed change to haproxy.cfg (a pull request), not through objects in
+# their own namespace as with Gateway API (../envoy/50-rbac.yaml).
+#
+# "team-platform" is a placeholder for your identity provider's group name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: edge-operator, namespace: edge}
+rules:
+  - apiGroups: ["", apps, policy, autoscaling]
+    resources: [configmaps, services, deployments, poddisruptionbudgets, horizontalpodautoscalers, pods, pods/log]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: edge-operator, namespace: edge}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: edge-operator}
+subjects: [{apiGroup: rbac.authorization.k8s.io, kind: Group, name: team-platform}]

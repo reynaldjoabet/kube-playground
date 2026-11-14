@@ -1,0 +1,18 @@
+# kubectl apply -k deploy/fintech/envoy
+# Needs: Gateway API CRDs, Envoy Gateway (GatewayClass "envoy", deploy/platform/gateway.yaml),
+# cert-manager with Gateway API support, and the backend Services listed in each file.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-namespaces.yaml
+  - 10-cert-manager-issuer.yaml
+  - 20-gateways.yaml
+  - 25-gateway-policies.yaml
+  - 30-web.yaml
+  - 31-auth.yaml
+  - 32-app-api.yaml
+  - 33-partner-api.yaml
+  - 34-console.yaml
+  - 35-sandbox.yaml
+  - 40-network-policies.yaml
+  - 50-rbac.yaml

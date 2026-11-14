@@ -1,0 +1,100 @@
+# Inside the cluster, only the right Gateway's Envoy Pods may reach each surface. Without this, any
+# Pod could call a backend directly and skip every JWT, scope and IP check at the edge.
+#
+# Assumes the containers listen on 8080 (Services map port 80 -> 8080). NetworkPolicy ports are
+# the Pod's port, because Envoy connects to Pod IPs directly (ingress-and-gateway-api.md §4.2).
+# Kubelet probes come from the node itself; with Calico, traffic from a Pod's own node is allowed
+# by default, so probes keep working.
+#
+# Envoy Gateway labels each proxy Pod with its Gateway's name and namespace:
+#   gateway.envoyproxy.io/owning-gateway-name: prod | sandbox
+#   gateway.envoyproxy.io/owning-gateway-namespace: infra
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-prod-gateway-only, namespace: web}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-prod-gateway-only, namespace: auth}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-prod-gateway-only, namespace: app-api}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-prod-gateway-only, namespace: partner-api}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-prod-gateway-only, namespace: console}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+      ports: [{port: 8080}]
+---
+# The ledger: from the prod Gateway (partner /v1/ledger) and from the app and partner services,
+# which post journals internally (wallet transfers, trades, deposits).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: gateway-and-internal-posters, namespace: ledger}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: app-api}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: partner-api}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: from-sandbox-gateway-only, namespace: sandbox}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: envoy-gateway-system}}
+          podSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: sandbox, gateway.envoyproxy.io/owning-gateway-namespace: infra}}
+      ports: [{port: 8080}]
+    - from: [{podSelector: {}}] # sandbox services may call each other (customers -> ledger, ...)
+      ports: [{port: 8080}]

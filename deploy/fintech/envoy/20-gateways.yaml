@@ -1,0 +1,180 @@
+# The platform team's part: two Gateways, so prod and sandbox never share a proxy, an IP or a
+# certificate. Both use the GatewayClass "envoy" (deploy/platform/gateway.yaml). Envoy Gateway gives
+# each Gateway its own Envoy Deployment and LoadBalancer Service, sized by its EnvoyProxy.
+#
+# Hostnames with no listener here, on purpose:
+#   status.domain.com  host it OUTSIDE this cluster (a status-page service), or it goes down with
+#                      what it reports on. DNS only.
+#   events.domain.com  outbound webhook delivery. Its "IPs" are the cluster's EGRESS addresses
+#                      (a NAT gateway with fixed IPs), not a Gateway listener.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata: {name: prod-proxy, namespace: infra}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        pod:
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: topology.kubernetes.io/zone
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod}}
+        container:
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 1Gi}
+      envoyHpa:
+        minReplicas: 3
+        maxReplicas: 12
+        metrics:
+          - type: Resource
+            resource: {name: cpu, target: {type: Utilization, averageUtilization: 60}}
+      envoyPDB: {minAvailable: 2}
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local # real client IPs: needed for the console's IP allowlist
+        annotations: # AWS example (AWS Load Balancer Controller); replace for other clouds
+          service.beta.kubernetes.io/aws-load-balancer-type: external
+          service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  shutdown: {drainTimeout: 60s}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata: {name: sandbox-proxy, namespace: infra}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 2
+        container:
+          resources:
+            requests: {cpu: 200m, memory: 256Mi}
+            limits: {memory: 512Mi}
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: external
+          service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: prod
+  namespace: infra
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod # issues one certificate per listener below
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: prod-proxy}
+  listeners:
+    # ---- port 80: only the redirect route (and cert-manager's HTTP-01 challenges) ----
+    - name: http-apex
+      protocol: HTTP
+      port: 80
+      hostname: domain.com
+      allowedRoutes: {namespaces: {from: Same}}
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.domain.com"
+      allowedRoutes: {namespaces: {from: Same}}
+    # ---- port 443: one listener per hostname, each open to ONE surface ----
+    # Each listener has its OWN certificate, naming only its own host. If several listeners shared
+    # one certificate (with each other's names in it), a browser could reuse an HTTP/2 connection
+    # opened for api.domain.com to send console.domain.com requests (connection coalescing).
+    # Envoy Gateway flags that as OverlappingTLSConfig and falls back to HTTP/1.1, unless a
+    # ClientTrafficPolicy sets ALPN, as 25-gateway-policies.yaml does. Tested in the lab.
+    - name: https-apex
+      protocol: HTTPS
+      port: 443
+      hostname: domain.com
+      tls: {mode: Terminate, certificateRefs: [{name: apex-domain-com}]}
+      allowedRoutes:
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: web}}}
+    - name: https-docs
+      protocol: HTTPS
+      port: 443
+      hostname: docs.domain.com
+      tls: {mode: Terminate, certificateRefs: [{name: docs-domain-com}]}
+      allowedRoutes:
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: web}}}
+    - name: https-auth
+      protocol: HTTPS
+      port: 443
+      hostname: auth.domain.com
+      tls: {mode: Terminate, certificateRefs: [{name: auth-domain-com}]}
+      allowedRoutes:
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: auth}}}
+    - name: https-api
+      protocol: HTTPS
+      port: 443
+      hostname: api.domain.com
+      tls: {mode: Terminate, certificateRefs: [{name: api-domain-com}]}
+      allowedRoutes: # app-api and partner-api share this host, on different paths
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: api}}}
+        kinds: [{kind: HTTPRoute}]
+    - name: https-console
+      protocol: HTTPS
+      port: 443
+      hostname: console.domain.com
+      tls: {mode: Terminate, certificateRefs: [{name: console-domain-com}]}
+      allowedRoutes:
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: console}}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: sandbox
+  namespace: infra
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-sandbox # one certificate per listener
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: sandbox-proxy}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.domain.com" # only sandbox.* names resolve to this Gateway's IP
+      allowedRoutes: {namespaces: {from: Same}}
+    - name: https-sandbox-api
+      protocol: HTTPS
+      port: 443
+      hostname: sandbox.api.domain.com # two labels deep: a *.domain.com wildcard would NOT cover it
+      tls: {mode: Terminate, certificateRefs: [{name: sandbox-api-domain-com}]}
+      allowedRoutes:
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: sandbox}}}
+    - name: https-sandbox-auth
+      protocol: HTTPS
+      port: 443
+      hostname: sandbox.auth.domain.com
+      tls: {mode: Terminate, certificateRefs: [{name: sandbox-auth-domain-com}]}
+      allowedRoutes:
+        namespaces: {from: Selector, selector: {matchLabels: {gateway.domain.com/surface: sandbox}}}
+---
+# HTTP -> HTTPS for every host on both Gateways. App routes attach to https-* listeners only.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: to-https, namespace: infra}
+spec:
+  parentRefs:
+    - {name: prod, sectionName: http-apex}
+    - {name: prod, sectionName: http}
+    - {name: sandbox, sectionName: http}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect: {scheme: https, statusCode: 301}

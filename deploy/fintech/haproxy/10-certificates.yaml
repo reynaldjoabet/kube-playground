@@ -1,0 +1,78 @@
+# One certificate per host, issued by cert-manager into Secrets in namespace edge, mounted into
+# HAProxy (20-haproxy.yaml). Not validated in the lab: cert-manager isn't installed there.
+#
+# DNS-01, not HTTP-01: HTTP-01 needs /.well-known/acme-challenge/<token> routed to cert-manager's
+# temporary solver Pods. With Gateway API or Ingress, cert-manager creates that route itself. With
+# a hand-written haproxy.cfg nothing would, so the challenge is answered in DNS instead.
+# Route 53 shown; cert-manager supports other DNS providers.
+#
+# Renewals: cert-manager updates the Secrets, the kubelet updates the mounted files within about a
+# minute, but HAProxy only reads certificates at start or reload. 20-haproxy.yaml carries the
+# annotation for Stakater Reloader, which rolls the Deployment when a referenced Secret changes.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata: {name: letsencrypt-dns}
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: platform@domain.com
+    privateKeySecretRef: {name: letsencrypt-dns-account}
+    solvers:
+      - dns01:
+          route53: {region: us-east-1} # credentials via IRSA or Pod Identity (workload-identity.md)
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: apex-domain-com, namespace: edge}
+spec:
+  secretName: apex-domain-com
+  dnsNames: [domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: docs-domain-com, namespace: edge}
+spec:
+  secretName: docs-domain-com
+  dnsNames: [docs.domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: auth-domain-com, namespace: edge}
+spec:
+  secretName: auth-domain-com
+  dnsNames: [auth.domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: api-domain-com, namespace: edge}
+spec:
+  secretName: api-domain-com
+  dnsNames: [api.domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: console-domain-com, namespace: edge}
+spec:
+  secretName: console-domain-com
+  dnsNames: [console.domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: sandbox-api-domain-com, namespace: edge}
+spec:
+  secretName: sandbox-api-domain-com
+  dnsNames: [sandbox.api.domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: sandbox-auth-domain-com, namespace: edge}
+spec:
+  secretName: sandbox-auth-domain-com
+  dnsNames: [sandbox.auth.domain.com]
+  issuerRef: {kind: ClusterIssuer, name: letsencrypt-dns}

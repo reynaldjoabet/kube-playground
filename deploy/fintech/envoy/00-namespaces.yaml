@@ -1,0 +1,44 @@
+# One namespace per surface. The labels are what each Gateway listener's allowedRoutes selects on,
+# so a namespace can only publish routes on the hostnames the platform team assigned to it.
+# App teams must not be able to edit namespace labels (see 50-rbac.yaml).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: web # domain.com, docs.domain.com
+  labels: {gateway.domain.com/surface: web}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth # auth.domain.com: the OAuth2/OIDC authorization server
+  labels: {gateway.domain.com/surface: auth}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-api # api.domain.com, unversioned paths: the first-party (mobile/web app) API
+  labels: {gateway.domain.com/surface: api}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: partner-api # api.domain.com/v1: the public partner API
+  labels: {gateway.domain.com/surface: api}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ledger # the double-entry ledger; reached from the Gateway only via partner-api's route
+  labels: {gateway.domain.com/surface: internal}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: console # console.domain.com: partner/admin console UI and the admin API
+  labels: {gateway.domain.com/surface: console}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox # sandbox.api.domain.com, sandbox.auth.domain.com
+  labels: {gateway.domain.com/surface: sandbox}

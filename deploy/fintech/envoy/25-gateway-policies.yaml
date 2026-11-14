@@ -1,0 +1,54 @@
+# Gateway-wide settings, owned by the platform team.
+# ClientTrafficPolicy: how clients may talk to the proxy. BackendTrafficPolicy: defaults for every
+# backend. A route-level BackendTrafficPolicy REPLACES these unless it sets mergeType (tested in the
+# lab: ingress-and-gateway-api.md §3.9, object 10), so app policies here always set it.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata: {name: edge-clients, namespace: infra}
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: prod}
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: sandbox}
+  tls:
+    minVersion: "1.2"
+    alpnProtocols: [h2, http/1.1]
+  timeout:
+    http:
+      requestReceivedTimeout: 30s # slowloris guard; raise if KYC uploads come over slow links
+      idleTimeout: 120s
+  headers:
+    withUnderscoresAction: RejectRequest
+    xForwardedClientCert: {mode: Sanitize}
+    # Identity headers are set ONLY by the JWT filter (claimToHeaders) from a verified token. Drop
+    # any a client sends, before anything else runs. claimToHeaders overwrites only the header it
+    # sets itself, so without this a forged X-User-Id reached the partner services next to a real
+    # partner token (tested in the lab).
+    earlyRequestHeaders:
+      remove: [x-user-id, x-client-id, x-staff-id]
+  clientIPDetection:
+    xForwardedFor: {numTrustedHops: 0} # NLB (IP targets) + externalTrafficPolicy Local: trust the TCP source only
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: edge-defaults, namespace: infra}
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: prod}
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: sandbox}
+  timeout:
+    http: {requestTimeout: 15s}
+  retry: # safe defaults for money-moving APIs: never retry a request the backend may have processed
+    numRetries: 1
+    retryOn: {triggers: [connect-failure, refused-stream]}
+    perRetry:
+      backOff: {baseInterval: 100ms, maxInterval: 1s}
+  circuitBreaker:
+    maxConnections: 4096
+    maxPendingRequests: 1024
+    maxParallelRequests: 4096
+  healthCheck:
+    passive: # eject Pods that keep failing, but never more than half
+      consecutive5XxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
