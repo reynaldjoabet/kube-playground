@@ -30,6 +30,15 @@ Without either API, every app that wants outside traffic gets its own `type: Loa
 
 That means one cloud load balancer per app, each with its own IP, certificates and settings. And it's L4 only, so it can't route `/api` and `/` on the same host to different apps.
 
+![Three clients, each going through its own LB, marked Costly, to service-a, service-b and service-c in the cluster, each of which sends to two Pods](image-21.png)
+
+*Slide from a course video (source not recorded).*
+
+Each red arrow is a separately billed cloud load balancer. Three apps mean three LBs, three public IPs and three sets of LB settings, and the count grows with every app you expose. Two things the picture simplifies:
+
+- **The LB doesn't send to the Service.** It sends to the Service's node port on the nodes, where kube-proxy picks a Pod. Some LBs send straight to Pod IPs instead ([kubernetes-services.md](kubernetes-services.md) §4.4, "How outside traffic reaches the LB-IP rule").
+- **The cost is more than money.** Each LB also needs its own DNS name, certificate and firewall rules, and its own health checks against every node.
+
 Both Ingress and Gateway API put **one shared proxy** at the edge and describe its HTTP routing as Kubernetes objects:
 
 ```
@@ -210,6 +219,94 @@ The cloud LB lives outside the cluster and is billed by the provider, whether it
    - *Example:* mobile clients call `orders.OrderService/*` and `users.UserService/*` on one hostname. A `GRPCRoute` splits them by gRPC service name and method, which L4 can't see.
 6. **Many TCP or TLS services behind one LB.**
    - *Example:* several tenants' Postgres instances, each needing its own hostname over TLS. A Gateway with `TLSRoute` passthrough routes by SNI to the right database Service through one LB, instead of one LB per tenant.
+
+#### Why use Ingress at all, and when to skip it
+
+Services already provide load balancing from outside the cluster (`NodePort`, `LoadBalancer`). So why add Ingress?
+
+**The mainline case: several HTTP/HTTPS services behind one external IP.** Each service can have a different URL path, or its own domain. That's much simpler for clients than exposing each service with its own LoadBalancer Service, which gives each one a separate external IP.
+
+Example (not tested), three apps:
+
+```text
+Without Ingress: three LoadBalancer Services
+  shop.example.com   → 203.0.113.10  (LB for Service web)
+  api.example.com    → 203.0.113.11  (LB for Service api)
+  shop.example.com/docs  → can't be done: an L4 LB sees only IP and port, not the path
+
+With Ingress: one IP, rules by host and path
+  shop.example.com, api.example.com → 203.0.113.20  (the ingress controller's LB)
+```
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: acme, namespace: shop}
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts: [shop.example.com, api.example.com]
+    secretName: acme-tls                 # one certificate, one place
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - {path: /docs, pathType: Prefix, backend: {service: {name: docs, port: {number: 80}}}}
+      - {path: /,     pathType: Prefix, backend: {service: {name: web,  port: {number: 80}}}}
+  - host: api.example.com
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: api, port: {number: 80}}}}
+```
+
+The three app Services stay `ClusterIP`. Only the controller's own Service is a LoadBalancer.
+
+**When to skip it: one front end.** If the application is fronted by a single "front end" microservice, a LoadBalancer Service is likely enough. Leaving Ingress out is simpler, and it can make it easier to restrict access to specific clients with NetworkPolicy. Behind an ingress proxy, the app's Pods only ever see the proxy as the source (§2, "Ingress as an application-layer load balancer").
+
+That works only if the policy can see the client's address. Tested on minikube (Calico enforces NetworkPolicy), with a NodePort standing in for the LoadBalancer and two outside clients:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata: {name: frontend, namespace: fe-demo}
+spec:
+  type: NodePort                     # stands in for type: LoadBalancer (no cloud LB on minikube)
+  externalTrafficPolicy: Local       # keep the client's IP
+  selector: {app: frontend}
+  ports: [{port: 80, targetPort: 8080, nodePort: 30110}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: frontend-allow-partner, namespace: fe-demo}
+spec:
+  podSelector: {matchLabels: {app: frontend}}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 192.168.49.10/32}   # the one allowed client
+    ports: [{port: 8080}]                 # the Pod port
+```
+
+`curl 192.168.49.2:30110/clientip` from each client (lab):
+
+| Setup | From 192.168.49.10 (allowed) | From 192.168.49.11 (not allowed) |
+|---|---|---|
+| `externalTrafficPolicy: Local` + policy | answered; Pod sees `192.168.49.10` | timeout |
+| `externalTrafficPolicy: Cluster` + policy | answered; Pod sees `10.244.120.64` (the node, SNAT) | timeout |
+| `Cluster`, no policy | answered; Pod sees `10.244.120.64` | answered; Pod sees `10.244.120.64` |
+
+- **With `Local`, the policy works and the Pod sees the real client.**
+- **With `Cluster`, the policy still worked on this one-node cluster,** even though the Pod saw the node's address. Calico checks the policy in the node's forward path, before kube-proxy's masquerade runs in `POSTROUTING`, so it still saw `192.168.49.10`.
+- **That doesn't hold across nodes** (lab). With `Cluster`, a request that arrives at node A and goes to a Pod on node B is masqueraded on node A. Node B's policy sees node A's address, so the allowed client is refused, or, with a policy allowing node addresses, everyone is let in. Use `externalTrafficPolicy: Local` when the policy filters on client IPs. Tested with a second minikube node (`minikube-m04`, 192.168.49.5) and the Pod only on it, the same policy (allow 192.168.49.10) and NodePort 30120:
+
+  | `curl <node>:30120/clientip` from 192.168.49.10 | via node 2 (Pod is local) | via node 1 (forwarded) |
+  |---|---|---|
+  | `Cluster` + policy | answered; Pod sees `10.244.59.128` (node 2's address) | **timeout**: refused by node 2's policy |
+  | `Local` + policy | answered; Pod sees `192.168.49.10` | timeout: no local Pod on node 1 |
+  | `Cluster`, no policy (control) | answered | answered; Pod sees `10.244.120.64` (node 1's address) |
+
+  The other client (192.168.49.11) was refused in every case with the policy on.
+- **With a real cloud LB, the client IP must also survive the LB.** Pass-through LBs keep it. Proxying LBs replace it, unless they support the PROXY protocol, which a NetworkPolicy can't read. `loadBalancerSourceRanges` on the Service is the other way to limit clients ([kubernetes-services.md](kubernetes-services.md) §4.4.1).
 
 #### A typical production layout
 
@@ -509,6 +606,45 @@ So the chain is **LB → nodes → kube-proxy → proxy Pod (nginx/HAProxy) → 
 
 The same path, measured hop by hop with Envoy Gateway, is in §3.4 "Following one request into the proxy Pod". The ingress-nginx code for the lookup is in §2.1 "The Service in the code".
 
+#### Ingress as an application-layer load balancer, and what that means for NetworkPolicy
+
+Kubernetes Ingress builds on top of Services to provide load balancing at the application layer. It maps HTTP and HTTPS requests for particular domains or URLs to Services, and it can terminate TLS before load balancing to the Service.
+
+Services are handled at the network layer (L3/L4): kube-proxy rewrites addresses on packets and never reads the request. An ingress load balancer works at the application layer (L7, HTTP). Incoming connections are **terminated** at the proxy, so it can inspect each HTTP or HTTPS request. The requests are then forwarded over **separate connections** from the proxy to Pods backing the chosen Service.
+
+```text
+ Service (L3/L4)    client ════════════ one TCP connection ═════════════► Pod
+                                  (kube-proxy rewrites the destination address)
+
+ Ingress (L7)       client ═══ connection 1 ═══► proxy Pod ═══ connection 2 ═══► Pod
+                                                   reads Host, path, headers
+                                                   ends TLS
+```
+
+**What that means for NetworkPolicy.** Connection 2 starts at the proxy Pod, so the backend Pods see the **proxy's Pod IP** as the source, not the client's. A NetworkPolicy on the backend Pods can therefore allow only connections from the proxy. It can't allow or block specific original clients, because their addresses never reach the backend as a packet source.
+
+Allowing only the ingress controller's Pods to reach an app (not tested; the label is ingress-nginx's default):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: only-from-ingress, namespace: shop}
+spec:
+  podSelector: {matchLabels: {app: api}}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+      podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
+    ports: [{port: 8080}]          # the Pod port, since the proxy connects to Pod IPs directly
+```
+
+To filter on the **original** client, do it before connection 2 (not tested):
+
+- **On the proxy's own LoadBalancer Service:** `loadBalancerSourceRanges`, enforced by the cloud LB or by kube-proxy's `KUBE-FW` chain ([kubernetes-services.md](kubernetes-services.md) §4.4.1).
+- **In the proxy:** an allowlist on the client address it sees, for example ingress-nginx's `nginx.ingress.kubernetes.io/whitelist-source-range` annotation. The proxy only sees the real client if the client IP survives to it: `externalTrafficPolicy: Local` on its Service, or the PROXY protocol from the LB.
+- **In the app:** read `X-Forwarded-For` or `X-Real-IP`, which the proxy adds. These are headers, so a NetworkPolicy can't use them.
+
 ### 2.1 Two parts: the object and the controller
 
 ```
@@ -530,6 +666,47 @@ Kubernetes ships the Ingress **type** but no controller. You install one. In the
 ```sh
 minikube addons enable ingress        # installs ingress-nginx and IngressClass "nginx"
 ```
+
+#### With Ingress you still need a NodePort or LoadBalancer Service
+
+Ingress doesn't remove the need to expose something with a `NodePort` or
+`LoadBalancer` Service. It reduces it to **one** Service: the one in front of
+the ingress controller. The app Services behind it (`wear-service`,
+`video-service`) stay `ClusterIP`.
+
+```text
+ On-prem / bare metal                         In a cloud (e.g. GCP)
+
+                                              cloud LB  (one public IP)
+                                                 │
+ <node IP>:<nodePort>                            ▼
+        │                                     <node IP>:<nodePort>
+        ▼                                            │
+ ingress-service  (type: NodePort)            ingress-service  (type: LoadBalancer)
+        │                                            │
+        └──────────────┬─────────────────────────────┘
+                       ▼
+          ingress controller Pods (nginx): TLS 🔒, host/path rules
+                       │
+           ┌───────────┴────────────┐
+           ▼                        ▼
+   wear-service (ClusterIP)   video-service (ClusterIP)      ← only looked up for Pod IPs
+           │                        │
+     wear wear wear          video video video
+```
+
+- **On-prem, `type: NodePort`:** clients, or a load balancer you run yourself,
+  reach `<any node IP>:<nodePort>`. The node port must be in the Service
+  node-port range, 30000–32767 by default. A port such as 38080 in some course
+  slides would need `--service-node-port-range` widened on the API server.
+- **In a cloud, `type: LoadBalancer`:** the same NodePort, plus a cloud LB with a
+  public IP in front of it, created by the cloud controller manager (below).
+- **Either way, it's one Service for every app behind the controller.** Without
+  Ingress, each app would need its own NodePort or LoadBalancer Service (§1).
+- **The controller can also skip the Service:** `hostNetwork` or `hostPort` on
+  the controller Pods, as some bare-metal setups do
+  ([kubernetes-services.md](kubernetes-services.md) §2.3, "Every way in from
+  outside the cluster").
 
 #### Installing the controller: where the load balancer comes from
 
@@ -640,6 +817,150 @@ The ways to get outside traffic to the proxy Pods:
 | `ClusterIP` only | reachable only inside the cluster | internal-only gateways, service-to-service routing |
 
 The Service type only decides how traffic reaches the proxy. The routing rules (Ingress or HTTPRoute) work the same with any of them.
+
+#### Helm or hand-written manifests: the same objects
+
+Helm doesn't install anything special. It renders its templates into plain
+YAML and sends that to the API server, which is what `kubectl apply` does with
+YAML you wrote yourself:
+
+```text
+Helm:     helm install …          ─► renders the YAML ─► sends it to the API server ─► the objects exist
+Manual:   kubectl apply -f my.yaml ──────────────────► sends it to the API server ─► the same objects exist
+```
+
+So if you write the manifests by hand, applying them **is** the installation:
+
+```text
+write the YAML  ──►  kubectl apply -f traefik.yaml  ──►  done
+                     (this IS the installation)
+```
+
+There's no `helm install`, and nothing to install on the nodes or your laptop
+beyond `kubectl`:
+
+- **The controller program comes from the container image** named in your
+  Deployment, for example `docker.io/traefik:v3.7.18`. The kubelet pulls it from
+  the registry by itself when the Pod starts.
+- **The `Ingress` and `IngressClass` kinds are already built into Kubernetes,**
+  so there's nothing to add for them.
+
+The exceptions are kinds that aren't built in. Gateway API's `Gateway` and
+`HTTPRoute`, and a controller's own CRDs (Traefik's `IngressRoute`, for
+example), need their CRD files applied first (§3.2). Those are just more YAML.
+
+##### Traefik from hand-written manifests (lab)
+
+A minimal Traefik install, written by hand and applied with `kubectl apply`:
+no Helm, no CRDs of its own. The RBAC rules and flags were copied from the
+official chart (`traefik-42.4.0`, rendered with `helm template` and its Gateway
+provider switched on), leaving out the rules for Traefik's own CRDs:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata: {name: traefik}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: traefik, namespace: traefik}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: traefik}
+rules:
+- apiGroups: [""]
+  resources: [services, secrets, nodes, configmaps]
+  verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [namespaces]
+  verbs: [list, watch]
+- apiGroups: [discovery.k8s.io]
+  resources: [endpointslices]
+  verbs: [list, watch]
+- apiGroups: [networking.k8s.io]
+  resources: [ingresses, ingressclasses]
+  verbs: [get, list, watch]
+- apiGroups: [networking.k8s.io]
+  resources: [ingresses/status]
+  verbs: [update]
+- apiGroups: [gateway.networking.k8s.io]
+  resources: [backendtlspolicies, gatewayclasses, gateways, grpcroutes, httproutes, referencegrants, tcproutes, tlsroutes]
+  verbs: [get, list, watch]
+- apiGroups: [gateway.networking.k8s.io]
+  resources: [backendtlspolicies/status, gatewayclasses/status, gateways/status, grpcroutes/status, httproutes/status, tcproutes/status, tlsroutes/status]
+  verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: traefik}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: traefik}
+subjects: [{kind: ServiceAccount, name: traefik, namespace: traefik}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: traefik, namespace: traefik}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: traefik}}
+  template:
+    metadata: {labels: {app: traefik}}
+    spec:
+      serviceAccountName: traefik
+      securityContext: {runAsNonRoot: true, runAsUser: 65532}
+      containers:
+      - name: traefik
+        image: docker.io/traefik:v3.7.18
+        args:
+        - --entryPoints.web.address=:8000
+        - --entryPoints.traefik.address=:8080
+        - --ping=true
+        - --providers.kubernetesingress
+        - --providers.kubernetesingress.ingressendpoint.publishedservice=traefik/traefik
+        - --providers.kubernetesgateway
+        - --providers.kubernetesgateway.statusaddress.service.name=traefik
+        - --providers.kubernetesgateway.statusaddress.service.namespace=traefik
+        ports:
+        - {name: web, containerPort: 8000}
+        - {name: traefik, containerPort: 8080}
+        readinessProbe: {httpGet: {path: /ping, port: 8080}}
+        resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 192Mi}}
+        securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: traefik, namespace: traefik}
+spec:
+  type: ClusterIP                         # lab only; LoadBalancer in a cloud
+  selector: {app: traefik}
+  ports: [{name: web, port: 80, targetPort: web}]
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata: {name: traefik}
+spec: {controller: traefik.io/ingress-controller}
+```
+
+What it takes to work, and what the lab showed:
+
+- **Four things must line up:**
+  - the Service's `selector` matches the Pod labels;
+  - the ClusterRole covers everything the controller watches;
+  - the IngressClass `controller` is the string Traefik claims
+    (`traefik.io/ingress-controller`);
+  - `publishedservice` names the Service.
+- **An Ingress worked straight away.** One with `ingressClassName: traefik` and
+  host `ing.example.com`, in front of a two-Pod `web` Deployment: six requests
+  from a client Pod were split 3 and 3 over both Pods. An unknown host got 404,
+  and Traefik logged no errors and no RBAC "forbidden" messages.
+- **The Ingress's ADDRESS stayed empty.** Traefik copies it from its Service's
+  load-balancer status, and a ClusterIP Service has none. With `type:
+  LoadBalancer` (the chart's default) it would show the LB's IP.
+- **Port 80 on the Service maps to 8000 in the Pod** (the `web` entryPoint), so
+  Traefik never needs a root-only port.
+- **The same install served Gateway API too,** via
+  `--providers.kubernetesgateway` and the `gateway.networking.k8s.io` rules
+  (§3.2, "Example: one route served by Envoy Gateway and Traefik at once").
 
 #### From `kubectl apply` to a routed request
 
@@ -806,6 +1127,21 @@ kubectl -n shop get svc,endpointslice            # ② ③ and the Pod IPs nginx
 The one difference is who creates Service ①. With ingress-nginx, it comes from the install manifests. With Envoy Gateway, the controller creates one per Gateway object (§3.3, §4.1). The full Gateway version of this diagram and of the walkthrough is at the end of §3.4.
 
 #### Inside an ingress controller: a reverse proxy plus a config generator
+
+The controller's main job: **watch Kubernetes objects and turn them into
+configuration for a proxy.** The proxy carries the traffic; the controller never
+touches a request.
+
+```text
+ Kubernetes API                          controller (config only)                 proxy (traffic only)
+ ──────────────                          ────────────────────────                 ────────────────────
+ Ingress / Gateway / HTTPRoute ─┐
+ Service (port → targetPort)  ──┼─watch─► translate into the proxy's ──deliver──► nginx / Envoy / HAProxy /
+ EndpointSlice (Pod IPs)      ──┤         own config language                     Traefik / a cloud LB
+ Secret (TLS certificates)    ──┘                                                       │
+                                                                                         ▼
+                                                                         client requests ─► Pods
+```
 
 An ingress controller such as ingress-nginx or an HAProxy-based one is two
 programs working together:
@@ -1406,6 +1742,365 @@ What was verified:
 
 Also noticed: the Ingress's ADDRESS was empty for its first seconds, then became `192.168.49.2`, the node's IP. With the bare-metal `NodePort` Service there's no external IP, so the controller reports the node's address instead. That's the same thing Envoy Gateway does for a `NodePort` Gateway (§3.3).
 
+#### The same idea in HAProxy and Traefik: one listener, a table of rules
+
+The nginx config above was generated in the lab. Every ingress controller
+follows the same pattern, so here it is for two others: HAProxy and Traefik.
+One listener takes all traffic, and a table of rules decides, per request,
+which pool of Pod IPs gets it. An Ingress that "points to many Services" is
+just a table with many rows. The configs below follow the shape each tool
+documents, with simplified names. **No controller generated them.** The HAProxy
+config of Example 1 was run in plain HAProxy in Docker (below, "Example 1's
+HAProxy config, run in Docker"). Examples 2–5 and the Traefik configs were run
+later, in Docker and in the lab ("Examples 2–5 and the Traefik configs, run",
+below). Generated names in real controllers differ from the simplified ones
+here (shown there).
+
+| Part | What it does | HAProxy | Traefik |
+|---|---|---|---|
+| Listener | one socket for all traffic, ends TLS | `frontend` with `bind :443 ssl crt …` | `entryPoint` (`websecure`, :443) |
+| Rule | matches Host and path, picks a pool | `acl` + `use_backend` | `router` with `rule: Host(…) && PathPrefix(…)` |
+| Pool | the Pod IPs of one Service port | `backend` with `server` lines | `service` with `loadBalancer.servers` |
+
+##### Example 1: two hosts, three Services
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: acme, namespace: shop}
+spec:
+  tls: [{hosts: [shop.example.com, api.example.com], secretName: acme-tls}]
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - {path: /docs, pathType: Prefix, backend: {service: {name: docs, port: {number: 80}}}}
+      - {path: /,     pathType: Prefix, backend: {service: {name: web,  port: {number: 80}}}}
+  - host: api.example.com
+    http:
+      paths:
+      - {path: /,     pathType: Prefix, backend: {service: {name: api,  port: {number: 80}}}}
+```
+
+**HAProxy: what the controller generates.** The Pod IPs come from the
+Services' EndpointSlices.
+
+```text
+frontend https
+    bind :443 ssl crt /certs/acme-tls.pem              ← one listener, TLS ends here
+    acl host_shop  hdr(host) -i shop.example.com
+    acl host_api   hdr(host) -i api.example.com
+    acl path_docs  path_beg /docs
+    use_backend shop_docs_80  if host_shop path_docs   ← most specific path first
+    use_backend shop_web_80   if host_shop
+    use_backend shop_api_80   if host_api
+    default_backend default_404
+
+backend shop_web_80                                    ← Service web, port 80
+    balance roundrobin
+    server pod1 10.244.1.12:8080 check                 ← Pod IPs and targetPort,
+    server pod2 10.244.2.7:8080  check                    not the ClusterIP
+
+backend shop_api_80                                    ← Service api
+    server pod1 10.244.1.30:9000 check
+
+backend shop_docs_80                                   ← Service docs
+    server pod1 10.244.2.15:8080 check
+```
+
+HAProxy checks `use_backend` lines top to bottom and takes the first match, so
+the controller has to write the more specific path first. Controllers with many
+rules usually keep hosts and paths in map files, looked up by one `use_backend`
+line, rather than one `acl` per host. The idea is the same.
+
+**Example 1's HAProxy config, run in Docker (lab).** The config above, unchanged
+except that the `server` lines point at container names, ran in
+`haproxy:3.0.5` on a Docker network with four `agnhost netexec` containers as
+the Pods: `web1`, `web2` (8080), `api1` (9000) and `docs1` (8080). A self-signed
+certificate covered both hostnames. `haproxy -c` accepted the config (exit 0).
+The `httplog` access log names the backend and server for each request:
+
+| Request | Backend / server | As intended? |
+|---|---|---|
+| `shop.example.com/docs` | `shop_docs_80/pod1` | yes |
+| `shop.example.com/docs/install` | `shop_docs_80/pod1` | yes |
+| `shop.example.com/` | `shop_web_80/pod1` | yes |
+| `shop.example.com/cart` | `shop_web_80/pod2` | yes: `roundrobin`, 10 requests gave 5 `web1`, 5 `web2` |
+| `api.example.com/users` | `shop_api_80/pod1` | yes |
+| `api.example.com/docs` | `shop_api_80/pod1` | yes: the `/docs` rule only applies to `shop` |
+| `other.example.com/` | `default_404/<NOSRV>` | yes: `404 no rule matched` |
+| **`shop.example.com/docsx`** | **`shop_docs_80/pod1`** | **no**: Ingress `Prefix /docs` must not match `/docsx` |
+| `shop.example.com/documents` | `shop_web_80/pod2` | yes |
+
+The backend saw the client as `172.18.0.6`, HAProxy's own container address: a
+second connection, as in §2 "Ingress as an application-layer load balancer".
+
+Two problems showed up, and both have fixes that were tested the same way:
+
+1. **`path_beg /docs` isn't segment-based,** so `/docsx` went to `docs`. Two
+   `acl` lines with the same name are ORed. With these, `/docsx` went to
+   `shop_web_80` while `/docs` and `/docs/install` still went to `shop_docs_80`:
+
+   ```text
+   acl path_docs  path /docs          ← exactly /docs
+   acl path_docs  path_beg /docs/     ← or anything below /docs/
+   ```
+
+   Writing it on **one** line, `acl path_docs path /docs or path_beg /docs/`, is
+   a trap. `haproxy -c` accepts it, but everything after the fetch is a list of
+   values, so it means "the path equals `/docs`, `or`, `path_beg` or `/docs/`".
+   In the test, `/docs` and `/docs/` reached `docs`, but `/docs/install` fell
+   through to `web`.
+
+2. **`hdr(host)` includes the port when the client sends one.** The first test
+   connected on port 18443, so curl sent `Host: shop.example.com:18443`, and
+   every request got the 404: `-i shop.example.com` needs the whole header to
+   match. Clients on 443 leave the port out, but a client calling a node port
+   directly (`node:30443`) won't. Stripping the port fixed it; with this,
+   `Host: shop.example.com:18443` and `Host: api.example.com:18443` routed
+   correctly:
+
+   ```text
+   acl host_shop  hdr(host),field(1,:) -i shop.example.com
+   acl host_api   hdr(host),field(1,:) -i api.example.com
+   ```
+
+Real controllers handle both. These are the details a generated config gets
+right and a hand-written one easily misses.
+
+**Traefik: the same thing as routers and services.**
+
+```yaml
+http:
+  routers:
+    shop-docs:  {entryPoints: [websecure], rule: "Host(`shop.example.com`) && PathPrefix(`/docs`)", service: shop-docs-80, tls: {}}
+    shop-web:   {entryPoints: [websecure], rule: "Host(`shop.example.com`) && PathPrefix(`/`)",     service: shop-web-80,  tls: {}}
+    api:        {entryPoints: [websecure], rule: "Host(`api.example.com`) && PathPrefix(`/`)",      service: shop-api-80,  tls: {}}
+  services:
+    shop-web-80:  {loadBalancer: {servers: [{url: "http://10.244.1.12:8080"}, {url: "http://10.244.2.7:8080"}]}}
+    shop-api-80:  {loadBalancer: {servers: [{url: "http://10.244.1.30:9000"}]}}
+    shop-docs-80: {loadBalancer: {servers: [{url: "http://10.244.2.15:8080"}]}}
+```
+
+Traefik keeps this in memory rather than writing a file. When several routers
+match, it picks the one with the highest priority, which by default is the
+length of the rule. So `/docs` beats `/` without you setting an order.
+
+**One request:** `GET https://shop.example.com/docs/install`
+
+```text
+client ─► LB / node port ─► HAProxy or Traefik Pod :443
+                              1. TLS ends (acme-tls)
+                              2. Host = shop.example.com, path = /docs/install
+                              3. rule match:   host_shop + path_docs      │  router shop-docs
+                              4. pool:         backend shop_docs_80       │  service shop-docs-80
+                              5. pick a server: 10.244.2.15:8080 (health-checked)
+                              6. NEW connection ─────────────────────────► docs Pod
+```
+
+A request to `api.example.com/users` takes the same steps. It goes to the same
+listener, matches a different row and gets a different pool. That's the whole
+"many Services" trick: one front door and a lookup table.
+
+##### Example 2: a second team's Ingress joins the same table
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: blog, namespace: content}           # another namespace, another team
+spec:
+  ingressClassName: haproxy                           # (or traefik) the same controller
+  rules:
+  - host: blog.example.com
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: ghost, port: {name: http}}}}
+```
+
+The controller merges every Ingress of its class into one table. Nothing new
+listens; only rows are added:
+
+```text
+HAProxy                                                Traefik
+  acl host_blog hdr(host) -i blog.example.com            routers:
+  use_backend content_ghost_http if host_blog              content-blog: {rule: "Host(`blog.example.com`) && PathPrefix(`/`)",
+                                                                          service: content-ghost-http}
+  backend content_ghost_http                             services:
+      server pod1 10.244.3.4:2368 check                    content-ghost-http: {loadBalancer: {servers:
+                                                                                 [{url: "http://10.244.3.4:2368"}]}}
+```
+
+- **The backend's name includes the namespace,** so `shop/web` and
+  `content/web` never collide.
+- **`port: {name: http}`** is resolved through the Service to each Pod's
+  `targetPort` (2368 here), the same way kube-proxy does it.
+- **Two teams can claim the same host and path.** The controller then has to pick
+  one, usually the older Ingress. Ingress has no way to say who owns a hostname
+  (§2.4). Gateway API's listeners and `allowedRoutes` fix that.
+
+##### Example 3: `Exact` vs `Prefix`, and the default backend
+
+```yaml
+spec:
+  defaultBackend: {service: {name: not-found, port: {number: 80}}}   # anything no rule matches
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - {path: /healthz, pathType: Exact,  backend: {service: {name: health, port: {number: 80}}}}
+      - {path: /static,  pathType: Prefix, backend: {service: {name: cdn,    port: {number: 80}}}}
+```
+
+```text
+                      HAProxy                                   Traefik
+Exact /healthz        acl p_health path /healthz                Path(`/healthz`)
+Prefix /static        acl p_static path /static                 PathPrefix(`/static`)
+                      acl p_static path_beg /static/            (two lines, same name = OR; see Example 1)
+defaultBackend        default_backend shop_not-found_80         a catch-all router with the lowest priority
+```
+
+`Prefix` in Ingress matches **whole path segments**: `/static` matches `/static`
+and `/static/app.js` but not `/staticfiles`. A plain `path_beg /static` would
+also match `/staticfiles`, so a controller has to translate it as "exactly
+`/static`, or starts with `/static/`". Traefik's `PathPrefix(/static)` is a plain
+string prefix too. Which requests match therefore depends partly on how
+carefully the controller translates, one more thing Gateway API pins down with
+conformance tests. In the lab, Traefik v3.7.18 translated an Ingress
+`pathType: Prefix` of `/docs` into a plain `PathPrefix("/docs")`, which also
+matches `/docsx`. The same path in an HTTPRoute became the segment-safe
+`Path("/docs") || PathPrefix("/docs/")` (below).
+
+| Request path | `Exact /healthz` | `Prefix /static` |
+|---|---|---|
+| `/healthz` | match | – |
+| `/healthz/` | no match | – |
+| `/static` | – | match |
+| `/static/app.js` | – | match |
+| `/staticfiles` | – | no match (by the Ingress spec) |
+| anything else | `defaultBackend` | `defaultBackend` |
+
+##### Example 4: scaling changes one pool, not the rules
+
+`kubectl -n shop scale deploy web --replicas=3` changes only `web`'s
+EndpointSlice. The controller updates one pool:
+
+```text
+HAProxy                                       Traefik
+ backend shop_web_80                           shop-web-80:
+     server pod1 10.244.1.12:8080 check          loadBalancer:
+     server pod2 10.244.2.7:8080  check            servers:
+   + server pod3 10.244.3.9:8080  check            - url: http://10.244.1.12:8080
+                                                   - url: http://10.244.2.7:8080
+ (via the runtime API: no reload)                + - url: http://10.244.3.9:8080
+```
+
+##### Examples 2–5 and the Traefik configs, run (lab)
+
+**HAProxy 3.0.5 in Docker.** One config combined Examples 1–3 and 5, with the
+two-line segment-safe path ACLs and the port-stripping `Host:` match. The
+backends were `traefik/whoami` containers, which reply with their hostname and
+the request headers they received:
+
+| Request | Answered by | Expected |
+|---|---|---|
+| `shop/docs`, `shop/docs/install` | docs1 | yes |
+| `shop/docsx` | web | yes (segment-safe) |
+| `shop/healthz` | health1 | yes (`Exact`) |
+| `shop/healthz/` | web | yes: `Exact` doesn't match the trailing slash |
+| `shop/static`, `shop/static/app.js` | cdn1 | yes |
+| `shop/staticfiles` | web | yes |
+| `api/users` | api1 | yes |
+| `blog/` (Example 2) | ghost1 | yes |
+| `other.example.com/` | notfound1 | yes: the `default_backend` (Example 3) |
+| `shop/` with `x-canary: always` | v2a, 5 of 5 | yes; `x-canary: sometimes` fell through |
+| 1,000 × `shop/`, weights 45/45/10 | web1 450, web2 450, v2a 100 | yes, exactly |
+
+The backends received `X-Served-By: gateway` from `http-request set-header`.
+
+**Example 4, scaling without a reload.** Through HAProxy's runtime API (a
+`stats socket`), `add server shop_web_80/pod3 172.18.0.11:80` then
+`enable server` put a third server into the live pool:
+`show servers state shop_web_80` went from `pod1, pod2` to `pod1, pod2, pod3`,
+and the process **PID stayed 7**, with uptime still counting up. The Docker
+Desktop detail: the socket has to live on a Docker volume, because a macOS bind
+mount can't hold a Unix socket. HAProxy exited at startup until that was
+changed.
+
+**Traefik v3.7.18 in Docker, file provider,** with the routers and services
+from Example 1 plus Example 5's weighted service and header middleware:
+
+- Example 1 routed as intended, except `shop/docsx` went to `docs`.
+  `PathPrefix` is a plain string prefix.
+- Router priorities from Traefik's API: `shop-docs` 47, `shop-web` 43, `api` 42,
+  `canary-hdr` 58. **The priority is the length of the rule**, so `/docs` wins
+  over `/` without any manual ordering.
+- The header router won (5 of 5 to v2). 1,000 requests to the weighted service
+  split 450 / 450 / 100, and the middleware's `X-Served-By: gateway` reached the
+  backend.
+
+**Traefik in the cluster** (the hand-written install from §2.1, with
+`--api.insecure=true` added to read its API) shows what a real controller
+generates from Example 1 as an Ingress and as an HTTPRoute:
+
+```text
+# from the Ingress tx-demo/acme   (provider @kubernetes)
+tx-demo-acme-shop-example-com-docs@kubernetes   prio=47  Host("shop.example.com") && PathPrefix("/docs")   → tx-demo-docs-80
+tx-demo-acme-shop-example-com@kubernetes        prio=43  Host("shop.example.com") && PathPrefix("/")       → tx-demo-web-80
+tx-demo-acme-api-example-com@kubernetes         prio=42  Host("api.example.com") && PathPrefix("/")        → tx-demo-api-80
+
+# from the HTTPRoute tx-demo/shop on Gateway tx-demo/good, entryPoint web   (provider @kubernetesgateway)
+httproute-tx-demo-shop-gw-tx-demo-good-ep-web-0-78577b26…  prio=10521  Host("shop.gw.example.com") && (Path("/docs") || PathPrefix("/docs/"))
+httproute-tx-demo-shop-gw-tx-demo-good-ep-web-1-0f70821f…  prio=21     Host("shop.gw.example.com") && PathPrefix("/")
+   each → a "-wrr" weighted service, even with one backend
+```
+
+- **Names:**
+  - Ingress routers are `<namespace>-<ingress>-<host>-<path>`, services
+    `<namespace>-<service>-<port>`.
+  - HTTPRoute routers are
+    `httproute-<ns>-<route>-gw-<ns>-<gateway>-ep-<entryPoint>-<rule#>-<hash>`.
+- **Prefix:** the Ingress translation is a plain prefix (`/docsx` matches);
+  the Gateway API translation is segment-safe.
+- **Priority:** rule length for Ingress (47 / 43 / 42, as in Docker). For
+  HTTPRoutes Traefik computes its own value (10521 vs 21), following Gateway
+  API's precedence rules, not the rule's length.
+
+##### Who keeps the table current
+
+```text
+controller loop (inside the HAProxy/Traefik Pod, or next to it):
+  watch Ingresses      → rules: hosts, paths, which Service
+  watch Services       → which port name/number maps to which targetPort
+  watch EndpointSlices → the Pod IPs in each pool
+  watch Secrets        → TLS certificates
+        │
+        ▼
+  HAProxy: rewrite the config, or use its runtime API to swap server IPs without a reload
+  Traefik: update its in-memory routers and services (no config file, no reload)
+```
+
+- **Adding a fourth app** means another Ingress rule, so another row and another
+  pool. There's still one listener, one LB and one IP.
+- **Scaling an app** changes only its EndpointSlice, so only the server lines of
+  that one pool change. The rules don't move (Example 4).
+- **The Services are lookups, not hops.** The proxy connects straight to Pod IPs.
+  That's why the per-Service boxes in typical Ingress diagrams never carry the
+  traffic themselves (§2.1 "Reading a typical Ingress diagram").
+
+How the controllers differ:
+
+- **HAProxy and nginx** started as config-file proxies. Their controllers
+  generate a file, and use a runtime API (HAProxy) or Lua (ingress-nginx) to
+  avoid reloading on endpoint changes.
+- **Traefik** was built for dynamic config. Kubernetes is one of its
+  "providers", and nothing is written to disk.
+- **Contour and Istio** use Envoy, configured over xDS, like Envoy Gateway in §3.
+- **GCE** has no proxy Pod at all: the Google LB holds the table (§2.5).
+
+The same examples written as a Gateway and HTTPRoutes, on Traefik and HAProxy
+(HUG), are in §3.4, "The same examples with Gateway API, on Traefik and
+HAProxy".
+
 #### How an annotation becomes proxy behaviour
 
 Take the canary from §2.3:
@@ -1702,6 +2397,279 @@ NEG mode is the same idea as §4. The proxy (here, Google's LB) uses the Service
 
 So the three questions from §1.1 still hold: the URL map picks the app, the Service defines the Pods, and the LB picks one. Only the place the proxy runs has moved. GKE's Gateway controller does the same for Gateway API: a GatewayClass such as `gke-l7-global-external-managed` turns Gateway and HTTPRoute objects into the same Google Cloud resources. The AWS Load Balancer Controller does the equivalent with ALBs.
 
+### 2.5.1 Two types of ingress solution: in-cluster and external
+
+§2.1–2.4 used one kind and §2.5 the other. Broadly speaking there are two
+types of ingress solution:
+
+- **In-cluster ingress:** ingress load balancing is performed by Pods within the
+  cluster itself.
+- **External ingress:** ingress load balancing is implemented outside the
+  cluster, by appliances or cloud provider capabilities.
+
+```text
+ IN-CLUSTER                                           EXTERNAL
+ the proxy runs as Pods you operate                   the proxy is the cloud's (or an appliance)
+
+ client                                               client
+   │                                                    │
+   ▼                                                    ▼
+ L4 LB / BGP-advertised IP  (just forwards packets)    cloud L7 LB (ALB, Google LB, App Gateway)
+   │                                                    │  ends TLS, reads Host + path
+   ▼                                                    │  ← rules pushed in by a controller that
+ proxy Pods (nginx, Envoy, HAProxy, Traefik)            │    watches Ingress/Gateway objects
+   │  ends TLS, reads Host + path                       │
+   ▼                                                    ▼
+ app Pods                                             app Pods (via node ports, or directly: below)
+```
+
+##### The same two types as courses often draw them: "Traditional" vs "Cloud Native"
+
+A common slide pair shows the same split. In the "Traditional" picture, an L4
+LB sends traffic to a "Controller" that acts as the proxy, which sends to Pods.
+In the "Cloud Native" picture, an L7 LB sends straight to Pods, and the
+"Controller" sits in the cluster off to the side:
+
+![Traditional vs Cloud Native ingress. Left, Traditional: client traffic goes to a Layer 4 LB, then to a Controller in the cluster labelled Proxy, which sends to two Pods. Right, Cloud Native: client traffic goes to a Layer 7 LB, which sends straight to the Pods; the Controller sits in the cluster, out of the traffic path](image-20.png)
+
+*Slide from a course video (source not recorded).*
+
+Redrawn, with the parts the slides leave out:
+
+```text
+ "TRADITIONAL"  = in-cluster ingress                "CLOUD NATIVE"  = external ingress
+
+ client                                             client
+   │                                                  │
+   ▼                                                  ▼
+ LB  ── Layer 4: forwards packets,                  LB  ── Layer 7: ends TLS, reads Host + path,
+   │     reads only IP and port                       │     picks the backend itself
+   ▼                                                  │            ▲
+ node : nodePort ─► kube-proxy  (not on the slide)    │            │ cloud API calls
+   │                                                  │            │ (configuration only)
+   ▼                                                  │   ┌────────┴─────────┐
+ ┌──────────────────────────────┐                     │   │ controller       │  watches Ingress /
+ │ "Controller" Pod             │                     │   │ (no traffic      │  Gateway objects,
+ │  = controller  (config only) │                     │   │  passes through) │  programs the LB
+ │  + proxy       (traffic)     │ ← "Proxy" on slide  │   └──────────────────┘
+ └──────────────┬───────────────┘                     │
+                ▼                                     ▼
+          app Pods                                  app Pods  (directly, or via node ports)
+```
+
+What the labels mean, and where they mislead:
+
+- **The "Controller" in the Traditional picture is really two programs in one
+  Pod:** a controller that watches the API and writes config, and a proxy that
+  carries the traffic. The slide's "Proxy" arrow points at the second. In
+  ingress-nginx both run in the same container (§2.1, "Inside an ingress
+  controller"). In Envoy Gateway they're separate Pods (§3.4).
+- **The "Controller" in the Cloud Native picture carries no traffic.** It
+  watches Ingress or Gateway objects and calls the cloud API to configure the L7
+  LB. It may run in your cluster (the AWS Load Balancer Controller) or in the
+  provider's managed control plane (GKE's `gce` controller, §2.5).
+- **"Straight to Pods" is one of two modes.** The L7 LB can target Pod IPs
+  (AWS `ip` targets, GKE NEGs) or go through node ports and kube-proxy (AWS
+  `instance` targets, GKE instance groups). "Two ways an external L7 LB reaches
+  the Pods", below, covers both.
+- **The Traditional picture skips the node port.** An L4 LB normally sends to
+  `node:nodePort`, and kube-proxy forwards to a proxy Pod, possibly on another
+  node, unless `externalTrafficPolicy: Local` is set (below).
+- **The names are misleading.** "Traditional" isn't legacy: in-cluster
+  proxies are the most common setup, Gateway API implementations included.
+  "In-cluster" vs "external" says what actually differs: **where the proxy
+  runs.**
+- **The slide's controller list mixes kinds.** NGINX Ingress Controller and
+  Kong (nginx/OpenResty underneath) are in-cluster proxies. Istio's ingress
+  gateway is an in-cluster Envoy, and it serves Ingress and Gateway API. All
+  three belong in the Traditional picture. The Cloud Native picture's
+  controllers are the cloud ones: GKE `gce`, the AWS Load Balancer Controller,
+  and Azure's Application Gateway for Containers.
+
+#### In-cluster ingress
+
+In-cluster solutions use software load balancers running in Pods within the
+cluster. Many ingress controllers follow this pattern, for example the NGINX
+ingress controller used in §2.1–2.4, or Envoy Gateway in §3.
+
+The advantages of this approach are that you can:
+
+- **scale the ingress horizontally,** up to the limits of Kubernetes: more proxy
+  Pods behind the same Service;
+- **choose the controller that best suits your needs,** for example for
+  particular load balancing algorithms or security options.
+
+To get ingress traffic to the proxy Pods, they're normally exposed as a
+Kubernetes Service, so any of the standard ways of reaching a Service from
+outside works ([kubernetes-services.md](kubernetes-services.md) §2.3, "Every way
+in from outside the cluster"). A common approach is an external **network** (L4)
+load balancer, or **service IP advertisement** (the Service's IP announced to the
+network over BGP or ARP, by MetalLB or Calico), with
+`externalTrafficPolicy: Local`:
+
+```text
+ externalTrafficPolicy: Cluster                       externalTrafficPolicy: Local
+
+ client 198.51.100.7                                  client 198.51.100.7
+   │                                                    │
+   ▼                                                    ▼
+ L4 LB / advertised IP                                L4 LB / advertised IP
+   │  sends to any node                                 │  health check (healthCheckNodePort):
+   ▼                                                    │  only nodes running a proxy Pod
+ node A  (no proxy Pod)                                 ▼
+   │  SNAT: source becomes node A                     node B  (runs a proxy Pod)
+   ▼                                                    │  no SNAT
+ node B ─► proxy Pod                                    ▼
+           sees node A as the client                  proxy Pod
+                                                      sees 198.51.100.7 as the client
+
+ one extra hop, client IP lost                        no extra hop, client IP kept
+```
+
+The `Local` case packet by packet (after the diagrams in [Calico's "Kubernetes
+ingress" documentation](https://docs.tigera.io/calico/latest/about/kubernetes-training/about-kubernetes-ingress)):
+
+```text
+ external client ──► LB ──────────► Node 1 : nodePort ──► kube-proxy ──► Pod A (ingress proxy) ══ new connection ══► Pod B (Service 2)
+   src = Client        DNAT           src = Client            DNAT         src = Client                              src = Pod A
+   dst = LB IP                        dst = Node 1                         dst = Pod A                               dst = Pod B
+```
+
+Reading it:
+
+- **`src = Client` survives both DNATs.** The LB rewrites only the destination
+  (to Node 1), and so does kube-proxy (to Pod A). Pod A, the ingress proxy, sees
+  the real client. That's what `Local` buys.
+- **The LB only picks Node 1 because Node 1 hosts an ingress Pod** ("nodes
+  hosting at least one ingress pod"). The health check node port tells it which
+  nodes those are.
+- **Pod A → Pod B is a new connection** (`src = Pod A`). That's the proxy's own
+  connection to the backend, and the reason Pod B can only filter on Pod A
+  (§2, "Ingress as an application-layer load balancer").
+- **Two kinds of load balancing:** network layer twice (LB → nodes, node port →
+  local ingress Pods), then application layer once (the proxy picks Service 2
+  from the URL, then one of its Pods).
+
+So, with `Local` on the proxy's Service:
+
+- **It minimizes network hops:** traffic only arrives at nodes running a proxy
+  Pod, so there's no forwarding to another node.
+- **It retains the client source IP,** so NetworkPolicy can restrict access to
+  the proxy Pods to particular clients if desired. §1.1 "Why use Ingress at all"
+  tested this with an `ipBlock` policy, and
+  [kubernetes-services.md](kubernetes-services.md) §4.3.1 tested the health check
+  node port.
+
+Restricting the proxy Pods to a client range (not tested; the labels are
+ingress-nginx's defaults):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ingress-from-office, namespace: ingress-nginx}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: ingress-nginx}}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 198.51.100.0/24}     # the office network
+    ports: [{port: 80}, {port: 443}]       # the proxy Pod's container ports
+```
+
+This filters before the proxy, so it limits every app behind it. The app
+Pods behind the proxy can only filter on the proxy (§2, "Ingress as an
+application-layer load balancer").
+
+#### External ingress
+
+External solutions use application (L7) load balancers outside the cluster.
+The details and features depend on the ingress controller, but most cloud
+providers offer one that automates provisioning and managing their application
+load balancers: GKE's `gce` controller (§2.5), the AWS Load Balancer
+Controller (ALB), and Azure's Application Gateway Ingress Controller or
+Application Gateway for Containers.
+
+```text
+ Ingress / HTTPRoute objects
+        │ watched by
+        ▼
+ cloud's controller ──── cloud API calls ────► cloud L7 LB: listeners, certificates,
+ (no proxy of its own)                          host/path rules, target groups / backend services
+```
+
+- **Advantage:** the cloud provider handles the operational complexity: scaling,
+  patching and keeping the proxies available.
+- **Downsides:**
+  - Potentially fewer features than the wide range of in-cluster controllers.
+  - The number of services exposed through one ingress is capped by the
+    provider's limits: rules, target groups or backend services, and
+    certificates per load balancer.
+
+#### Two ways an external L7 LB reaches the Pods
+
+Most application load balancers support a basic mode: forward traffic to the
+chosen Service's Pods **via the Service's node port**. Some cloud providers
+also support a second mode that load balances **directly to the Pods** backing
+each Service, without going through node ports or kube-proxy.
+
+```text
+ Mode 1: via node ports                    (AWS ALB "instance" targets, GKE instance groups)
+
+ client ─► L7 LB ─► node A : nodePort ─► kube-proxy ─► Pod on node B
+                    (targets = nodes)    DNAT          ↑ possible second hop
+                                                       (and SNAT, unless ETP Local)
+
+ Mode 2: straight to Pods                  (AWS ALB "ip" targets, GKE NEGs, Azure CNI + App Gateway)
+
+ client ─► L7 LB ─────────────────────────────────────► Pod IP : targetPort
+           (targets = Pod IPs, kept in sync by the controller from EndpointSlices;
+            needs Pod IPs the LB can route to: VPC/VNet CNI)
+```
+
+Mode 1, via node ports, packet by packet:
+
+```text
+ external client ──► L7 LB ══ new connection ══► Node 1 : nodePort ──► kube-proxy ──► Pod B (Service 2, on Node 2)
+   src = Client                 src = LB                                  NAT            src = Node 1
+   dst = LB IP                  dst = Node 1                                             dst = Pod B
+```
+
+- **The LB opens its own connection** (`src = Load Bal`): it's an L7 proxy, so
+  the client's address is already gone before the packet reaches a node.
+- **kube-proxy rewrites both addresses** (`src = Node 1`, `dst = Pod B`): Pod B
+  is on another node, so this is the SNAT + DNAT of `externalTrafficPolicy:
+  Cluster` ([kubernetes-services.md](kubernetes-services.md) §4.3.1 shows the
+  same SNAT in the lab).
+- **One application-layer step (the LB), then one network-layer step
+  (kube-proxy).**
+
+Mode 2, straight to Pods, packet by packet:
+
+```text
+ external client ──► L7 LB ══ new connection ══► Pod B (Service 2, on Node 2)
+   src = Client                 src = LB
+   dst = LB IP                  dst = Pod B
+```
+
+- **No kube-proxy and no node port:** `dst = Pod B` straight from the LB.
+- **Only the application-layer step remains.**
+
+Comparing the two modes:
+
+- **Mode 2's advantage:** it removes the potential second network hop that
+  happens when a node port sends to a Pod on a different node. The LB's health
+  checks also probe the Pods themselves, not the nodes.
+- **Mode 2's potential disadvantage:** at very high scale, for example with
+  hundreds of Pods behind a Service, you may exceed the maximum number of IPs the
+  LB can target in this mode. Every Pod is a registered target, and every Pod
+  change is a cloud API call.
+- **Then an in-cluster solution is likely the better fit:** the cloud LB only
+  targets the few proxy Pods (or nodes), and the proxy Pods spread traffic over
+  the hundreds of app Pods themselves.
+
+Nothing in this section was tested beyond what the cross-references
+mention; it's from the providers' documentation and the general docs.
+
 ### 2.6 Status: frozen API, retired controller
 
 - **The Ingress API is frozen.** It stays in Kubernetes and is supported, but it won't get new features. New work goes into Gateway API.
@@ -1770,7 +2738,10 @@ Ana       HTTPRoute    routes pushed to that Envoy        routes written into sh
 (app dev)
 ```
 
-HUG is a separate project from `haproxytech/kubernetes-ingress`, which has no Gateway API code. HUG serves Gateway API and Ingress.
+HUG stands for **HAProxy Unified Gateway**. It's a separate project from `haproxytech/kubernetes-ingress`, which has no Gateway API code. "Unified" means one controller and one HAProxy serve both Gateway API and Ingress:
+
+- **Gateway API is handled natively:** Gateways and HTTPRoutes, plus TLSRoute and TCPRoute.
+- **Ingresses are converted into a synthetic Gateway** that allows routes from all namespaces. That skips the operator's `allowedRoutes` gate (see "Ingress on HUG skips Chihiro's gate" below).
 
 **Ian: the install and the `GatewayClass`.** The docs describe his job more widely than this, but in these repos his part is the install plus the class.
 
@@ -1826,10 +2797,31 @@ Choose Envoy Gateway if teams need separate proxies, and accept one proxy and po
 
 ### 3.2 Install: CRDs plus an implementation
 
-Gateway API isn't built into Kubernetes. It's a set of CRDs from `kubernetes-sigs/gateway-api`, in two channels:
+Gateway API **is** part of Kubernetes: an official project of SIG Network, at `kubernetes-sigs/gateway-api`, GA (v1.0) since October 2023. But it's deliberately **not built into the API server**. It ships as CRDs, so "official" and "built in" are two different things here:
 
-- **standard**: stable fields only.
-- **experimental**: standard plus features still being tried out. In v1.7.0, for example, the `ExternalAuth` filter and `sessionPersistence` are experimental only.
+```text
+Built into kube-apiserver (compiled in)        Official, but delivered as CRDs
+───────────────────────────────────────        ───────────────────────────────
+Pod, Service, Deployment, Ingress,             Gateway, GatewayClass, HTTPRoute,
+IngressClass, EndpointSlice, …                 GRPCRoute, ReferenceGrant, …
+→ exist in every cluster                       → exist only after `kubectl apply` of the CRDs
+→ change only when you upgrade Kubernetes      → change when you apply a newer CRD bundle
+```
+
+Why it's shipped this way:
+
+1. **It can move faster than Kubernetes.** A built-in API changes only with a Kubernetes release, and clusters often run versions that are years old. As CRDs, Gateway API v1.6 works on older clusters too: you upgrade the CRDs, not the cluster.
+2. **Ingress shows the problem.** Ingress was built in, couldn't evolve quickly, filled up with controller-specific annotations, and was eventually frozen (§2.6). Gateway API was designed to avoid that.
+3. **Release channels.** Each release comes as two bundles, and you choose per cluster. A built-in API can't offer that choice.
+   - `standard-install.yaml`: only stable fields.
+   - `experimental-install.yaml`: adds fields still being tried out, such as `retry` and `sessionPersistence`. In v1.7.0, for example, the `ExternalAuth` filter and `sessionPersistence` are experimental only. §3.9 lists which fields are in which channel in v1.6.1.
+4. **The API is large and still growing.** It has many kinds, plus conformance tests per feature, and new kinds keep arriving (ListenerSet, for example). CRDs let that grow without touching the core API server.
+
+What this means in practice:
+
+- **A fresh cluster doesn't know these kinds.** `kubectl get gateways` fails with "the server doesn't have a resource type" until the CRDs are applied.
+- **There's one CRD bundle per cluster,** shared by every Gateway controller in it. Two implementations that expect different versions can conflict. That's why many implementations' Helm charts include the CRDs, and why you should know which version and channel you've installed. A real example: HUG's chart (1.3.2) runs a Job that installs the Gateway API CRDs v1.7.0 by default, which would replace a v1.6.1 experimental set another implementation is using. Its `gwapijob.enabled: false` turns that off (§3.3, "HUG's chart, rendered").
+- **Some platforms pre-install them.** GKE, for example, adds the CRDs when you enable its Gateway controller.
 
 You then install an implementation: Envoy Gateway, Istio, Cilium, NGINX Gateway Fabric, Traefik, Kong, a cloud provider's own, and others. In the lab:
 
@@ -1846,9 +2838,1310 @@ $ kubectl get crd httproutes.gateway.networking.k8s.io -o jsonpath='{...bundle-v
 v1.6.1 experimental
 ```
 
+These are CRDs, labelled with their bundle version and channel. The Envoy Gateway Helm chart installed them, which is why this section is called "CRDs plus an implementation".
+
+So you need two installs:
+
+- **The CRDs** teach the API server the new kinds.
+- **The implementation** (Envoy Gateway, Traefik, HUG) is the controller that acts on them.
+
+Ingress needs only the second, because its kinds are built in (§2.1, "Helm or hand-written manifests").
+
+**Who provides each install:**
+
+- **The first install comes from one place:** the Gateway API project itself.
+- **There's one copy per cluster,** shared by every gateway implementation.
+- **Only the second install differs.**
+
+```text
+                         ONE per cluster, the same for everyone
+                    ┌─────────────────────────────────────────────────┐
+ 1st install        │  Gateway API CRDs  (gateway.networking.k8s.io)  │   from kubernetes-sigs/gateway-api
+                    │  Gateway, GatewayClass, HTTPRoute, GRPCRoute,   │   standard-install.yaml or
+                    │  ReferenceGrant, BackendTLSPolicy, …            │   experimental-install.yaml
+                    └─────────────────────────────────────────────────┘
+                          ▲                ▲                 ▲
+                   all read the same kinds, all claim their own GatewayClass
+                          │                │                 │
+ 2nd install      Envoy Gateway        Traefik             HUG            ← differs per implementation
+                  + its own CRDs       + its own CRDs      + its own CRDs
+                  (gateway.envoyproxy.io: EnvoyProxy,   (traefik.io: …)   (HAProxy's)
+                   BackendTrafficPolicy, SecurityPolicy…)
+```
+
+The content of the first install always comes from `kubernetes-sigs/gateway-api`'s release files. Whoever installs them, it's the same YAML.
+
+**What's shared, and by whom.** There are three layers:
+
+```text
+LAYER 1: Gateway API CRDs              shared by EVERY implementation and EVERY Gateway
+         (Gateway, HTTPRoute, …)       installed once per cluster (by you, or bundled in a chart)
+            │
+LAYER 2: an implementation's install   shared by every Gateway OF THAT implementation
+         (controller + its own CRDs)   e.g. envoy-gateway Deployment, EnvoyProxy/SecurityPolicy CRDs
+            │
+LAYER 3: each Gateway                  its own: listeners, ports, TLS certs, allowedRoutes
+                                       and, depending on the implementation, its own proxy
+```
+
+"Its own proxy" is where implementations differ (§3.1). In Envoy Gateway, each
+Gateway gets its own Envoy Deployment and Service, so its own IP. In Traefik and
+HUG, the proxy comes with the install (layer 2), and a Gateway only adds
+listeners to it, sharing its IP. In the lab, `helm install eg …` created layer
+2 (the `envoy-gateway` controller and Envoy Gateway's CRDs, plus a copy of layer
+1), and Gateway `public` then created its own `envoy-infra-public-8d55c10f`
+Deployment and LoadBalancer Service.
+
+#### More than one implementation in the same cluster
+
+Several implementations can run side by side on the one shared CRD bundle.
+The **GatewayClass** keeps them apart: each controller only acts on Gateways
+whose class names it. In short:
+
+- **One CRD bundle is shared by all of them** (above), so every implementation
+  uses the same `Gateway` and `HTTPRoute` kinds.
+- **Each implementation claims only classes with its own `controllerName`,** and
+  builds only Gateways of those classes. The rest it ignores.
+- **Each Gateway's `gatewayClassName` picks the implementation** (and the
+  configuration), as in the name chain in §3.3, "One kind, many GatewayClass
+  objects".
+
+```text
+                         shared Gateway API CRDs (one bundle)
+                                       │
+          ┌────────────────────────────┼─────────────────────────────┐
+          ▼                            ▼                             ▼
+ GatewayClass envoy           GatewayClass traefik          GatewayClass gke-l7-global-external-managed
+ controllerName:              controllerName:               controllerName:
+ gateway.envoyproxy.io/       traefik.io/                   networking.gke.io/gateway
+ gatewayclass-controller      gateway-controller
+          │                            │                             │
+ claimed by Envoy Gateway     claimed by Traefik            claimed by GKE's controller
+          │                            │                             │
+ Gateway public               Gateway internal              Gateway edge
+ (gatewayClassName: envoy)    (gatewayClassName: traefik)   (gatewayClassName: gke-l7-…)
+          │                            │                             │
+ its own Envoy Pods + LB      a listener on Traefik's       a Google Cloud LB
+ (one IP per Gateway)         shared Pods (Traefik's IP)    (Google's IP)
+```
+
+How they avoid stepping on each other:
+
+1. **Each controller claims only its own `controllerName`.** A GatewayClass
+   whose string no installed controller recognises is simply never accepted.
+   Tested in the lab: a class with
+   `controllerName: example.com/no-such-controller`, next to Envoy Gateway's,
+   stayed at
+
+   ```text
+   NAME          CONTROLLER                       ACCEPTED
+   nobody-home   example.com/no-such-controller   Unknown       ← reason Pending: "Waiting for controller"
+   ```
+
+2. **Each controller only builds Gateways of its own classes.** A Gateway with
+   `gatewayClassName: traefik` is invisible to Envoy Gateway, and the reverse.
+3. **Routes attach to a Gateway, not to an implementation.** An HTTPRoute's
+   `parentRefs` names Gateways. It can even name two Gateways from different
+   implementations, and each implementation programs its own copy.
+
+##### Example: one route served by Envoy Gateway and Traefik at once (lab)
+
+The platform team installs both implementations (each with its own
+GatewayClass) and creates one Gateway on each:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: envoy}
+spec: {controllerName: gateway.envoyproxy.io/gatewayclass-controller}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: traefik}
+spec: {controllerName: traefik.io/gateway-controller}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: public, namespace: infra}
+spec:
+  gatewayClassName: envoy                     # → Envoy Gateway builds this one
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "*.example.com"                 # what the internet sees
+    allowedRoutes: {namespaces: {from: All}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: internal, namespace: infra}
+spec:
+  gatewayClassName: traefik                   # → Traefik builds this one
+  listeners:
+  - name: web
+    protocol: HTTP
+    port: 8000                                # must match a Traefik entryPoint port
+    hostname: "*.example.com"
+    allowedRoutes: {namespaces: {from: All}}
+```
+
+The app team writes **one** route and attaches it to both Gateways:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}
+spec:
+  parentRefs:
+  - {name: public,   namespace: infra, sectionName: http}   # class envoy   → Envoy Gateway programs it
+  - {name: internal, namespace: infra, sectionName: web}    # class traefik → Traefik programs it
+  hostnames: [shop.example.com]
+  rules:
+  - matches: [{path: {type: PathPrefix, value: /}}]
+    backendRefs: [{name: web, port: 80}]
+```
+
+What each controller does with it:
+
+```text
+                         HTTPRoute shop/shop
+                    ┌────────────┴─────────────┐
+ parentRef public (class envoy)        parentRef internal (class traefik)
+          │                                     │
+ Envoy Gateway: route into the          Traefik: a router on entryPoint web,
+ Envoy Pods behind Gateway public       Host(`shop.example.com`) && PathPrefix(`/`)
+          │                                     │
+          └──────────► the same web Pod IPs ◄───┘   (both read web's EndpointSlice)
+
+ client ─► public's IP  ─► Envoy   ─┐
+                                    ├─► web Pods
+ client ─► Traefik's IP ─► Traefik ─┘
+```
+
+Two independent proxies now serve the same route, each at its own address.
+DNS (or the network) decides which one a client reaches.
+
+**Does traffic go to both Gateways? No.** A request goes through exactly
+**one** of them: whichever Gateway's address the client connected to. Listing
+two `parentRefs` doesn't send traffic to both; it installs the same routing rule
+in two separate proxies.
+
+```text
+                       HTTPRoute shop  (a rule, stored once)
+                     ┌──────────┴───────────┐
+          programmed into                programmed into
+                Envoy (public)             Traefik (internal)
+
+client A ─► DNS: shop.example.com → public's IP   ─► Envoy   ─► web Pod
+client B ─► DNS: shop.example.com → Traefik's IP  ─► Traefik ─► web Pod
+                                   ▲
+                    this decides which proxy a client uses
+```
+
+- **A Gateway only handles traffic sent to its own address.** Envoy never sees
+  requests that went to Traefik's IP, and the reverse.
+- **The route doesn't move traffic between Gateways.** It's configuration that
+  both proxies hold copies of. Each applies it on its own, to the requests that
+  reach it.
+- **Both proxies end at the same Pods.** Both read `web`'s EndpointSlice, so
+  whichever proxy a request goes through, it lands on one of the same `web`
+  Pods.
+
+The route's status has **one entry per parent**, each written by the
+controller that owns that Gateway:
+
+```yaml
+status:
+  parents:
+  - parentRef: {name: public, namespace: infra, sectionName: http}
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    conditions:
+    - {type: Accepted,     status: "True", reason: Accepted}
+    - {type: ResolvedRefs, status: "True", reason: ResolvedRefs}
+  - parentRef: {name: internal, namespace: infra, sectionName: web}
+    controllerName: traefik.io/gateway-controller
+    conditions:
+    - {type: Accepted,     status: "True", reason: Accepted}
+    - {type: ResolvedRefs, status: "True", reason: ResolvedRefs}
+```
+
+To read it per implementation:
+
+```bash
+kubectl -n shop get httproute shop -o jsonpath='{range .status.parents[*]}{.parentRef.name}{"  "}{.controllerName}{"  "}{range .conditions[*]}{.type}={.status}({.reason}) {end}{"\n"}{end}'
+# public    gateway.envoyproxy.io/gatewayclass-controller  Accepted=True(Accepted) ResolvedRefs=True(ResolvedRefs)
+# internal  traefik.io/gateway-controller                  Accepted=True(Accepted) ResolvedRefs=True(ResolvedRefs)
+```
+
+If one implementation rejects the route, only its entry turns `False`, with
+its own reason, and the other keeps serving.
+
+**Run in the lab** (Envoy Gateway v1.9.3 and Traefik v3.7.18 side by side,
+Gateway API CRDs v1.6.1). Traefik was installed from the hand-written manifests
+in §2.1, "Helm or hand-written manifests", with its Gateway provider switched
+on. The objects were the ones above, except that the route lived in a test
+namespace `tr-demo` (labelled `gateway-access=public`, so `public`'s
+`Selector` listener admits it). The real per-parent status:
+
+```text
+internal  traefik.io/gateway-controller                  Accepted=True(Accepted) ResolvedRefs=True(ResolvedRefs)
+public    gateway.envoyproxy.io/gatewayclass-controller  Accepted=True(Accepted) ResolvedRefs=True(ResolvedRefs)
+```
+
+The `internal` Gateway reported `Programmed=True` with `attachedRoutes=1` on
+listener `web`. Six requests through each proxy, with `Host: shop.example.com`:
+
+```text
+via Envoy   (envoy-infra-public Service :80)          4 web-…-5wgdw   2 web-…-zg2c8
+via Traefik (traefik Service :80 → entryPoint :8000)   3 web-…-5wgdw   3 web-…-zg2c8
+client IP the Pod saw:  via Envoy 10.244.120.72  (the Envoy Pod)
+                        via Traefik 10.244.120.97 (the Traefik Pod)
+```
+
+Both proxies served the one route and reached the same two Pods, each over its
+own connection.
+
+Then the Traefik parent was pointed at a listener that doesn't exist
+(`sectionName: nope`):
+
+```text
+internal/nope  traefik.io/gateway-controller                  Accepted=False(NoMatchingParent) ResolvedRefs=True(ResolvedRefs)
+public/http    gateway.envoyproxy.io/gatewayclass-controller  Accepted=True(Accepted) ResolvedRefs=True(ResolvedRefs)
+via Envoy: 200      via Traefik: 404      (after setting it back to web: Traefik 200 again)
+```
+
+Only Traefik's entry turned `False`, and Envoy kept serving.
+
+Things to watch:
+
+- **One shared CRD bundle must suit all of them** (above). If one implementation
+  needs the experimental channel and another only supports an older standard
+  version, you're stuck with a compromise.
+- **Implementation-specific extras don't cross over.** An Envoy Gateway
+  `SecurityPolicy` attached to route `shop` only affects the `public` Gateway.
+  Traefik ignores it, so the `internal` path would have no JWT check.
+- **Each implementation has its own address,** so DNS decides which
+  implementation a client reaches.
+
+Typical reasons to run more than one:
+
+- **Edge and internal:** a cloud L7 LB for public traffic, plus an in-cluster
+  Envoy or Traefik for internal services.
+- **Mesh and edge:** Istio (classes `istio`, `istio-waypoint`) between services,
+  plus Envoy Gateway or a cloud gateway at the edge.
+- **Migration:** run the new implementation next to the old one, and move
+  Gateways or routes over one at a time.
+
+Ingress works the same way: several Ingress controllers coexist, separated by
+IngressClass.
+
 In Gateway API v1.7.0's standard channel, all of these are served at `v1`: `TCPRoute`, `UDPRoute`, `TLSRoute`, `ListenerSet` and `BackendTLSPolicy`, alongside `Gateway`, `GatewayClass`, `HTTPRoute` and `GRPCRoute`. `ReferenceGrant` is served at both `v1` and `v1beta1`. Which features work depends on the implementation and the bundle version it installs. Check the implementation's conformance report.
 
 ### 3.3 GatewayClass and Gateway: the platform team's part
+
+#### One kind, many GatewayClass objects
+
+Gateways can be implemented by different controllers, often with different
+configurations. A Gateway must reference a GatewayClass, and the GatewayClass
+contains the name of the controller that implements it (docs). There's one
+GatewayClass **kind** (one CRD, from the shared bundle in §3.2), but you can
+create as many GatewayClass **objects** as you need:
+
+```text
+ the KIND  (1 CRD, from the shared bundle)                     GatewayClass
+                                                                    │
+ the OBJECTS (as many as you create)     ┌─────────────┬───────────┼──────────────┬──────────────────┐
+                                         ▼             ▼           ▼              ▼                  ▼
+                                       envoy     envoy-public  envoy-internal   traefik             hug
+                                         │             │           │              │                  │
+ controllerName              gateway.envoyproxy.io/gatewayclass-controller   traefik.io/        gate.haproxy.org/
+                             (one controller, three classes)                 gateway-controller  hug
+```
+
+Each part has to be stated:
+
+- **The GatewayClass names its controller (`controllerName`).** That's how a
+  controller finds its work. On start, it lists all GatewayClasses and claims
+  only those carrying its own string.
+- **The Gateway names its class (`gatewayClassName`).** That's how a Gateway
+  finds its controller. The field is **required**, and Gateway API has **no
+  default class**. Even with a single implementation, every Gateway names its
+  class. (An IngressClass, by contrast, can be marked default with the
+  `ingressclass.kubernetes.io/is-default-class: "true"` annotation.)
+
+```text
+Gateway public ──gatewayClassName: envoy──► GatewayClass envoy ──controllerName──► Envoy Gateway builds it
+```
+
+**Why have more than one class, even with one implementation.** The docs'
+phrase "often with different configurations" is the point. One controller can
+serve several classes, each with different settings, through `parametersRef`:
+
+```yaml
+kind: GatewayClass
+metadata: {name: envoy-public}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: public-proxy, namespace: envoy-gateway-system}
+  # public-proxy: 2 replicas, Service type LoadBalancer, externalTrafficPolicy Local
+---
+kind: GatewayClass
+metadata: {name: envoy-internal}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller          # same controller
+  parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: internal-proxy, namespace: envoy-gateway-system}
+  # internal-proxy: 1 replica, Service type ClusterIP (not reachable from outside)
+```
+
+A team that wants a public entry point writes `gatewayClassName: envoy-public`,
+and one that wants an internal one writes `envoy-internal`. Neither needs to
+know about replicas or Service types; the class carries those.
+
+**What makes it pick one over the other.** The Gateway picks, by the class name
+it writes. Everything after that is a chain of name references, each field
+pointing at the next object's `metadata.name`:
+
+```text
+ Gateway                    GatewayClass                         EnvoyProxy
+ ───────                    ────────────                         ──────────
+ spec:                      metadata:                            metadata:
+   gatewayClassName: ──────►  name: envoy-internal                 name: internal-proxy ◄──┐
+     envoy-internal         spec:                                spec: …                   │
+                              parametersRef:                       envoyService:           │
+                                name: internal-proxy ──────────────────────────────────────┘
+                                                                     type: ClusterIP   ← the result
+```
+
+Two Gateways side by side; the only difference is the class name each one
+writes:
+
+```text
+Gateway "corp"                                   Gateway "shop-edge"
+  gatewayClassName: envoy-internal   ◄── CHOICE    gatewayClassName: envoy-public
+          │                                                 │
+          ▼  (looks up GatewayClass by this name)           ▼
+GatewayClass envoy-internal                      GatewayClass envoy-public
+  parametersRef.name: internal-proxy               parametersRef.name: public-proxy
+          │                                                 │
+          ▼  (looks up EnvoyProxy by this name)             ▼
+EnvoyProxy internal-proxy                        EnvoyProxy public-proxy
+  envoyService.type: ClusterIP                     envoyService.type: LoadBalancer
+          │                                                 │
+          ▼                                                 ▼
+Service type ClusterIP (no LB)                   Service type LoadBalancer → cloud LB
+```
+
+- **Whoever writes the Gateway chooses,** by typing one class name. Nothing is
+  automatic. If `corp` said `gatewayClassName: envoy-public`, it would get a
+  LoadBalancer.
+- **The names `internal` and `public` mean nothing to Kubernetes.** The
+  behaviour comes only from the EnvoyProxy each class points at.
+- **The EnvoyProxy objects are written by the platform team,** like the classes.
+  `EnvoyProxy` is Envoy Gateway's own CRD. It's a settings template: it creates
+  nothing by itself, and Envoy Gateway reads it whenever it builds a Gateway of
+  a class that points at it.
+
+What Envoy Gateway then builds for each. The `corp` (ClusterIP) case was
+checked in the lab; see "Tested in the lab" below.
+
+```text
+Gateway corp (gatewayClassName: envoy-internal)
+   │
+   ▼
+Envoy Gateway (the controller) sees it
+   1. class envoy-internal ── parametersRef ──► EnvoyProxy internal-proxy
+   2. reads: replicas 1, Service type ClusterIP
+   3. creates  Deployment envoy-infra-corp-…   (1 Envoy Pod)
+               Service    envoy-infra-corp-…   type: ClusterIP
+   │
+   └─► nothing else happens: a ClusterIP Service never gets a load balancer
+
+Gateway shop-edge (gatewayClassName: envoy-public)
+   │
+   ▼
+Envoy Gateway
+   1. class envoy-public ── parametersRef ──► EnvoyProxy public-proxy
+   2. reads: replicas 2, Service type LoadBalancer, externalTrafficPolicy Local
+   3. creates  Deployment envoy-infra-shop-edge-… (2 Envoy Pods)
+               Service    envoy-infra-shop-edge-… type: LoadBalancer
+   │
+   ▼
+cloud controller manager sees a LoadBalancer Service ──► creates the cloud LB
+(on minikube: stays <pending> unless `minikube tunnel` runs)
+```
+
+Envoy Gateway never creates a load balancer itself. It creates an ordinary
+Service, and the Service's type decides what follows, exactly as for any
+LoadBalancer Service ([kubernetes-services.md](kubernetes-services.md) §4.4).
+Without a `parametersRef`, Envoy Gateway's defaults apply: the lab's plain
+`envoy` class gave Gateway `public` a Service of type `LoadBalancer`
+(`envoy-infra-public-8d55c10f`).
+
+The manifests behind the diagram, in full:
+
+```yaml
+# ---- Envoy Gateway: one controller, three classes ----
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: envoy}                       # the lab's class: default proxy settings
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: envoy-public}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: public-proxy, namespace: envoy-gateway-system}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: envoy-internal}
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller   # same controller
+  parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: internal-proxy, namespace: envoy-gateway-system}
+---
+# the settings each Envoy class points at
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata: {name: public-proxy, namespace: envoy-gateway-system}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment: {replicas: 2}
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata: {name: internal-proxy, namespace: envoy-gateway-system}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment: {replicas: 1}
+      envoyService: {type: ClusterIP}         # reachable only inside the cluster
+---
+# ---- Traefik ----
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: traefik}
+spec:
+  controllerName: traefik.io/gateway-controller
+---
+# ---- HAProxy (HUG, HAProxy Unified Gateway, §3.1) ----
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: hug}
+spec:
+  controllerName: gate.haproxy.org/hug
+  # HUG's class settings live in a HugGate object (§3.1); its only field is mworkerMaxReload
+```
+
+And a Gateway picks one by name. The rest of the Gateway is the same whichever
+class it names:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: corp, namespace: infra}
+spec:
+  gatewayClassName: envoy-internal          # or envoy, envoy-public, traefik, hug
+  listeners:
+  - {name: http, protocol: HTTP, port: 80, hostname: "*.corp.local"}
+```
+
+What each class makes of that Gateway:
+
+| `gatewayClassName` | Who builds it | What it creates |
+|---|---|---|
+| `envoy` | Envoy Gateway | a new Envoy Deployment + LoadBalancer Service, default settings |
+| `envoy-public` | Envoy Gateway | a new Envoy Deployment with 2 replicas + LoadBalancer Service, `externalTrafficPolicy: Local` |
+| `envoy-internal` | Envoy Gateway | a new Envoy Deployment with 1 replica + **ClusterIP** Service |
+| `traefik` | Traefik | a listener on the existing Traefik Pods (the port must match an entryPoint) |
+| `hug` | HUG | a listener on the existing HAProxy; the port is added to its Service |
+
+**Tested in the lab** (Envoy Gateway v1.9.3): the three Envoy classes plus one
+that no installed controller claims, `nobody-home` with
+`controllerName: example.com/no-such-controller`:
+
+```text
+$ kubectl get gatewayclass
+NAME             CONTROLLER                                      ACCEPTED
+envoy            gateway.envoyproxy.io/gatewayclass-controller   True
+envoy-internal   gateway.envoyproxy.io/gatewayclass-controller   True
+envoy-public     gateway.envoyproxy.io/gatewayclass-controller   True
+nobody-home      example.com/no-such-controller                  Unknown     ← Pending: "Waiting for controller"
+```
+
+The same controller accepted all three Envoy classes, and nothing claimed the
+fourth.
+
+Then the `corp` Gateway above (class `envoy-internal`). Envoy Gateway built it
+from the `internal-proxy` settings: one replica, and a **ClusterIP** Service
+whose IP became the Gateway's address:
+
+```text
+$ kubectl -n infra get gateway corp
+NAME   CLASS            ADDRESS        PROGRAMMED
+corp   envoy-internal   10.107.45.89   True
+
+$ kubectl -n envoy-gateway-system get deploy,svc -l gateway.envoyproxy.io/owning-gateway-name=corp
+deployment.apps/envoy-infra-corp-4bb9c729   1/1     1   1
+service/envoy-infra-corp-4bb9c729           ClusterIP   10.107.45.89   <none>   80/TCP
+```
+
+With no HTTPRoute attached (`attachedRoutes=0`), the Gateway accepted
+connections and returned `404 Not Found` for every host (`app.corp.local`,
+`other.example.com`), from a Pod inside the cluster. Deleting `corp` made Envoy
+Gateway remove its Deployment and Service.
+
+The first build attempt didn't happen at once. The minikube node was at its
+3 GiB memory limit, the API server stopped answering, and the Envoy Gateway
+controller lost leader election ("unable to start provider"). It built `corp`
+after minikube was restarted.
+
+A Gateway from `envoy-public` (`shop-edge`) was tested too. Envoy Gateway
+built a Deployment with **2/2** replicas and a Service of type
+**LoadBalancer** with **`externalTrafficPolicy: Local`** and an automatically
+allocated `healthCheckNodePort` (31666). On minikube the LB IP stays `<pending>`,
+so the Gateway reported `Programmed=False`, reason `AddressNotAssigned`.
+
+The `traefik` class was applied later, in the two-implementation test (§3.2,
+"Example: one route served by Envoy Gateway and Traefik at once"), and was
+accepted. A Traefik Gateway whose listener port matched no Traefik entryPoint
+(9999) was rejected: the listener reported `Accepted=False (PortUnavailable)`,
+and the Gateway `Accepted=False (ListenersNotValid)`.
+
+The `hug` class was only checked with a server-side dry-run
+(`--validate=strict`). Installing HUG's Helm chart into the lab cluster wasn't
+permitted in this session (see "HUG's chart, rendered", in "The same ideas with
+HAProxy (HUG)").
+
+How many classes you need:
+
+- **One implementation, one configuration:** one class. Every Gateway still
+  names it, because there's no default.
+- **One implementation, several configurations** (public vs internal, small vs
+  large): one class per configuration, each with its own `parametersRef`.
+- **Several implementations:** at least one class each, told apart by
+  `controllerName` (§3.2, "More than one implementation in the same cluster").
+
+**How instances of one implementation are told apart:**
+
+1. **Several classes of one implementation: the GatewayClass name.** They share
+   the same `controllerName`, so the class **name** is the only thing a Gateway
+   can use to choose, plus whatever `parametersRef` each class points at.
+
+   ```text
+   envoy-public    ┐
+   envoy-internal  ├─ same controllerName: gateway.envoyproxy.io/gatewayclass-controller
+   envoy           ┘  told apart by metadata.name (and their parametersRef)
+   ```
+
+2. **Several Gateways of one implementation: namespace plus name.** Each Gateway
+   is identified by `namespace/name`, for example `infra/public` and
+   `infra/corp`. The controller carries that identity into everything it
+   creates for the Gateway. In the lab, for `infra/public`:
+
+   ```text
+   Deployment / Service   envoy-infra-public-8d55c10f          ← envoy-<namespace>-<name>-<hash>
+   labels                 gateway.envoyproxy.io/owning-gateway-name: public
+                          gateway.envoyproxy.io/owning-gateway-namespace: infra
+   ```
+
+   So two Gateways called `public` in different namespaces don't clash: the
+   namespace is part of the identity, and the hash keeps the generated names
+   unique.
+
+#### The same ideas with HAProxy (HUG)
+
+The concepts above, told with HAProxy through HUG (HAProxy Unified Gateway,
+§3.1). HUG makes them easy to see, because there's only one proxy, and
+everything you create edits its one config file. HUG's behaviour comes from the
+note's reading of its code (§3.1). The `haproxy.cfg` excerpts are simplified:
+their logic follows what was tested in Docker (§2.1, "Example 1's HAProxy
+config, run in Docker"), but no HUG controller generated them.
+
+##### The three layers, with HUG
+
+```text
+LAYER 1  Gateway API CRDs (shared)          Gateway, GatewayClass, HTTPRoute, …     ← from kubernetes-sigs/gateway-api
+            │
+LAYER 2  HUG install (shared by every HUG Gateway)
+            Deployment hug   ── one container: the HUG controller + HAProxy
+            Service    hug   ── one IP for everything (the chart's default type is
+                                NodePort; LoadBalancer in a cloud setup)
+            HUG's own CRDs   ── HugGate, HugConf, Backend, …
+            │
+LAYER 3  each Gateway                         ← adds a frontend to the SAME haproxy.cfg
+                                                (no new Pod, no new Service, no new IP)
+```
+
+##### GatewayClass: "which software"
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: hug}
+spec:
+  controllerName: gate.haproxy.org/hug     # the HUG controller claims classes with this string
+```
+
+`kubectl get gatewayclass` shows `hug  gate.haproxy.org/hug  True` once the
+controller claims it. Nothing is created yet: no port is opened.
+
+##### Gateway: "where traffic comes in". With HUG, that's a frontend
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: public, namespace: infra}
+spec:
+  gatewayClassName: hug
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "*.example.com"
+    tls: {mode: Terminate, certificateRefs: [{name: wildcard-example-com}]}
+    allowedRoutes: {namespaces: {from: Selector, selector: {matchLabels: {gateway-access: public}}}}
+```
+
+What HUG does with it:
+
+```text
+haproxy.cfg  (in the one HAProxy)                  Service hug  (the one Service)
+───────────                                        ─────────────────────────────
+frontend infra_public_https                        ports: + 443   ← added to the existing Service
+    bind :443 ssl crt /certs/infra_wildcard-example-com.pem
+    # no routes attached yet → every request gets the default 404
+```
+
+- **The listener became a `frontend` with a `bind`,** and the certificate Secret
+  became a `.pem` file that HAProxy loads.
+- **No Pod and no Service were created.** HUG's controller can't create
+  Deployments: its RBAC only allows `get` and `list` (§3.1). It adds a port to
+  the Service that came with the install.
+- **The Gateway's address** in `status.addresses` is the install's Service IP,
+  the same for every HUG Gateway.
+
+##### HTTPRoute: "what goes where". With HUG, that's acl, use_backend and backend
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [shop.example.com]
+  rules:
+  - matches: [{path: {type: PathPrefix, value: /docs}}]
+    backendRefs: [{name: docs, port: 80}]
+  - backendRefs: [{name: web, port: 80}]
+```
+
+```text
+frontend infra_public_https
+    bind :443 ssl crt /certs/infra_wildcard-example-com.pem
+    acl host_shop  hdr(host),field(1,:) -i shop.example.com      ← hostnames
+    acl path_docs  path /docs                                    ← PathPrefix /docs, segment-safe
+    acl path_docs  path_beg /docs/                                  (the fix the Docker test proved)
+    use_backend shop_docs_80 if host_shop path_docs              ← rule 1
+    use_backend shop_web_80  if host_shop                        ← rule 2
+
+backend shop_web_80                     ← Service web, port 80
+    server pod1 10.244.1.12:8080 check  ← Pod IPs from web's EndpointSlice (not the ClusterIP)
+    server pod2 10.244.2.7:8080  check
+backend shop_docs_80
+    server pod1 10.244.2.15:8080 check
+```
+
+The name chain, as HAProxy sees it:
+
+```text
+HTTPRoute.parentRefs: infra/public, sectionName https
+      └─► Gateway infra/public, listener https  =  frontend infra_public_https
+             └─► gatewayClassName: hug  ──►  GatewayClass hug  ──►  controllerName gate.haproxy.org/hug
+                                                                      └─► the HUG controller writes it all
+```
+
+##### Telling instances apart, with HUG
+
+**Several Gateways end up as separate frontends in the same file,** identified
+by `namespace/name`:
+
+```text
+Gateway infra/public  (port 443)   →  frontend infra_public_https   bind :443
+Gateway infra/admin   (port 8443)  →  frontend infra_admin_https    bind :8443
+                                       same HAProxy, same IP, different ports
+```
+
+The manifests behind that picture. The class and the two Gateways (platform
+team):
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: hug}
+spec:
+  controllerName: gate.haproxy.org/hug
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: public, namespace: infra}        # identity: infra/public
+spec:
+  gatewayClassName: hug
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443                                     # → bind :443
+    hostname: "*.example.com"
+    tls: {mode: Terminate, certificateRefs: [{name: wildcard-example-com}]}
+    allowedRoutes:
+      namespaces: {from: Selector, selector: {matchLabels: {gateway-access: public}}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: admin, namespace: infra}         # identity: infra/admin
+spec:
+  gatewayClassName: hug                           # same class → same HUG → same HAProxy
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 8443                                    # → bind :8443 (must differ from public's port)
+    hostname: "admin.example.com"
+    tls: {mode: Terminate, certificateRefs: [{name: admin-example-com}]}
+    allowedRoutes:
+      namespaces: {from: Selector, selector: {matchLabels: {kubernetes.io/metadata.name: ops}}}   # only namespace ops
+```
+
+One route per Gateway (app teams):
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}           # shop is labelled gateway-access=public
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [shop.example.com]
+  rules:
+  - backendRefs: [{name: web, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: dashboard, namespace: ops}
+spec:
+  parentRefs: [{name: admin, namespace: infra, sectionName: https}]
+  hostnames: [admin.example.com]
+  rules:
+  - backendRefs: [{name: grafana, port: 3000}]
+```
+
+What HUG makes of it: one `haproxy.cfg`, two frontends.
+
+```text
+# ---- from Gateway infra/public, listener https ----
+frontend infra_public_https
+    bind :443 ssl crt /certs/infra_wildcard-example-com.pem
+    acl host_shop hdr(host),field(1,:) -i shop.example.com          ← from HTTPRoute shop/shop
+    use_backend shop_web_80 if host_shop
+
+# ---- from Gateway infra/admin, listener https ----
+frontend infra_admin_https
+    bind :8443 ssl crt /certs/infra_admin-example-com.pem
+    acl host_admin hdr(host),field(1,:) -i admin.example.com        ← from HTTPRoute ops/dashboard
+    use_backend ops_grafana_3000 if host_admin
+
+backend shop_web_80
+    server pod1 10.244.1.12:8080 check
+backend ops_grafana_3000
+    server pod1 10.244.3.5:3000 check
+```
+
+And the one Service that came with the install gets both ports added:
+
+```yaml
+# Service hug (from the HUG install, not created by the Gateways)
+spec:
+  type: LoadBalancer                 # one LB, one IP: 203.0.113.20 (the chart's default is NodePort)
+  ports:
+  - {name: infra-public-https, port: 443,  targetPort: 443}    # added for Gateway infra/public
+  - {name: infra-admin-https,  port: 8443, targetPort: 8443}   # added for Gateway infra/admin
+```
+
+```text
+$ kubectl -n infra get gateway
+NAME     CLASS   ADDRESS        PROGRAMMED
+public   hug     203.0.113.20   True          ← same address
+admin    hug     203.0.113.20   True          ← same address, reached on port 8443
+```
+
+Where each piece of identity shows up:
+
+| From the manifest | Ends up as |
+|---|---|
+| `metadata.namespace/name` of the Gateway (`infra/public`) | the frontend name `infra_public_https` |
+| `listeners[].name` (`https`) | the suffix of that frontend name; also what routes target with `sectionName` |
+| `listeners[].port` | the `bind :<port>`, and a port on the shared Service |
+| `listeners[].tls.certificateRefs` | the `.pem` file that `bind` loads |
+| `parentRefs` of each HTTPRoute | which frontend its `acl` / `use_backend` lines go into |
+
+**Why the ports must differ with HUG.** If `admin` also used port 443:
+
+```yaml
+spec:
+  gatewayClassName: hug
+  listeners:
+  - {name: https, protocol: HTTPS, port: 443, hostname: "admin.example.com", …}   # same port as public
+```
+
+…both Gateways would need `bind :443` in the same HAProxy. There's only one
+socket for port 443, so in effect they share it, yet HUG still reports both
+Gateways as valid: the recorded gap from §3.1. With HUG, either give each
+Gateway its own port, or put both hostnames on **one** Gateway as two
+listeners. Listeners on the same port with different hostnames are fine
+*within* one Gateway, where they're split by SNI and Host:
+
+```yaml
+spec:
+  gatewayClassName: hug
+  listeners:
+  - {name: https-shop,  protocol: HTTPS, port: 443, hostname: "*.example.com",     tls: {certificateRefs: [{name: wildcard-example-com}]}}
+  - {name: https-admin, protocol: HTTPS, port: 443, hostname: "admin.example.com", tls: {certificateRefs: [{name: admin-example-com}]}}
+```
+
+With Envoy Gateway the clash doesn't arise: `public` and `admin` would each get
+their own Envoy Pods, Service and IP, so both could use 443.
+
+**Several classes all land on the same HAProxy:**
+
+```text
+hug           ┐
+hug-internal  ├─ same controllerName: gate.haproxy.org/hug
+hug-public    ┘  told apart by metadata.name only; a HugGate can change just mworkerMaxReload
+                 → every class ends up as frontends in the SAME haproxy.cfg, behind the SAME IP
+```
+
+##### Where Envoy makes it clearer: public vs internal
+
+HUG can't express "this Gateway is internal, that one is public", because all
+its Gateways share one Service and one IP. Envoy Gateway can, because each
+Gateway gets its own proxy and Service, shaped by the class:
+
+```text
+                      HUG                                      Envoy Gateway
+Gateway public  ──►  frontend in the shared HAProxy      ──►  its own Envoy Pods + Service type LoadBalancer
+Gateway corp    ──►  frontend in the SAME HAProxy, same IP ─►  its own Envoy Pods + Service type ClusterIP
+                     (can't be internal-only)                  (class envoy-internal → EnvoyProxy internal-proxy)
+```
+
+With HUG, an internal entry point means a second HUG install with its own
+ClusterIP Service. Whether HUG lets that second install claim a different
+`controllerName` (needed so the two don't fight over the same classes) isn't
+confirmed. The chart's values (1.3.2) have no setting for it. `controller.name`
+there is only the workload's name. Whether the binary has a flag for it wasn't
+checked.
+
+##### HUG's chart, rendered (not installed)
+
+`helm template` of `haproxytech/haproxy-unified-gateway` chart **1.3.2** (app
+**1.1.0**; the late-2025 benchmark tested a beta) shows what an install would
+create:
+
+- 1 Deployment (`docker.io/haproxytech/haproxy-unified-gateway:1.1.0`), 1
+  Service of type **NodePort** by default (plus a stats port, 31024), 3
+  ServiceAccounts, ClusterRoles/Roles, a `HugConf` object
+  (`gate.v3.haproxy.org/v3`) with logging settings, and **three Jobs**:
+  - `--job-check-crd`: installs HUG's own CRDs;
+  - `--job-gwapi=1.7.0`: **installs the Gateway API CRDs v1.7.0** by default;
+  - a `hugconf` cleanup job.
+- **The second Job is the shared-CRD conflict from §3.2, for real.** In a
+  cluster that already has another implementation, it would replace the shared
+  Gateway API CRDs (here v1.6.1 experimental, used by Envoy Gateway). The chart
+  lets you turn it off: `gwapijob.enabled: false`.
+
+##### In short
+
+| Concept | With HUG it becomes |
+|---|---|
+| Gateway API CRDs | the shared kinds (same for everyone) |
+| HUG install | the one HAProxy + its Service + its IP |
+| GatewayClass `hug` | "the HUG controller handles this" |
+| Gateway | a `frontend` + `bind` in the one `haproxy.cfg`, a port on the one Service |
+| listener TLS | a `.pem` loaded by that `bind` |
+| HTTPRoute hostnames / matches | `acl` lines |
+| HTTPRoute rules | `use_backend` lines |
+| backendRef → Service | a `backend` block |
+| EndpointSlice | the `server` lines (Pod IPs) |
+
+#### `allowedRoutes`: which namespaces may attach
+
+`allowedRoutes` is the listener's **guest list**: which namespaces may attach
+routes to it. `gateway-access` isn't anything built in. It's a label made up
+for this note, so the platform team can mark the namespaces that are allowed in.
+
+```yaml
+listeners:
+- name: https
+  port: 443
+  allowedRoutes:
+    namespaces:
+      from: Selector                                  # admit routes from namespaces that match…
+      selector:
+        matchLabels: {gateway-access: public}         # …this label (our own invention)
+```
+
+The three choices for `from`:
+
+| `from` | Routes admitted from | Typical use |
+|---|---|---|
+| `Same` (the default) | only the Gateway's own namespace (`infra` here) | a Gateway owned by one team |
+| `All` | every namespace | labs, or fully trusted clusters |
+| `Selector` | namespaces whose **labels** match `selector` | a shared Gateway, where the platform team decides who's in |
+
+The label sits on the **namespace**, not on the route:
+
+```bash
+kubectl label namespace shop gateway-access=public      # shop's routes may now attach
+kubectl get ns --show-labels | grep gateway-access       # who's on the list
+```
+
+```text
+namespace shop    labels: gateway-access=public   ──► HTTPRoute in shop   → Accepted
+namespace search  labels: gateway-access=public   ──► HTTPRoute in search → Accepted
+namespace other   (no label)                       ──► HTTPRoute in other  → Accepted: False
+                                                                             reason NotAllowedByListeners
+```
+
+The lab showed the rejection (§3.4, "Attaching needs both sides to agree"): a
+route from an unlabelled namespace got `NotAllowedByListeners`, and the proxy
+never received its rules.
+
+The key and value are up to you. Any label works:
+
+```yaml
+selector: {matchLabels: {team-tier: production}}
+selector: {matchLabels: {kubernetes.io/metadata.name: shop}}    # exactly one namespace, by name
+selector:
+  matchExpressions:
+  - {key: environment, operator: In, values: [prod, staging]}
+```
+
+`kubernetes.io/metadata.name` is the one label Kubernetes sets on every
+namespace by itself: its own name. That's handy for allowing a fixed list.
+
+Why it exists:
+
+- **Without it,** anyone who can create an HTTPRoute could attach to the shared
+  public Gateway, claim hostnames, and publish an app to the internet.
+- **With it,** the platform team owns the decision, in one place, on the
+  Gateway. With Ingress there's no such gate: any namespace can add rules to
+  the shared proxy (§2.4).
+
+**The catch: the label is the permission.** Whoever can label namespaces can let
+themselves in. So RBAC has to keep app teams from editing namespace labels: no
+`patch` or `update` on `namespaces`. Otherwise a team runs
+`kubectl label ns myteam gateway-access=public` and the gate is gone. §3.9,
+object 13 gives app teams no rights on namespaces for this reason.
+
+A related field on the same listener: `allowedRoutes.kinds` limits **which route
+types** may attach, for example `[{kind: HTTPRoute}, {kind: GRPCRoute}]` (§3.9,
+object 2). So `allowedRoutes` answers two questions: from which namespaces, and
+of which kinds.
+
+##### Every way to choose namespaces, as manifests (lab)
+
+These match the v1.6.1 Gateway CRD (`standard-install.yaml`):
+
+- `from` takes exactly three values: `Same`, `All` and `Selector`.
+- `selector` is a standard Kubernetes label selector, whose operators are `In`,
+  `NotIn`, `Exists` and `DoesNotExist`.
+- The CRD says `selector` "must be specified when From is set to 'Selector'"
+  and is "ignored for other values".
+
+They were run in the lab on Traefik v3.7.18, where a Gateway only adds
+listeners, so no extra Pods. To fit that and avoid touching the lab's real
+namespaces, a copy was changed in four ways:
+
+- the namespaces were renamed `ar-shop`, `ar-search`, `ar-sandbox` and `ar-ops`
+  (and listener 4's selector to `ar-shop`);
+- the Gateway lived in an unlabelled `ar-infra` (the lab's `infra` carries
+  `gateway-access=public`, which would change row 3);
+- the class was `traefik`;
+- every port was 8000 (Traefik's `web` entryPoint).
+
+Each namespace got one HTTPRoute whose `parentRefs` listed all nine listeners.
+The table below matches the routes' real status, cell for cell: `✓` is
+`Accepted=True`, `–` is `Accepted=False` with reason `NotAllowedByListeners`.
+The listeners' `attachedRoutes` counts agreed:
+`same=1 all=5 public=2 only-shop=1 prod-or-staging=2 not-dev=4 has-team=3
+not-experimental=4 prod-public=1`.
+
+The namespaces and their labels, used by every example:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+  labels: {gateway-access: public, team-tier: production, environment: prod}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: search
+  labels: {gateway-access: public, team-tier: production, environment: staging}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+  labels: {environment: dev, experimental: "true"}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ops
+  labels: {team-tier: platform}
+# every namespace also carries kubernetes.io/metadata.name: <its own name>, set by Kubernetes
+```
+
+One Gateway, one listener per way of choosing. The listeners share port 80 and
+are told apart by hostname:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: demo, namespace: infra}
+spec:
+  gatewayClassName: envoy
+  listeners:
+
+  # 1. Same (the default): only routes in the Gateway's own namespace (infra)
+  - name: same
+    protocol: HTTP
+    port: 80
+    hostname: same.example.com
+    allowedRoutes:
+      namespaces: {from: Same}          # leaving allowedRoutes out entirely means the same thing
+
+  # 2. All: routes from every namespace
+  - name: all
+    protocol: HTTP
+    port: 80
+    hostname: all.example.com
+    allowedRoutes:
+      namespaces: {from: All}
+
+  # 3. Selector + matchLabels: namespaces with ALL of these labels
+  - name: public
+    protocol: HTTP
+    port: 80
+    hostname: public.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchLabels: {gateway-access: public}
+
+  # 4. Selector by name: exactly one namespace, via the label Kubernetes sets itself
+  - name: only-shop
+    protocol: HTTP
+    port: 80
+    hostname: shop-only.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchLabels: {kubernetes.io/metadata.name: shop}
+
+  # 5. matchExpressions In: the label's value is one of a list (an OR on one key)
+  - name: prod-or-staging
+    protocol: HTTP
+    port: 80
+    hostname: release.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchExpressions:
+          - {key: environment, operator: In, values: [prod, staging]}
+
+  # 6. NotIn: the label is missing, or its value is not in the list
+  - name: not-dev
+    protocol: HTTP
+    port: 80
+    hostname: notdev.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchExpressions:
+          - {key: environment, operator: NotIn, values: [dev]}
+
+  # 7. Exists: the label is present, whatever its value (no "values" allowed)
+  - name: has-team
+    protocol: HTTP
+    port: 80
+    hostname: teams.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchExpressions:
+          - {key: team-tier, operator: Exists}
+
+  # 8. DoesNotExist: the label is absent
+  - name: not-experimental
+    protocol: HTTP
+    port: 80
+    hostname: stable.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchExpressions:
+          - {key: experimental, operator: DoesNotExist}
+
+  # 9. Combined: everything listed must hold (matchLabels AND each expression)
+  - name: prod-public
+    protocol: HTTP
+    port: 80
+    hostname: prod-public.example.com
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector:
+          matchLabels: {gateway-access: public}
+          matchExpressions:
+          - {key: environment, operator: In, values: [prod]}
+          - {key: experimental, operator: DoesNotExist}
+      kinds: [{kind: HTTPRoute}]          # and only HTTPRoutes (no GRPCRoute etc.)
+```
+
+A route picks a listener by `sectionName`:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: app, namespace: search}
+spec:
+  parentRefs: [{name: demo, namespace: infra, sectionName: prod-or-staging}]
+  hostnames: [release.example.com]
+  rules:
+  - backendRefs: [{name: web, port: 80}]
+```
+
+Who may attach to which listener, worked out from the labels above:
+
+| Listener | `infra` | `shop` | `search` | `sandbox` | `ops` |
+|---|---|---|---|---|---|
+| 1 `same` | ✓ | – | – | – | – |
+| 2 `all` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 3 `public` (`gateway-access=public`) | – | ✓ | ✓ | – | – |
+| 4 `only-shop` (name = shop) | – | ✓ | – | – | – |
+| 5 `prod-or-staging` (`environment In [prod, staging]`) | – | ✓ | ✓ | – | – |
+| 6 `not-dev` (`environment NotIn [dev]`) | ✓ (no label) | ✓ | ✓ | – | ✓ (no label) |
+| 7 `has-team` (`team-tier Exists`) | – | ✓ | ✓ | – | ✓ |
+| 8 `not-experimental` (`experimental DoesNotExist`) | ✓ | ✓ | ✓ | – | ✓ |
+| 9 `prod-public` (all three) | – | ✓ | – | – | – |
+
+A route attached to a listener it isn't allowed on gets `Accepted: False`,
+reason `NotAllowedByListeners`.
+
+Rules worth remembering:
+
+- **Within one selector, everything is AND:** every `matchLabels` entry, and
+  every `matchExpressions` item, must hold.
+- **OR only works within one key,** using `In`. For "namespace A or namespace
+  B", use `kubernetes.io/metadata.name In [a, b]`:
+
+  ```yaml
+  matchExpressions:
+  - {key: kubernetes.io/metadata.name, operator: In, values: [shop, search]}
+  ```
+
+  There's no OR across different keys. Give those namespaces a shared label
+  instead, or use a second listener.
+- **`NotIn` and `DoesNotExist` also match namespaces with no such label at
+  all.** That's why `infra` and `ops` pass listener 6. If you mean "has the
+  label, but not this value", add `{key: environment, operator: Exists}` as well.
+- **`Exists` and `DoesNotExist` take no `values`;** `In` and `NotIn` need at
+  least one.
+- **An empty selector, `selector: {}`, matches every namespace,** the same as
+  `from: All`. Avoid it when you mean "nobody".
+- **Each listener has exactly one `allowedRoutes`.** To admit different groups
+  to the same host, use separate listeners or separate Gateways.
+- **The label is the permission:** restrict who can edit namespace labels
+  (above).
+
+**Where the listeners live.** All these listeners belong to **one** Gateway in
+**one** namespace. A listener has no namespace of its own; what varies per
+listener is which namespaces' **routes** may attach to it. The routes, and the
+apps behind them, live in their own namespaces:
+
+```text
+namespace infra
+└── Gateway demo          ← ONE object, ONE namespace, ONE proxy, ONE IP
+      ├── listener same              (same.example.com)        admits routes from: infra only
+      ├── listener all               (all.example.com)         admits routes from: every namespace
+      ├── listener public            (public.example.com)      admits routes from: namespaces labelled gateway-access=public
+      ├── listener only-shop         (shop-only.example.com)   admits routes from: shop
+      └── …
+
+namespace shop                         namespace search                    namespace infra
+├── HTTPRoute (parentRef: demo,        ├── HTTPRoute (parentRef: demo,     ├── HTTPRoute (parentRef: demo,
+│   sectionName: only-shop)            │   sectionName: public)            │   sectionName: same)
+└── Service web → Pods                 └── Service web → Pods              └── Service …
+```
+
+To give teams listeners of their own, use separate Gateways, or a
+`ListenerSet` (§3.8), which adds listeners to a shared Gateway from the team's
+own namespace.
+
+**Are listeners sockets? No.** A listener is a configuration entry: port,
+protocol, hostname, TLS settings and which routes may attach. A socket is opened
+per port. Listeners that share a port share one socket, and the proxy tells
+them apart per request, by hostname. For Gateway `demo`, all nine listeners use
+port 80:
+
+```text
+Gateway demo: 9 listeners                       Envoy Pod: 1 listening socket
+──────────────────────────                       ──────────────────────────────
+same         :80  same.example.com       ┐
+all          :80  all.example.com        │
+public       :80  public.example.com     ├──►   0.0.0.0:10080   (one socket for port 80)
+only-shop    :80  shop-only.example.com  │        reads the Host header
+…            :80  …                      ┘        → that listener's routes (a "virtual host" per hostname)
+```
+
+How it looks in each implementation:
+
+- **Envoy Gateway:** listeners with the same port become one Envoy listener, a
+  single socket per Envoy Pod. Each hostname becomes a virtual host inside it,
+  and for HTTPS a filter chain picked by SNI. The port inside the Pod is shifted
+  to avoid root-only ports. In the lab, Gateway port 80 maps to Envoy's 10080
+  ("Choosing the proxy's Service type", below), and 443 maps to 10443.
+- **HAProxy:** the same idea, in the config's own words. One `bind :8443` (one
+  socket) serves all hosts, and certificates are chosen by SNI from the
+  directory. In HUG, each Gateway port becomes a `bind`, which is why two HUG
+  Gateways on the same port end up sharing one socket (the gap noted in §3.1).
+
+Why it matters:
+
+- **Port clashes:** two HTTP or HTTPS listeners on the same port must be
+  distinguishable by hostname, or they conflict; Gateway status reports that.
+  TCP listeners have no hostname, so two TCP listeners can't share a port (nor
+  can two UDP listeners).
+- **One Gateway, many hostnames, one socket:** adding a hostname costs a config
+  entry, not a new port or IP.
+- **Several replicas:** each proxy Pod opens its own socket for each port, and
+  the Service in front spreads connections across those Pods.
+
+#### The lab's GatewayClass and Gateway
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -2213,6 +4506,71 @@ In the example, rule 2 has no `path`, so it gets the default `PathPrefix /`. Tha
 
 Hostname comes before all of this: a route with an exact hostname beats one inherited from a wildcard listener, before any path is compared. §3.7 shows how that can break a catch-all redirect.
 
+#### Request flow, as the docs describe it (docs)
+
+The Gateway API docs give this flow for HTTP traffic routed to a Service by a
+Gateway and an HTTPRoute, when the Gateway is implemented as a reverse proxy:
+
+1. The client starts to prepare an HTTP request for the URL
+   `http://www.example.com`.
+2. The client's DNS resolver queries for the destination name and learns a
+   mapping to one or more IP addresses associated with the Gateway.
+3. The client sends a request to the Gateway IP address. The reverse proxy
+   receives the HTTP request and uses the `Host:` header to match a
+   configuration that was derived from the Gateway and the attached HTTPRoute.
+4. Optionally, the reverse proxy can perform request header and/or path
+   matching based on the match rules of the HTTPRoute.
+5. Optionally, the reverse proxy can modify the request, for example to add or
+   remove headers, based on the filter rules of the HTTPRoute.
+6. Lastly, the reverse proxy forwards the request to one or more backends.
+
+```text
+client ──(1) http://www.example.com
+   │
+   ├──(2) DNS: www.example.com → Gateway address (status.addresses)
+   │
+   └──(3) TCP to that address ─► LB / node port ─► proxy Pod (Envoy)
+                                   │ (3) Host: www.example.com → listener + HTTPRoute hostnames
+                                   │ (4) path / header / method / query matches → one rule
+                                   │ (5) filters: add/remove headers, rewrite, redirect, mirror
+                                   ▼
+                              (6) backendRefs → Service → EndpointSlice → a Pod IP (weights if several)
+```
+
+A common picture of the same flow:
+
+![Kubernetes Gateway API: an HTTP request goes from a Client to an Ingress Gateway, then HTTPRoute, then Routing Rule, then Service, which fans out to two Pods](image-19.png)
+
+Read it as an order of decisions, not of network hops:
+
+- **Only "Ingress Gateway" is a box traffic passes through.** It's the proxy Pod (Envoy here).
+- **"HTTPRoute" and "Routing Rule" are configuration inside the proxy.** The controller translated them into Envoy routes ahead of time (steps 3–5 above). No request travels to an HTTPRoute object.
+- **"Service" is a lookup, not a hop.** The proxy connects straight to a Pod IP taken from the Service's EndpointSlice. The Service's ClusterIP isn't used (§4.2).
+- **What the picture leaves out:** the Gateway's own LoadBalancer Service, the cloud LB and the node port in front of the proxy (§3.4 "Reading a typical Gateway diagram").
+
+How each step looks on this note's lab (Envoy Gateway):
+
+- **Step 2: the Gateway's address.** It's the external IP of the proxy's
+  LoadBalancer Service, copied into the Gateway's `status.addresses` (§3.3).
+  Nothing in Gateway API creates the DNS record; you add it yourself, or use a
+  tool such as external-dns.
+- **Step 3: getting to the proxy.** "Sends a request to the Gateway IP" passes
+  through the LB, a node port and kube-proxy before it reaches the Envoy Pod
+  (below, "Following one request into the proxy Pod"). For HTTPS, the TLS
+  handshake's SNI picks the listener and certificate before any `Host:` header
+  is read (§3.7 sets up an HTTPS listener).
+- **Step 3: the `Host:` match.** A route only attaches if its `hostnames`
+  overlap the listener's `hostname`. A mismatch shows up as
+  `NoMatchingListenerHostname` in the route's status (§3.4).
+- **Step 4: the rule match.** When several rules match, the most specific one
+  wins (§3.4 "Which rule wins").
+- **Step 5: filters.** These are typed fields on the rule, such as
+  `RequestHeaderModifier`, `URLRewrite`, `RequestRedirect` and
+  `RequestMirror` (§3.5).
+- **Step 6: "one or more backends".** Several `backendRefs` with `weight` split
+  traffic (§3.4 "Traffic"). The proxy sends straight to Pod IPs from the
+  EndpointSlices, not to the Service's ClusterIP (§4.2).
+
 #### From `kubectl apply` to a routed request (Gateway API)
 
 This is the Gateway counterpart of §2.1's walkthrough. It works the same way: the objects are records, and a controller turns them into proxy configuration. Two things differ. The controller also **creates the proxy** and its Service. And it **pushes config over gRPC (xDS)** instead of writing a file and reloading.
@@ -2259,7 +4617,7 @@ Notes:
 
 - **No reload, ever.** ingress-nginx re-renders `nginx.conf` and reloads for route changes (§2.1). Envoy receives new routes and endpoints as xDS updates on a gRPC stream that's already open.
 - **Status says why, not only whether.** An Ingress with an empty ADDRESS just looks unclaimed (§2.1). A Gateway says `AddressNotAssigned`, and a route says `NotAllowedByListeners` or `RefNotPermitted`. Debugging starts with `kubectl get gateway,httproute -o yaml`.
-- **The controller owns the proxy's lifecycle.** Delete the Gateway and Envoy Gateway is expected to remove its Deployment and Service ①, and with it the cloud LB. Because the `ownerReferences` point at the GatewayClass, it's the controller that does this cleanup, not Kubernetes garbage collection. This wasn't tested, to keep the lab's Gateway. With ingress-nginx, the proxy and its Service come from the install manifests and outlive every Ingress.
+- **The controller owns the proxy's lifecycle.** Delete the Gateway and Envoy Gateway is expected to remove its Deployment and Service ①, and with it the cloud LB. Because the `ownerReferences` point at the GatewayClass, it's the controller that does this cleanup, not Kubernetes garbage collection. Tested with a second Gateway, `corp` (§3.3): deleting it removed its `envoy-infra-corp-…` Deployment and Service. With ingress-nginx, the proxy and its Service come from the install manifests and outlive every Ingress.
 - **One Gateway, one proxy, one IP** (with Envoy Gateway). A second Gateway (`internal`) gets its own Service ① and its own LB (§3.3).
 
 #### Reading a typical Gateway diagram
@@ -2530,6 +4888,315 @@ What was verified:
 - **On the lab:** the bootstrap's xDS source; the listeners, including the 19001 stats and 19003 readiness listeners; the routes, clusters, EDS localities and weights; the `least_request` policy; and the update counters for both changes.
 - **Restored afterwards:** `web-v1` back to 2 replicas, and `tmp-route` deleted.
 
+#### The same examples with Gateway API, on Traefik and HAProxy (not tested)
+
+These are the four examples from §2.1, "The same idea in HAProxy and Traefik",
+written as a Gateway plus HTTPRoutes instead of Ingresses. A fifth example
+shows something Ingress can't express. The proxy side doesn't change: still one
+listener, a table of rules, and pools of Pod IPs. What changes is who writes
+which part of the table.
+
+- **HAProxy** here is HAProxy Unified Gateway (HUG, §3.1), not
+  `haproxytech/kubernetes-ingress`, which has no Gateway API support.
+- **Traefik** implements Gateway API through its `kubernetesGateway` provider.
+
+As in §2.1, the generated configs follow the shape each tool documents, with
+simplified names. The HAProxy rules use the two fixes that §2.1's Docker test of
+the same table showed were needed: segment-safe paths, and `Host:` matching
+without the port. HUG itself wasn't run (its install wasn't permitted in this
+session). On Traefik, the lab confirmed two things: the `PathPrefix`
+translation is segment-safe (`Path("/docs") || PathPrefix("/docs/")`), and the
+real router names follow
+`httproute-<ns>-<route>-gw-<ns>-<gateway>-ep-<entryPoint>-<rule#>-<hash>`
+(§2.1, "Examples 2–5 and the Traefik configs, run"). The weighted canary and
+header filters below were run on Envoy Gateway (§3.9, object 6).
+
+```text
+ Ingress (§2.1)                              Gateway API (here)
+
+ one object, one owner:                      split by owner (§3.1):
+   listener + TLS + hosts + paths              GatewayClass   which controller          (provider)
+                                               Gateway        listener, TLS, who may    (platform team)
+                                                              attach
+                                               HTTPRoute      hosts, paths, backends    (app teams)
+              │                                          │
+              └──────────────► the same proxy table ◄────┘
+                    listener → rules (Host + path) → pools of Pod IPs
+```
+
+##### The class and the Gateway (the platform team's part)
+
+Each controller announces itself with a `GatewayClass`:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: traefik}
+spec: {controllerName: traefik.io/gateway-controller}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata: {name: hug}
+spec: {controllerName: gate.haproxy.org/hug}
+```
+
+One Gateway holds the listener and the TLS certificate, and says which
+namespaces may attach routes:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: public, namespace: infra}
+spec:
+  gatewayClassName: traefik            # or: hug
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443                          # Traefik: must match one of its entryPoints' ports (e.g. 8443)
+    hostname: "*.example.com"          # routes may only claim names under this
+    tls:
+      mode: Terminate
+      certificateRefs: [{name: acme-tls}]   # the Secret lives in infra, not in the app namespaces
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector: {matchLabels: {gateway-access: public}}   # only labelled namespaces may attach
+```
+
+Neither controller starts a new proxy for this Gateway. Both add a listener to
+the proxy they already run (§3.1). Envoy Gateway would create a new Deployment
+instead.
+
+```text
+                  Traefik                                  HAProxy (HUG)
+ Gateway public   listener on entryPoint websecure         frontend https
+ :443, TLS        (tls cert from infra/acme-tls)           bind :443 ssl crt /certs/infra_acme-tls.pem
+```
+
+##### Example 1: two hosts, three Services
+
+The `shop` team writes two HTTPRoutes (one per hostname, or one with both
+hostnames; either works):
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}          # namespace labelled gateway-access=public
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [shop.example.com]
+  rules:
+  - matches: [{path: {type: PathPrefix, value: /docs}}]
+    backendRefs: [{name: docs, port: 80}]
+  - matches: [{path: {type: PathPrefix, value: /}}]
+    backendRefs: [{name: web, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: api, namespace: shop}
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [api.example.com]
+  rules:
+  - matches: [{path: {type: PathPrefix, value: /}}]
+    backendRefs: [{name: api, port: 80}]
+```
+
+**HAProxy (HUG): the same table as with the Ingress.**
+
+```text
+frontend https                                          ← from the Gateway's listener
+    bind :443 ssl crt /certs/infra_acme-tls.pem
+    acl host_shop  hdr(host),field(1,:) -i shop.example.com   ← from HTTPRoute shop's hostnames
+    acl host_api   hdr(host),field(1,:) -i api.example.com    ← from HTTPRoute api's hostnames
+    acl path_docs  path /docs                           ← PathPrefix is segment-based (Example 3):
+    acl path_docs  path_beg /docs/                         exactly /docs, or anything below /docs/
+    use_backend shop_docs_80  if host_shop path_docs
+    use_backend shop_web_80   if host_shop
+    use_backend shop_api_80   if host_api
+
+backend shop_web_80
+    server pod1 10.244.1.12:8080 check                  ← Pod IPs from web's EndpointSlice
+    server pod2 10.244.2.7:8080  check
+backend shop_api_80
+    server pod1 10.244.1.30:9000 check
+backend shop_docs_80
+    server pod1 10.244.2.15:8080 check
+```
+
+**Traefik: routers attached to the Gateway's entryPoint.**
+
+```yaml
+http:
+  routers:
+    httproute-shop-shop-rule-0: {entryPoints: [websecure], rule: "Host(`shop.example.com`) && PathPrefix(`/docs`)", service: shop-docs-80, tls: {}}
+    httproute-shop-shop-rule-1: {entryPoints: [websecure], rule: "Host(`shop.example.com`) && PathPrefix(`/`)",     service: shop-web-80,  tls: {}}
+    httproute-shop-api-rule-0:  {entryPoints: [websecure], rule: "Host(`api.example.com`) && PathPrefix(`/`)",      service: shop-api-80,  tls: {}}
+  services:
+    shop-web-80:  {loadBalancer: {servers: [{url: "http://10.244.1.12:8080"}, {url: "http://10.244.2.7:8080"}]}}
+    shop-api-80:  {loadBalancer: {servers: [{url: "http://10.244.1.30:9000"}]}}
+    shop-docs-80: {loadBalancer: {servers: [{url: "http://10.244.2.15:8080"}]}}
+```
+
+The request `GET https://shop.example.com/docs/install` follows the same six
+steps as in §2.1. The only new step is before any request: each route must be
+**accepted** by the Gateway. Its namespace has to be allowed, and its hostnames
+have to fall under `*.example.com`. The route's `status` says whether that
+happened (§3.4, "Attaching needs both sides to agree").
+
+##### Example 2: a second team's route joins the same table
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: blog, namespace: content}
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [blog.example.com]
+  rules:
+  - backendRefs: [{name: ghost, port: 80}]       # no matches = PathPrefix /
+```
+
+What happens depends on the platform team's Gateway, not on the route:
+
+| `content` namespace | Route status | Rows in the proxy |
+|---|---|---|
+| not labelled `gateway-access: public` | `Accepted: False`, `NotAllowedByListeners` | none |
+| labelled | `Accepted: True` | `host_blog → content_ghost_80` (HAProxy), a `Host(blog.example.com)` router (Traefik) |
+| labelled, but `hostnames: [blog.other.org]` | `Accepted: False`, `NoMatchingListenerHostname` | none |
+
+With Ingress, any namespace could add rows for any host (§2.4). Here the
+platform team decides, in one place. If two accepted routes still claim the
+same host and path, the spec settles it: the **oldest route wins** (then
+`namespace/name` in alphabetical order), so the other rule is never matched.
+Every conformant controller resolves it the same way; none picks a rule of its
+own.
+
+##### Example 3: `Exact` vs `PathPrefix`, and no default backend
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop-extra, namespace: shop}
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [shop.example.com]
+  rules:
+  - matches: [{path: {type: Exact, value: /healthz}}]
+    backendRefs: [{name: health, port: 80}]
+  - matches: [{path: {type: PathPrefix, value: /static}}]
+    backendRefs: [{name: cdn, port: 80}]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: catch-all, namespace: infra}    # the platform team's fallback
+spec:
+  parentRefs: [{name: public, sectionName: https}]
+  hostnames: ["*.example.com"]
+  rules:
+  - backendRefs: [{name: not-found, port: 80}]   # PathPrefix / on any matching host
+```
+
+```text
+                      HAProxy (HUG)                             Traefik
+Exact /healthz        acl p_health path /healthz                Path(`/healthz`)
+PathPrefix /static    acl p_static path /static                 PathPrefix(`/static`), translated so
+                      acl p_static path_beg /static/              /staticfiles doesn't match
+catch-all route       use_backend infra_not-found_80 last       a Host wildcard router, lowest priority
+```
+
+- **There's no `defaultBackend` field.** A catch-all is just another route with
+  the least specific match. Here the platform team owns it, so app teams can't
+  change the 404 page by accident.
+- **Precedence is written in the spec,** not left to each controller:
+  - the most specific hostname first: `shop.example.com` beats `*.example.com`;
+  - then `Exact` beats `PathPrefix`, and a longer prefix beats a shorter one;
+  - then a method match, then more header matches, then more query-parameter
+    matches.
+- **`PathPrefix` matches whole path segments.** `/static` doesn't match
+  `/staticfiles`. It's in the conformance tests, so Traefik and HUG must both
+  get it right to pass. That's the gap Example 3 in §2.1 described for Ingress.
+
+The match table from §2.1 holds unchanged:
+
+| Request path | `Exact /healthz` | `PathPrefix /static` |
+|---|---|---|
+| `/healthz` | match | – |
+| `/healthz/` | no match | – |
+| `/static` | – | match |
+| `/static/app.js` | – | match |
+| `/staticfiles` | – | no match |
+
+Requests that none of these rules match:
+
+- **Another path on `shop.example.com`** goes to the `/` rule of route `shop`
+  (Example 1), because a route for the exact hostname beats the wildcard
+  `catch-all`.
+- **Any other host under `*.example.com`** goes to the `catch-all` route.
+
+##### Example 4: scaling changes one pool, not the routes
+
+The same as with Ingress: `kubectl -n shop scale deploy web --replicas=3`
+changes `web`'s EndpointSlice. Neither the Gateway nor the HTTPRoutes change,
+and only the `shop_web_80` / `shop-web-80` pool gains a server.
+
+##### Example 5: a weighted canary, which Ingress can't express
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}
+spec:
+  parentRefs: [{name: public, namespace: infra, sectionName: https}]
+  hostnames: [shop.example.com]
+  rules:
+  - matches: [{path: {type: PathPrefix, value: /}, headers: [{name: x-canary, value: always}]}]
+    backendRefs: [{name: web-v2, port: 80}]                     # QA forces v2 with a header
+  - matches: [{path: {type: PathPrefix, value: /}}]
+    filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier: {add: [{name: x-served-by, value: gateway}]}
+    backendRefs:
+    - {name: web,    port: 80, weight: 90}
+    - {name: web-v2, port: 80, weight: 10}                      # 10% to the new version
+```
+
+```text
+HAProxy (HUG)                                           Traefik
+  acl canary hdr(x-canary) -m str always                  routers:
+  use_backend shop_web-v2_80 if host_shop canary            …-rule-0: {rule: "Host(`shop.example.com`) && Header(`x-canary`, `always`)",
+  use_backend shop_web_split if host_shop                              service: shop-web-v2-80}
+                                                            …-rule-1: {rule: "Host(`shop.example.com`) && PathPrefix(`/`)",
+  backend shop_web_split                                               middlewares: [add-x-served-by], service: shop-web-split}
+      http-request set-header x-served-by gateway         services:
+      server web-a  10.244.1.12:8080 weight 45              shop-web-split:
+      server web-b  10.244.2.7:8080  weight 45                weighted:
+      server v2-a   10.244.3.20:8080 weight 10                  services: [{name: shop-web-80, weight: 90},
+                                                                           {name: shop-web-v2-80, weight: 10}]
+```
+
+- **The header rule comes first** because a header match is more specific than
+  the same path without one: the spec's precedence, not the order in the file.
+- **HAProxy spreads the weights over the Pods.** Each of web's 2 Pods gets 45 so
+  that the Service as a whole gets 90. Traefik keeps the two Services as
+  weighted children instead.
+- **With Ingress this needs controller annotations** (ingress-nginx's
+  `canary-weight` on a second Ingress), which don't carry over to HAProxy or
+  Traefik (§2.3). Here it's a standard field, so the same route works on both.
+
+##### What's the same and what's different
+
+| | Ingress (§2.1) | Gateway API (here) |
+|---|---|---|
+| Proxy table | listener → rules → pools of Pod IPs | the same |
+| Listener and TLS | in each Ingress, repeated | once, in the Gateway, owned by the platform team |
+| Who may add rows | anyone who can create an Ingress | namespaces the Gateway's `allowedRoutes` allows |
+| Conflicting rules | up to the controller | the spec decides: oldest route wins |
+| `Prefix` semantics | depends on the controller's translation | segment-based, conformance-tested |
+| Default backend | `defaultBackend` field | a catch-all route |
+| Weights, header matches, header filters | controller annotations | standard fields |
+| On Traefik and HUG | no new proxy | no new proxy; a Gateway is a new listener (Envoy Gateway would create a proxy) |
+
 ### 3.5 Filters available as typed fields
 
 The HTTPRoute filter types in v1.7.0 (`HTTPRouteFilterType` in `httproute_types.go`, checked against the standard CRD):
@@ -2724,6 +5391,105 @@ The rule to take away: when a Gateway redirects HTTP to HTTPS, **every app route
 
 With Ingress, every app's Ingress names a TLS Secret, which has to sit in that app's namespace.
 
+#### Real certificates: cert-manager and Let's Encrypt (not tested)
+
+The lab used a self-signed certificate. In production, cert-manager gets a
+publicly trusted one from Let's Encrypt and keeps renewing it:
+
+![A client sends HTTPS through a load balancer into the cluster, where the Ingress Controller terminates TLS and forwards plain HTTP to service-b and its two Pods. cert-manager, also in the cluster, supplies the certificate to the Ingress Controller and renews it from Let's Encrypt every 60 days](image-22.png)
+
+*Slide from a course video (source not recorded).*
+
+What the picture shows, and what it simplifies:
+
+- **TLS ends at the ingress proxy, not at the LB.** The LB here is L4: it
+  passes the encrypted bytes through. The proxy decrypts them, reads `Host` and
+  path, and opens a plain HTTP connection to a Pod. (With an L7 cloud LB, TLS
+  would end at the LB instead, §2.5.1.)
+- **Plain HTTP inside the cluster is a choice, not a rule.** To re-encrypt to the
+  Pod, use `BackendTLSPolicy` with Gateway API (§3.9, object 11), or an annotation
+  such as ingress-nginx's `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"`.
+  A service mesh can add mTLS between them instead.
+- **cert-manager doesn't hand the certificate to the controller.** It writes a
+  `kubernetes.io/tls` **Secret**, and the controller, which watches Secrets,
+  loads it. The slide's arrow from cert-manager to the controller is really
+  "Secret updated → controller reloads". No restart is needed.
+- **"Renew (60 days)":** Let's Encrypt certificates have been valid for 90 days.
+  cert-manager renews when two thirds of the lifetime has passed (its default),
+  so around day 60. That rule is relative, so it keeps working if Let's Encrypt
+  shortens its lifetimes, as it has announced.
+- **The service-b arrow is a lookup.** The proxy sends to Pod IPs from the
+  EndpointSlice, not to the ClusterIP (§4.2).
+
+How the certificate gets issued:
+
+```text
+ Ingress / Gateway with annotation  cert-manager.io/cluster-issuer: letsencrypt-prod
+        │ watched by
+        ▼
+ cert-manager ──► Certificate (shop.example.com) ──► ACME order at Let's Encrypt
+        │                                                  │
+        │  proves you control the name:                    │
+        │   HTTP-01: serves a token at                     │ Let's Encrypt fetches
+        │   http://shop.example.com/.well-known/acme-challenge/<token>
+        │   through the SAME ingress proxy (temporary route) ◄┘
+        │   DNS-01:  writes a TXT record (needed for wildcards like *.example.com)
+        ▼
+ Secret shop-example-com-tls  (tls.crt + tls.key)  ──► the proxy loads it ──► HTTPS works
+        │
+        └── at 2/3 of the lifetime: new order, same Secret updated, proxy reloads it
+```
+
+A ClusterIssuer, and an Ingress that asks for a certificate:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata: {name: letsencrypt-prod}
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ops@example.com                       # expiry notices
+    privateKeySecretRef: {name: letsencrypt-prod-account}
+    solvers:
+    - http01:
+        ingress: {ingressClassName: nginx}       # serve the challenge through this controller
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop
+  namespace: shop
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod   # cert-manager reacts to this
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts: [shop.example.com]
+    secretName: shop-example-com-tls             # cert-manager creates and renews it
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: web, port: {number: 80}}}}
+```
+
+With Gateway API, the annotation goes on the **Gateway** instead (§3.9,
+object 2), and each listener's `certificateRefs` names the Secret. The HTTP-01
+solver then uses `http01.gatewayHTTPRoute.parentRefs` pointing at the Gateway,
+and cert-manager's Gateway API support has to be switched on.
+
+Things that break issuance:
+
+- **Port 80 must reach the proxy** for HTTP-01, even if the site is HTTPS-only.
+  A Gateway redirect that sends *everything* to HTTPS can catch the challenge
+  path too, depending on the implementation.
+- **DNS must already point at the LB** before issuing, or Let's Encrypt can't
+  reach the token.
+- **Wildcards need DNS-01,** and with it API credentials for the DNS provider.
+- **Use Let's Encrypt's staging server while testing.** The production server has
+  rate limits, and repeated failures can lock a name out for a while.
+
 ### 3.8 Beyond HTTP
 
 | Route | For |
@@ -2735,6 +5501,580 @@ With Ingress, every app's Ingress names a TLS Secret, which has to sit in that a
 | `ListenerSet` | lets other namespaces add listeners (e.g. their own hostname + cert) to a shared Gateway |
 
 Ingress is HTTP(S) only. TCP/UDP with Ingress means a controller-specific ConfigMap.
+
+### 3.9 A production-grade setup (schema-validated; parts run)
+
+The lab's Gateway is one listener, one route and one Envoy Pod. A production
+setup adds redundancy, hardening, resilience, safe rollouts and enforced
+ownership. Below are 13 objects that do that with Envoy Gateway, split between
+the platform team (`infra`) and an app team (`shop`).
+
+**Parts that were run in the lab:**
+
+- object 6's header canary, weights, mirroring and header filters;
+- object 10's `mergeType`;
+- a Gateway built from an `EnvoyProxy` with 2 replicas, LoadBalancer and
+  `externalTrafficPolicy: Local` (§3.3).
+
+The results are under each object.
+
+**How these were checked.** Every object was sent to the lab cluster with
+`kubectl apply --dry-run=server --validate=strict`. The cluster runs the
+Gateway API CRDs v1.6.1 (experimental channel) and Envoy Gateway v1.9.3. All 13
+were accepted. Strict mode rejects unknown fields: misspelling `retryOn` as
+`retryOnn` failed with `strict decoding error: unknown field
+"spec.retry.retryOnn"`. Nothing was created.
+
+**What that doesn't check.** The dry-run validates the schema, not behaviour.
+None of this carried traffic. It also depends on things the lab doesn't have:
+cert-manager, the backend Services, a Keycloak JWKS endpoint, and an AWS NLB.
+
+**Standard vs experimental fields.** The lab has the experimental channel
+installed, so a dry-run accepts experimental fields too. The official v1.6.1
+release files (`standard-install.yaml` vs `experimental-install.yaml`) say
+which is which:
+
+| Field / kind | Channel in v1.6.1 | Used below? |
+|---|---|---|
+| HTTPRoute `timeouts` (`request`, `backendRequest`) | standard | yes |
+| `RequestMirror` with `percent` | standard | yes |
+| `CORS` filter | standard | yes |
+| `BackendTLSPolicy`, `GRPCRoute`, `ReferenceGrant`, `ListenerSet` | standard | the first three |
+| HTTPRoute `retry` | **experimental** | no: Envoy Gateway's `BackendTrafficPolicy` instead |
+| HTTPRoute `sessionPersistence` | **experimental** | no |
+| `ExternalAuth` filter | **experimental** | no: Envoy Gateway's `SecurityPolicy` covers auth |
+
+So the routes use only standard fields. Anything beyond them comes from Envoy
+Gateway's own policy objects (`EnvoyProxy`, `ClientTrafficPolicy`,
+`BackendTrafficPolicy`, `SecurityPolicy`), which don't carry over to other
+implementations.
+
+#### Platform team (`infra` namespace)
+
+##### 1. How the proxy fleet runs: `EnvoyProxy`
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata: {name: prod-proxy, namespace: infra}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        pod:
+          topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector: {matchLabels: {gateway.envoyproxy.io/owning-gateway-name: prod-public}}
+        container:
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {memory: 1Gi}
+      envoyHpa:
+        minReplicas: 3
+        maxReplicas: 12
+        metrics:
+        - type: Resource
+          resource: {name: cpu, target: {type: Utilization, averageUtilization: 60}}
+      envoyPDB:
+        minAvailable: 2
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local          # keep the client IP; LB health-checks nodes
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: external
+          service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  shutdown:
+    drainTimeout: 60s                        # let in-flight requests finish on scale-down
+```
+
+- **At least 3 proxies, spread across zones.** An HPA scales them on CPU, and a
+  PDB keeps 2 up during node drains.
+- **`externalTrafficPolicy: Local` keeps the client IP** (§2.5.1, and
+  [kubernetes-services.md](kubernetes-services.md) §4.3.1).
+- **The NLB sends straight to Pod IPs** (`nlb-target-type: ip`, read by the AWS
+  Load Balancer Controller), so there's no node-port hop (§2.5.1).
+- **Proxies drain for 60 s on scale-down,** so in-flight requests finish.
+
+##### 2. The Gateway: one listener per domain, and only labelled namespaces may attach
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: prod-public
+  namespace: infra
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod   # cert-manager fills the Secrets below
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef: {group: gateway.envoyproxy.io, kind: EnvoyProxy, name: prod-proxy}
+  listeners:
+  - name: http                               # only for the redirect below
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces: {from: Same}               # app teams can't serve plain HTTP
+  - name: https-shop
+    protocol: HTTPS
+    port: 443
+    hostname: "*.shop.example.com"
+    tls:
+      mode: Terminate
+      certificateRefs: [{name: wildcard-shop-example-com}]
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector: {matchLabels: {gateway.example.com/public: "true"}}
+      kinds: [{kind: HTTPRoute}, {kind: GRPCRoute}]
+  - name: https-api
+    protocol: HTTPS
+    port: 443
+    hostname: api.example.com
+    tls:
+      mode: Terminate
+      certificateRefs: [{name: api-example-com}]
+    allowedRoutes:
+      namespaces:
+        from: Selector
+        selector: {matchLabels: {gateway.example.com/public: "true"}}
+```
+
+- **`infrastructure.parametersRef`** ties this Gateway to object 1, so only this
+  Gateway's proxies get that sizing.
+- **Two HTTPS listeners share port 443, told apart by SNI.** Each has its own
+  certificate, and the private keys never leave `infra`.
+- **cert-manager's annotation** makes it issue and renew the two Secrets named
+  in `certificateRefs`.
+- **Port 80 accepts routes only from `infra`,** so no app can serve plain HTTP.
+- **Only namespaces labelled `gateway.example.com/public: "true"` may attach.**
+  Labelling a namespace is the platform team's decision.
+
+##### 3. HTTP → HTTPS once, for every host
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: https-redirect, namespace: infra}
+spec:
+  parentRefs: [{name: prod-public, sectionName: http}]
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect: {scheme: https, statusCode: 301}
+```
+
+The same pattern §3.7 tested in the lab: one route on the `http` listener
+redirects everything, so app routes only attach to HTTPS listeners.
+
+##### 4. Client-facing hardening for the whole Gateway: `ClientTrafficPolicy`
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata: {name: prod-public-clients, namespace: infra}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: Gateway, name: prod-public}]
+  tls:
+    minVersion: "1.2"
+    alpnProtocols: [h2, http/1.1]
+  timeout:
+    http:
+      requestReceivedTimeout: 30s            # slowloris guard
+      idleTimeout: 120s
+  connection:
+    bufferLimit: 1Mi
+  headers:
+    withUnderscoresAction: RejectRequest
+    xForwardedClientCert: {mode: Sanitize}
+  clientIPDetection:
+    xForwardedFor: {numTrustedHops: 0}       # NLB in IP mode + ETP Local: trust the TCP source only
+```
+
+- **TLS 1.2 or newer,** with HTTP/2 offered.
+- **`requestReceivedTimeout`** cuts off clients that send a request very
+  slowly to hold connections open (slowloris).
+- **Headers with underscores are rejected.** Some backends treat `x_user_id`
+  and `x-user-id` as the same header, which can be used to smuggle one past a
+  check.
+- **`numTrustedHops: 0` matters.** If you trusted `X-Forwarded-For` while no
+  proxy in front sets it, any client could fake their IP, and with it any
+  IP-based rate limit or allowlist. Raise it only by the number of proxies in
+  front that really add the header (a CDN, an ALB).
+
+##### 5. Defaults every backend gets: `BackendTrafficPolicy` on the Gateway
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: prod-public-defaults, namespace: infra}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: Gateway, name: prod-public}]
+  timeout:
+    http: {requestTimeout: 15s}
+  retry:
+    numRetries: 2
+    retryOn:
+      triggers: [connect-failure, retriable-status-codes]
+      httpStatusCodes: [503]
+    perRetry:
+      backOff: {baseInterval: 100ms, maxInterval: 1s}
+  circuitBreaker:
+    maxConnections: 4096
+    maxPendingRequests: 1024
+    maxParallelRequests: 4096
+  healthCheck:
+    passive:                                 # outlier detection: eject Pods that keep failing
+      consecutive5XxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+```
+
+- **Retries:** up to 2, only for failed connects and `503`, with backoff.
+- **Circuit breaker:** caps connections and queued requests per backend, so a
+  slow backend can't take all the proxy's resources.
+- **Passive health checks (outlier detection):** a Pod that returns five 5xx
+  in a row is taken out for 30 s, but never more than half the Pods at once.
+  Readiness probes only see what the kubelet sees; this sees what clients get.
+- **These are defaults.** In Envoy Gateway a route-level policy beats a
+  Gateway-level one (§3.1), so app teams can override them (object 10). Only
+  RBAC can stop that.
+- **A route-level policy replaces these entirely, not field by field,** unless it
+  sets `mergeType` (object 10 shows why that matters).
+
+#### App team (`shop` namespace, labelled `gateway.example.com/public: "true"`)
+
+##### 6. Storefront: header canary, weights, shadow traffic, security headers, timeouts
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: storefront, namespace: shop}
+spec:
+  parentRefs: [{name: prod-public, namespace: infra, sectionName: https-shop}]
+  hostnames: [www.shop.example.com]
+  rules:
+  - name: canary-by-header
+    matches: [{path: {type: PathPrefix, value: /}, headers: [{name: x-canary, value: always}]}]
+    backendRefs: [{name: web-v2, port: 80}]
+  - name: main
+    matches: [{path: {type: PathPrefix, value: /}}]
+    timeouts: {request: 10s, backendRequest: 4s}
+    filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+        - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains"}
+        - {name: X-Content-Type-Options, value: nosniff}
+        remove: [Server, X-Powered-By]
+    - type: RequestMirror                    # shadow 5% of traffic to v2, responses discarded
+      requestMirror:
+        backendRef: {name: web-v2, port: 80}
+        percent: 5
+    backendRefs:
+    - {name: web,    port: 80, weight: 95}
+    - {name: web-v2, port: 80, weight: 5}
+  - name: static
+    matches: [{path: {type: PathPrefix, value: /static}}]
+    backendRefs: [{name: cdn-origin, port: 80}]
+```
+
+- **`sectionName: https-shop`** attaches to one listener; the hostname must fall
+  under `*.shop.example.com`.
+- **Run in the lab** on the lab's `public` Gateway, in a test namespace, with
+  `traefik/whoami` backends, `web` (2 Pods) and `web-v2` (1 Pod), and
+  `percent: 50` instead of 5 to make mirroring easy to count:
+  - `x-canary: always` → web-v2, 5 of 5;
+  - 400 requests without it → 362 `web`, 38 `web-v2` (90/10);
+  - `web-v2` received **241** requests for those 400: 38 real plus about 203
+    mirrored. So **the mirror copies every request on the rule, about half at
+    50 %, including those already sent to web-v2;**
+  - the response carried `strict-transport-security` and
+    `x-content-type-options`, and had no `server` header; the backend received
+    `X-Served-By: gateway` (a `RequestHeaderModifier` added for the test).
+- **Three ways to release `web-v2` safely:**
+  - QA forces it with `x-canary: always` (the header rule wins over the same
+    path without one);
+  - 5 % of real users get it (`weight`);
+  - another 5 % of requests are copied to it, and its answers thrown away
+    (`RequestMirror`), so it's load-tested without users seeing errors.
+- **`timeouts`:** the whole request (including retries) must finish in 10 s,
+  each attempt at the backend in 4 s.
+- **Security headers are set once, at the edge,** and headers that reveal the
+  server software are removed.
+- **Named rules** (`name: main`) let a policy target one rule with
+  `sectionName`, not the whole route (object 9).
+
+##### 7. Public API: versioned paths, a prefix rewrite, CORS, a sunset header, a backend in another namespace
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: public-api, namespace: shop}
+spec:
+  parentRefs: [{name: prod-public, namespace: infra, sectionName: https-api}]
+  hostnames: [api.example.com]
+  rules:
+  - name: v2
+    matches: [{path: {type: PathPrefix, value: /v2}}]
+    filters:
+    - type: URLRewrite
+      urlRewrite: {path: {type: ReplacePrefixMatch, replacePrefixMatch: /}}
+    - type: CORS
+      cors:
+        allowOrigins: ["https://www.shop.example.com"]
+        allowMethods: [GET, POST, PUT, DELETE]
+        allowHeaders: [Authorization, Content-Type]
+        allowCredentials: true
+        maxAge: 600
+    backendRefs: [{name: orders-v2, port: 8080}]
+  - name: v1-sunset
+    matches: [{path: {type: PathPrefix, value: /v1}}]
+    filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        add: [{name: Sunset, value: "Wed, 31 Mar 2027 00:00:00 GMT"}, {name: Deprecation, value: "true"}]
+    backendRefs: [{name: orders-v1, port: 8080}]
+  - name: auth
+    matches: [{path: {type: PathPrefix, value: /auth}}]
+    backendRefs: [{name: keycloak, namespace: other-team, port: 8080}]   # needs the ReferenceGrant below
+```
+
+- **`/v2/orders` reaches `orders-v2` as `/orders`:** the version lives only in the
+  public URL.
+- **CORS is answered at the edge** for the storefront's origin, so the browser's
+  preflight never reaches the backend.
+- **`/v1` still works but tells clients it's going away** (`Sunset`,
+  `Deprecation`), so migration can be tracked before it's switched off.
+- **`/auth` goes to a Service in another team's namespace.** That needs that
+  team's permission (object 8).
+
+##### 8. The owner of the shared backend allows the reference: `ReferenceGrant`
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata: {name: allow-shop-routes, namespace: other-team}
+spec:
+  from: [{group: gateway.networking.k8s.io, kind: HTTPRoute, namespace: shop}]
+  to:   [{group: "", kind: Service, name: keycloak}]
+```
+
+It lives in the **target's** namespace, written by its owner. It allows only
+HTTPRoutes from `shop`, and only to `keycloak`. Without it, `public-api` gets
+`ResolvedRefs: False, RefNotPermitted` (§3.6).
+
+##### 9. JWT on `/v2` only: `SecurityPolicy` targeting one rule
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata: {name: public-api-jwt, namespace: shop}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: public-api, sectionName: v2}]
+  jwt:
+    providers:
+    - name: keycloak
+      issuer: https://auth.example.com/realms/shop
+      audiences: [orders-api]
+      remoteJWKS: {uri: "https://auth.example.com/realms/shop/protocol/openid-connect/certs"}
+      claimToHeaders: [{claim: sub, header: x-user-id}]
+```
+
+- **Only the `v2` rule needs a token.** `/auth` (where tokens are obtained) and
+  `/v1` stay open.
+- **Envoy checks signature, issuer, audience and expiry** against Keycloak's
+  published keys, so invalid tokens never reach the backend.
+- **The token's `sub` claim is passed on as `x-user-id`,** which object 10
+  rate-limits on.
+
+##### 10. Per-route overrides: a rate limit per user, and safer retries
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata: {name: public-api-limits, namespace: shop}
+spec:
+  targetRefs: [{group: gateway.networking.k8s.io, kind: HTTPRoute, name: public-api}]
+  mergeType: StrategicMerge                  # keep object 5's timeout, circuit breaker, outlier ejection
+  rateLimit:
+    type: Local                              # per Envoy replica; Global needs a Redis-backed rate-limit service
+    local:
+      rules:
+      - clientSelectors: [{headers: [{name: x-user-id, type: Distinct}]}]
+        limit: {requests: 100, unit: Minute}
+  retry:
+    numRetries: 1
+    retryOn: {triggers: [connect-failure]}  # POSTs aren't safe to retry on 5xx
+```
+
+- **`mergeType` decides whether object 5 still applies.** The installed CRD's
+  description: "If unset, no merging occurs, and only the most specific
+  configuration takes effect." Without it, this route would silently lose the
+  Gateway's 15 s timeout, circuit breaker and outlier ejection, because only
+  this policy would apply. With `StrategicMerge`, the fields set here (retry,
+  rate limit) override object 5's and the rest are kept.
+  - `mergeType` is only allowed on policies that target routes (a CEL rule in
+    the CRD).
+  - The schema doesn't check the value: `Bogus` passed the dry-run too (only
+    `Replace` is rejected). A typo would only show up in the policy's status.
+  - **Run in the lab** with a 2 s Gateway-level `requestTimeout`, a route on
+    the lab's `public` Gateway, and a backend that waits 3 s (`?wait=3s`):
+
+    | Policies | `wait=3s` | Status |
+    |---|---|---|
+    | Gateway-level timeout only | **504 after 2.0 s** | Gateway policy `Accepted` |
+    | + route-level policy (retry only), **no** `mergeType` | **200 after 3.0 s**: the timeout is gone | Gateway policy **`Overridden=True`** |
+    | + `mergeType: StrategicMerge` | **504 after 2.0 s**: the timeout is kept | route policy **`Merged=True`** |
+- **This overrides object 5's retries for the API.** It retries only failed
+  connects, never a 5xx, because a `POST /orders` may already have created the
+  order.
+- **100 requests per minute per user** (`Distinct` = one bucket per
+  `x-user-id` value).
+- **`Local` is per Envoy replica.** With 3–12 replicas the real limit is
+  100 × the replica count. An exact cluster-wide limit needs `type: Global`,
+  which needs a separate rate-limit service backed by Redis.
+
+##### 11. Re-encrypt to a TLS-only backend: `BackendTLSPolicy`
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata: {name: orders-v2-tls, namespace: shop}
+spec:
+  targetRefs: [{group: "", kind: Service, name: orders-v2, sectionName: https}]
+  validation:
+    caCertificateRefs: [{group: "", kind: ConfigMap, name: orders-ca}]
+    hostname: orders-v2.shop.svc.cluster.local
+```
+
+TLS ends at the Gateway, and the proxy opens a **new** TLS connection to the
+backend's port named `https`. It checks the backend's certificate against the
+CA in ConfigMap `orders-ca`, for the name `orders-v2.shop.svc.cluster.local`.
+Use it when traffic inside the cluster must stay encrypted too.
+
+##### 12. gRPC on the same listener: `GRPCRoute`
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata: {name: inventory, namespace: shop}
+spec:
+  parentRefs: [{name: prod-public, namespace: infra, sectionName: https-shop}]
+  hostnames: [grpc.shop.example.com]
+  rules:
+  - matches: [{method: {service: inventory.v1.InventoryService}}]
+    backendRefs: [{name: inventory, port: 9090}]
+```
+
+It matches on the gRPC service name (§3.8), on the same HTTPS listener and IP
+as the website. The listener allows it because its `kinds` list includes
+`GRPCRoute`.
+
+##### 13. What the shop team may write: RBAC
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: gateway-routes-editor, namespace: shop}
+rules:
+- apiGroups: [gateway.networking.k8s.io]
+  resources: [httproutes, grpcroutes]
+  verbs: [get, list, watch, create, update, patch, delete]
+- apiGroups: [gateway.envoyproxy.io]
+  resources: [backendtrafficpolicies, securitypolicies]
+  verbs: [get, list, watch, create, update, patch, delete]
+# no gateways, no gatewayclasses, no referencegrants: those belong to the platform team
+```
+
+Bind it to the shop team with a RoleBinding. The team can write routes and
+their own policies, but not Gateways (listeners, certificates, who may
+attach), not GatewayClasses, and not ReferenceGrants: a grant would let them
+open up access from their namespace to elsewhere. This is the three-role model
+from §3.1, enforced.
+
+#### Who owns what
+
+```text
+infra (platform team)                         shop (app team)                    other-team
+─────────────────────                         ───────────────                    ──────────
+EnvoyProxy prod-proxy   → 3–12 Envoy Pods     HTTPRoute storefront ─┐            Service keycloak
+Gateway prod-public     → LB, listeners, TLS  HTTPRoute public-api ─┼─ attach    ReferenceGrant ◄── allows
+HTTPRoute https-redirect                      GRPCRoute inventory  ─┘  to the       public-api
+ClientTrafficPolicy     → TLS, timeouts,      SecurityPolicy (JWT on /v2)          → keycloak
+                          client IP           BackendTrafficPolicy (overrides)
+BackendTrafficPolicy    → defaults            BackendTLSPolicy (re-encrypt)
+                                              Role: may write only routes + its policies
+```
+
+One request to `https://api.example.com/v2/orders`, through all of it:
+
+```text
+client ─► NLB (IP targets) ─► Envoy Pod (one of 3–12)
+            ClientTrafficPolicy:  TLS ≥ 1.2, cert api-example-com, slowloris timeout, client IP = TCP source
+            listener https-api ─► HTTPRoute public-api, rule v2
+            SecurityPolicy:       JWT valid? (issuer, audience, expiry) ── no → 401
+                                  sub → x-user-id
+            BackendTrafficPolicy: x-user-id under 100/min? ── no → 429
+            filters:              CORS headers; /v2/orders → /orders
+            timeouts / retry:     15 s request (object 5, kept by mergeType), 1 retry on connect failure
+            BackendTLSPolicy:     new TLS connection, verify orders-ca
+            outlier detection:    skip Pods ejected for repeated 5xx
+          ─► orders-v2 Pod IP:8443 (from the EndpointSlice, §4.2)
+```
+
+#### What makes it production grade, compared with the lab
+
+| Concern | Lab (§3.3–3.4) | Here |
+|---|---|---|
+| Redundancy | 1 Envoy Pod | 3–12 (HPA), PDB, zone spread, 60 s drain |
+| Certificates | a self-made Secret | cert-manager, one per domain, keys stay in `infra` |
+| Plain HTTP | allowed | redirect only; app routes can't attach to port 80 |
+| Client IP | not preserved | `externalTrafficPolicy: Local`, NLB IP targets, `X-Forwarded-For` not trusted |
+| Abuse | none | slowloris timeout, request buffer limit, per-user rate limit |
+| Failures | none | timeouts, retries only where safe, circuit breaker, outlier ejection |
+| Rollouts | weights only | header canary, weights, shadow traffic |
+| Auth | none | JWT at the edge, per rule |
+| Encryption to backends | plain HTTP | `BackendTLSPolicy` where needed |
+| Ownership | one person | listener selectors, ReferenceGrant, RBAC |
+
+#### Applying it, and checking it took effect
+
+Apply in this order: the platform objects (1–5) first, then each team's.
+Labelling a namespace is what lets its routes attach:
+
+```bash
+kubectl label namespace shop gateway.example.com/public=true
+```
+
+Then read the status. Every object reports whether it took effect:
+
+```bash
+kubectl -n infra get gateway prod-public                          # PROGRAMMED True, ADDRESS = the NLB
+kubectl -n infra get gateway prod-public -o jsonpath='{range .status.listeners[*]}{.name}{"  attached="}{.attachedRoutes}{"\n"}{end}'
+kubectl -n shop get httproute,grpcroute                           # then -o yaml: Accepted, ResolvedRefs per parent
+kubectl -n shop get securitypolicy,backendtrafficpolicy -o yaml | grep -A3 'type: Accepted'
+kubectl -n infra get hpa,pdb                                      # created by Envoy Gateway from object 1
+```
+
+Typical failures, and where they show:
+
+| Symptom | Where it shows | Cause |
+|---|---|---|
+| route not served | HTTPRoute `Accepted: False, NotAllowedByListeners` | namespace not labelled |
+| route not served | `Accepted: False, NoMatchingListenerHostname` | hostname outside the listener's |
+| `/auth` returns 500 | `ResolvedRefs: False, RefNotPermitted` | ReferenceGrant missing |
+| listener not ready | Gateway listener `ResolvedRefs: False, InvalidCertificateRef` | cert-manager hasn't issued the Secret yet |
+| policy ignored | policy status `Accepted: False` | wrong `targetRefs` name or `sectionName` |
+| Gateway defaults missing on one route | the Gateway-level policy's status shows `Overridden=True` (no error) | a route-level policy without `mergeType` replaced them |
+
+`kubectl apply --dry-run=server --validate=strict -f <file>` catches typos and
+unknown fields before any of this. It's how the manifests above were checked.
 
 ---
 
