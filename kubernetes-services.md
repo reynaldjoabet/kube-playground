@@ -811,6 +811,167 @@ Two variations on LoadBalancer:
   their ClusterIP (§1.1 and §4 of
   [ingress-and-gateway-api.md](ingress-and-gateway-api.md)).
 
+#### Every way in from outside the cluster
+
+ClusterIP is internal only. From outside, traffic reaches a Pod in one of these
+ways:
+
+```text
+client outside the cluster
+   │
+   ├─▶ NodePort                 nodeIP:30080 → kube-proxy → Pod
+   │
+   ├─▶ LoadBalancer             cloud LB → (NodePort on a node | Pod IP directly) → Pod
+   │
+   ├─▶ externalIPs              an IP you route to a node → kube-proxy → Pod
+   │
+   ├─▶ hostPort / hostNetwork   nodeIP:port is the Pod itself, no Service
+   │
+   └─▶ routable Pod IPs         the network routes Pod IPs (AWS VPC CNI, Azure CNI) → Pod
+```
+
+- **NodePort:** every node accepts the same port (30000–32767), and kube-proxy
+  forwards it to the Service's endpoints. This is the basic way in.
+- **LoadBalancer:** a NodePort plus a load balancer in front of it. The cloud
+  controller manager creates it, or a controller such as the AWS Load Balancer
+  Controller or MetalLB (`minikube tunnel` in this lab).
+  - Classic mode: the LB sends traffic to the node port on the nodes.
+  - IP-target mode: the LB sends straight to Pod IPs and skips the node port.
+    Examples are the AWS Load Balancer Controller with `target-type: ip`, and
+    GKE's container-native load balancing. It needs routable Pod IPs (below).
+- **`externalIPs`:** kube-proxy accepts any IP you list in the Service, but you
+  have to route that IP to a node yourself. It's rarely used, because whoever
+  can edit a Service can claim any IP, including someone else's
+  (CVE-2020-8554). The `DenyServiceExternalIPs` admission plugin turns the
+  field off.
+- **`hostPort` / `hostNetwork`:** the Pod listens on the node's own IP, with no
+  Service involved. Ingress controllers and CNI agents sometimes run this way.
+- **Routable Pod IPs:** on some CNIs a Pod IP is a real address in the network
+  (VPC or VNet). Anything that can route to it can reach the Pod directly. In
+  the cloud, the LB IP-target mode above uses this.
+- **For development only:** `kubectl port-forward` and `kubectl proxy`. Both
+  tunnel through the API server; neither is a production path.
+
+##### Each way, with an example
+
+NodePort, LoadBalancer and `externalIPs` are the `t-nodeport`, `t-lb` and
+`t-extip` Services listed at the end of §2.3; §4.1 shows their rules, and §4.4
+the LoadBalancer. The others
+were run on minikube in a namespace `in-demo` (lab). The node IP is
+192.168.49.2.
+
+**`hostPort`:** a port on the node, DNATed to one Pod.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata: {name: hp, namespace: in-demo}
+spec:
+  containers:
+  - name: web
+    image: registry.k8s.io/e2e-test-images/agnhost:2.53
+    args: ["netexec", "--http-port=8080"]
+    ports: [{containerPort: 8080, hostPort: 8088}]
+```
+
+```text
+$ minikube ssh -- curl -s 192.168.49.2:8088/hostname
+hp
+```
+
+Nothing listens on 8088 (`ss -ltn` shows no socket). The CNI's `portmap`
+plugin wrote nat rules instead, the same idea as a node port but for one Pod:
+
+```text
+-A PREROUTING -m addrtype --dst-type LOCAL -j CNI-HOSTPORT-DNAT
+-A OUTPUT -m addrtype --dst-type LOCAL -j CNI-HOSTPORT-DNAT
+-A CNI-HOSTPORT-DNAT -p tcp -m comment --comment "dnat name: \"k8s-pod-network\" id: \"7fc0da3a…\"" -m multiport --dports 8088 -j CNI-DN-4f8d6341353c518a53b3b
+-A CNI-DN-4f8d6341353c518a53b3b -s 10.244.120.68/32 -p tcp -m tcp --dport 8088 -j CNI-HOSTPORT-SETMARK
+-A CNI-DN-4f8d6341353c518a53b3b -s 127.0.0.1/32 -p tcp -m tcp --dport 8088 -j CNI-HOSTPORT-SETMARK
+-A CNI-DN-4f8d6341353c518a53b3b -p tcp -m tcp --dport 8088 -j DNAT --to-destination 10.244.120.68:8080
+```
+
+Only the node running the Pod has these rules. Unlike a node port, other nodes
+don't forward, and two Pods with the same `hostPort` can't share a node (the
+scheduler keeps them apart).
+
+**`hostNetwork`:** the Pod uses the node's network namespace.
+
+```yaml
+spec:
+  hostNetwork: true
+  containers:
+  - name: web
+    image: registry.k8s.io/e2e-test-images/agnhost:2.53
+    args: ["netexec", "--http-port=8089"]
+```
+
+```text
+$ kubectl -n in-demo get pod hn -o wide
+NAME   READY   STATUS    IP             NODE
+hn     1/1     Running   192.168.49.2   minikube      # the Pod IP is the node IP
+
+$ minikube ssh -- sudo ss -ltnp | grep 8089
+LISTEN 0  4096  *:8089  *:*  users:(("agnhost",pid=8582,fd=3))   # a real socket on the node
+
+$ minikube ssh -- curl -s 192.168.49.2:8089/hostname
+minikube                                              # even its hostname is the node's
+```
+
+No NAT is involved. The process just listens on the node.
+
+**A plain Pod is not reachable on the node IP:**
+
+```text
+$ minikube ssh -- curl -s --max-time 3 192.168.49.2:8080/hostname    # refused (exit 7)
+$ minikube ssh -- curl -s 10.244.120.85:8080/hostname                # Pod IP, from the node
+plain
+```
+
+The node can route to the Pod IP, but nothing outside the cluster can: here the
+Pod network 10.244.0.0/16 exists only inside the minikube node. With a CNI that
+gives Pods VPC or VNet addresses, the same Pod IP would be reachable from
+anywhere in the network.
+
+**`kubectl port-forward` and `kubectl proxy`:** both go laptop → API server →
+kubelet → Pod.
+
+```text
+$ kubectl -n in-demo port-forward pod/plain 18080:8080 &
+$ curl -s localhost:18080/hostname
+plain
+$ curl -s localhost:18080/clientip
+127.0.0.1:49736            # the connection is opened inside the Pod's network namespace
+
+$ kubectl proxy --port=18001 &
+$ curl -s localhost:18001/api/v1/namespaces/in-demo/pods/plain:8080/proxy/hostname
+plain
+```
+
+Both need Kubernetes credentials and send every byte through the API server.
+That's fine for debugging and wrong for real traffic.
+
+##### Where Ingress and Gateway API fit
+
+An Ingress (or Gateway API `Gateway`) is a set of HTTP routing rules: by host
+and path, with TLS termination. A controller Pod, such as ingress-nginx, Envoy
+Gateway or Traefik, carries them out. That controller is an ordinary workload,
+so it's exposed through one of the ways above:
+
+```text
+client → LoadBalancer (or NodePort/hostPort) → ingress controller Pod
+            → reads Host/path → picks a backend Service → that Service's endpoints (Pod IPs)
+```
+
+There are two layers:
+
+- **Getting in:** NodePort, LoadBalancer, externalIPs, hostPort/hostNetwork,
+  routable Pod IPs. Each exposes one Service or one Pod.
+- **L7 routing once in:** Ingress or Gateway. One entry point carries many
+  hostnames and paths.
+
+The next section draws both layers in full.
+
 #### Where Ingress and Gateway fit on top of a NodePort
 
 This builds on the NodePort picture in §2.2 ("Reading a typical NodePort diagram"). A LoadBalancer Service only adds a cloud LB in front of the node ports. Ingress and Gateway add a proxy, which runs as Pods behind its *own* LoadBalancer Service:
@@ -3925,6 +4086,67 @@ bridge instead, with `hairpinMode`); kube-proxy's nftables and IPVS modes.
 
 ### 3.6 EndpointSlices and readiness decide who gets traffic
 
+#### Who watches what: from Service to rules
+
+```text
+Service (selector app=web, port 80 → targetPort 8080)
+   │  watched by
+   ▼
+EndpointSlice controller (in kube-controller-manager)
+   │  finds Pods matching the selector, records their IPs and readiness
+   ▼
+EndpointSlice  (label kubernetes.io/service-name=web)
+   endpoints: 10.244.0.5 ready, 10.244.0.6 ready, 10.244.0.7 not ready
+   │  watched by
+   ├──▶ kube-proxy on every node → iptables/nftables rules (ClusterIP → Pod IP DNAT)
+   └──▶ CoreDNS → web.ns.svc.cluster.local → ClusterIP (or Pod IPs if headless)
+```
+
+1. **The Service is only a spec.** It holds a ClusterIP, ports and a label
+   selector.
+2. **The EndpointSlice controller turns the selector into a list of Pod IPs.**
+   It watches Services, Pods and Nodes. For each Service it:
+   - finds the Pods whose labels match the selector;
+   - writes their IPs into one or more EndpointSlice objects, by default up to
+     100 endpoints per slice;
+   - records three conditions for each endpoint:
+     - `ready`: the readiness probe passes and the Pod isn't terminating;
+     - `serving`: like `ready`, but stays true while the Pod is terminating;
+     - `terminating`: the Pod is being deleted;
+   - resolves a named `targetPort` (e.g. `http`) separately for each Pod, so
+     different Pods can use different port numbers.
+3. **kube-proxy turns the slices into rules.** kube-proxy runs on every node and
+   watches Services and EndpointSlices. In iptables mode, `KUBE-SVC` has one
+   probability jump per ready endpoint, and each endpoint has its own
+   `KUBE-SEP` DNAT chain. In the lab (§3.3, "Scaling 0 → 1 → 2 → 3 → 5 Pods"):
+   - the rules changed when the EndpointSlice changed, not when the Service was
+     created;
+   - with 0 replicas there was only the filter `REJECT` rule.
+4. **CoreDNS answers name lookups from the same data.** A normal Service name
+   resolves to its ClusterIP. A headless Service (`clusterIP: None`) resolves
+   straight to the ready endpoint IPs (§4.2).
+
+What follows from this:
+
+- **Readiness decides who gets traffic.** A Pod failing its probe stays in the
+  slice with `ready: false`, so kube-proxy drops its rule. The Pod keeps
+  running; it just gets no new connections.
+- **Scaling or Pod restarts change only the slices.** The Service object never
+  changes.
+- **A Service without a selector gets no endpoints automatically.** You write
+  the EndpointSlice yourself, for example to point at a database outside the
+  cluster. Set its `kubernetes.io/service-name` label so kube-proxy links it to
+  the Service, and give its port the same name as the Service's port.
+- **The old `Endpoints` object is deprecated** (since v1.33). It was a single
+  object per Service, which had size problems at scale (§6.4). The control
+  plane still writes it for Services with a selector, for older clients, but
+  kube-proxy and CoreDNS read EndpointSlices.
+
+The examples below show each point on a cluster. First, the `web` slice from
+§0.2 and what its conditions mean.
+
+#### The `web` slice and its conditions (lab)
+
 The EndpointSlice controller (part of kube-controller-manager) watches the
 Service's selector and the matching pods, and writes the result into
 EndpointSlice objects. kube-proxy on each node reads those, never the pods
@@ -4004,6 +4226,586 @@ after restoring readiness:   97 h9km8   98 scntw   105 tlztj
 ```
 
 The pod was never restarted. It was only taken out of rotation, then put back.
+
+#### Examples: named ports, scaling to 0, no selector, legacy Endpoints (lab)
+
+Run on minikube (Kubernetes v1.34, kube-proxy in iptables mode) in a namespace
+`ep-demo`. Rules were read with
+`kubectl -n kube-system exec <kube-proxy pod> -- iptables-save`.
+
+##### A named `targetPort` with a different port on each Pod
+
+Two Deployments carry the same `app: web` label, but name a different container
+port `http`. The Service refers to the name, not a number:
+
+```yaml
+# web-a: 2 replicas, labels {app: web, track: a}
+        args: ["netexec", "--http-port=8080"]
+        ports: [{name: http, containerPort: 8080}]
+---
+# web-b: 1 replica, labels {app: web, track: b}
+        args: ["netexec", "--http-port=9090"]
+        ports: [{name: http, containerPort: 9090}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: web, namespace: ep-demo}
+spec:
+  selector: {app: web}
+  ports: [{name: http, port: 80, targetPort: http}]
+```
+
+The controller looked up `http` on each Pod. A slice has one `ports` list for
+all its endpoints, so Pods with different port numbers went into different
+slices:
+
+```text
+$ kubectl -n ep-demo get endpointslice -o wide
+NAME        ADDRESSTYPE   PORTS   ENDPOINTS                       AGE
+web-2bxjv   IPv4          8080    10.244.120.115,10.244.120.116   13s
+web-lhmxh   IPv4          9090    10.244.120.105                  6s
+```
+
+kube-proxy merged both slices into one `KUBE-SVC` chain with three endpoints.
+Each `KUBE-SEP` DNATs to its own port:
+
+```text
+-A KUBE-SERVICES -d 10.104.181.209/32 -p tcp -m comment --comment "ep-demo/web:http cluster IP" -m tcp --dport 80 -j KUBE-SVC-YAFVY3TZMTDCY6NC
+-A KUBE-SVC-YAFVY3TZMTDCY6NC ! -s 10.244.0.0/16 -d 10.104.181.209/32 -p tcp -m comment --comment "ep-demo/web:http cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+-A KUBE-SVC-YAFVY3TZMTDCY6NC -m comment --comment "ep-demo/web:http -> 10.244.120.105:9090" -m statistic --mode random --probability 0.33333333349 -j KUBE-SEP-KJWWSRXPF3634JVS
+-A KUBE-SVC-YAFVY3TZMTDCY6NC -m comment --comment "ep-demo/web:http -> 10.244.120.115:8080" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-TYN4IXIJQUEY76TF
+-A KUBE-SVC-YAFVY3TZMTDCY6NC -m comment --comment "ep-demo/web:http -> 10.244.120.116:8080" -j KUBE-SEP-BL5XC6TPUD5WZ7DE
+-A KUBE-SEP-KJWWSRXPF3634JVS -p tcp -m comment --comment "ep-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.105:9090
+-A KUBE-SEP-TYN4IXIJQUEY76TF -p tcp -m comment --comment "ep-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.115:8080
+-A KUBE-SEP-BL5XC6TPUD5WZ7DE -p tcp -m comment --comment "ep-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.116:8080
+```
+
+(The hairpin `KUBE-MARK-MASQ` rule of each `KUBE-SEP` is left out.) 30 requests
+to `web:80` reached all three Pods:
+
+```text
+$ for i in $(seq 1 30); do kubectl -n ep-demo exec client -- curl -s web/hostname; echo; done | sort | uniq -c
+  10 web-a-ff46bcbdb-wghhp
+   7 web-a-ff46bcbdb-zpc4x
+  13 web-b-68c5b76485-hfhkh
+```
+
+This is how a rollout can change a container's port without breaking the
+Service: during the rollout, old and new Pods sit in separate slices, and both
+get traffic.
+
+##### Scaling to 0 and back: only the slices change
+
+```text
+$ kubectl -n ep-demo scale deploy web-a web-b --replicas=0
+$ kubectl -n ep-demo get endpointslice -l kubernetes.io/service-name=web -o wide
+NAME        ADDRESSTYPE   PORTS     ENDPOINTS   AGE
+web-lhmxh   IPv4          <unset>   <unset>     3m50s
+
+nat rules for ep-demo/web: none
+filter: -A KUBE-SERVICES -d 10.104.181.209/32 -p tcp -m comment --comment "ep-demo/web:http has no endpoints" -m tcp --dport 80 -j REJECT --reject-with icmp-port-unreachable
+curl web/hostname: exit 7 (connection refused, at once)
+```
+
+```text
+$ kubectl -n ep-demo scale deploy web-a --replicas=2; kubectl -n ep-demo scale deploy web-b --replicas=1
+$ kubectl -n ep-demo get endpointslice -l kubernetes.io/service-name=web -o wide
+NAME        ADDRESSTYPE   PORTS   ENDPOINTS                      AGE
+web-lhmxh   IPv4          9090    10.244.120.91                  4m37s
+web-zh5h2   IPv4          8080    10.244.120.99,10.244.120.111   2s
+```
+
+- At 0 replicas the controller kept one empty slice (`endpoints: null`,
+  `ports: null`) and deleted the other.
+- On scale-up it reused the empty slice and created a new one.
+- The Service's `resourceVersion` was 491348 at 0 replicas and still 491348
+  after scaling up: the Service object never changed.
+
+##### A Service with no selector, and a hand-written EndpointSlice
+
+`ext-db` stands for a database outside the cluster. In the lab its backend was
+a plain Pod, `outside-db` at 10.244.120.84, listening on 5432 and carrying no
+labels the Service could select.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata: {name: ext-db, namespace: ep-demo}
+spec:
+  ports: [{name: pg, port: 5432, targetPort: 5432}]   # no selector
+```
+
+What each step did:
+
+| Step | Slices for `ext-db` | Rules | `curl ext-db:5432/hostname` |
+|---|---|---|---|
+| Service only | none | filter `REJECT ... "ep-demo/ext-db:pg has no endpoints"` | refused (exit 7) |
+| + slice **without** the `kubernetes.io/service-name` label | not linked | still the `REJECT` | refused (exit 7) |
+| + label `kubernetes.io/service-name=ext-db` | `ext-db-1`, 10.244.120.84 | `KUBE-SVC` + `KUBE-SEP` DNAT to 10.244.120.84:5432 | `outside-db` |
+| slice port renamed `postgres` (Service port is `pg`) | linked | no working rule | refused (exit 7) |
+| port renamed back to `pg` | linked | DNAT again | `outside-db` |
+
+The slice that worked:
+
+```yaml
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: ext-db-1                               # any name; the label does the linking
+  namespace: ep-demo
+  labels:
+    kubernetes.io/service-name: ext-db
+addressType: IPv4
+ports: [{name: pg, port: 5432, protocol: TCP}] # name must match the Service port's name
+endpoints:
+- addresses: ["10.244.120.84"]                 # no conditions: treated as ready
+```
+
+And the rules kube-proxy wrote from it:
+
+```text
+-A KUBE-SERVICES -d 10.102.65.175/32 -p tcp -m comment --comment "ep-demo/ext-db:pg cluster IP" -m tcp --dport 5432 -j KUBE-SVC-KIAFYPMWTWAJLAID
+-A KUBE-SVC-KIAFYPMWTWAJLAID ! -s 10.244.0.0/16 -d 10.102.65.175/32 -p tcp -m comment --comment "ep-demo/ext-db:pg cluster IP" -m tcp --dport 5432 -j KUBE-MARK-MASQ
+-A KUBE-SVC-KIAFYPMWTWAJLAID -m comment --comment "ep-demo/ext-db:pg -> 10.244.120.84:5432" -j KUBE-SEP-F2AJJ44E6KNBJT4C
+-A KUBE-SEP-F2AJJ44E6KNBJT4C -s 10.244.120.84/32 -m comment --comment "ep-demo/ext-db:pg" -j KUBE-MARK-MASQ
+-A KUBE-SEP-F2AJJ44E6KNBJT4C -p tcp -m comment --comment "ep-demo/ext-db:pg" -m tcp -j DNAT --to-destination 10.244.120.84:5432
+```
+
+- These are the same rules a selector-based Service gets. kube-proxy doesn't
+  care who wrote the slice.
+- Nobody health-checks a hand-written endpoint. If the database moves or goes
+  down, the rule stays until you edit the slice.
+- To point a name at a DNS name instead of an IP, use `type: ExternalName`
+  (§4.5).
+
+##### The legacy `Endpoints` object
+
+```text
+$ kubectl -n ep-demo get endpoints
+Warning: v1 Endpoints is deprecated in v1.33+; use discovery.k8s.io/v1 EndpointSlice
+NAME   ENDPOINTS                                                     AGE
+web    10.244.120.105:9090,10.244.120.115:8080,10.244.120.116:8080   44s
+```
+
+- `web` has a selector, so the control plane still writes a single `Endpoints`
+  object for it, holding all three addresses from both slices.
+- `ext-db` has no `Endpoints` object. Hand-written slices aren't copied back.
+
+Copying works the other way, though. A selectorless Service `ext-legacy` with a
+hand-written `Endpoints` object (`subsets: [{addresses: [{ip: 10.244.120.84}],
+ports: [{name: pg, port: 5432}]}]`) got a slice created for it:
+
+```text
+NAME               ADDRESSTYPE   PORTS   ENDPOINTS       LABELS
+ext-legacy-v2v6b   IPv4          5432    10.244.120.84   endpointslice.kubernetes.io/managed-by=endpointslicemirroring-controller.k8s.io,
+                                                         kubernetes.io/service-name=ext-legacy
+```
+
+The EndpointSlice mirroring controller made it, and `curl ext-legacy:5432`
+reached `outside-db`. Old manifests that write `Endpoints` by hand keep
+working, but new ones should write EndpointSlices directly.
+
+#### When the ClusterIP enters `KUBE-SERVICES`
+
+Creating a Service doesn't put its ClusterIP in the nat table. kube-proxy adds
+it only once the Service has at least one usable endpoint. Until then the only
+rule is a `REJECT` in the filter table.
+
+```text
+kubectl apply -f svc.yaml
+  │
+  ▼
+API server: allocates a ClusterIP, stores the Service in etcd
+  │
+  ▼
+kube-proxy (watching Services) syncs:
+  no endpoints yet →  filter KUBE-SERVICES:  -d ClusterIP --dport P ... "has no endpoints" -j REJECT
+                      nat KUBE-SERVICES:     nothing for this Service
+  │
+  ▼
+EndpointSlice controller: Pods match the selector and become ready → slice updated
+  │
+  ▼
+kube-proxy (watching EndpointSlices) syncs again:
+  filter: the REJECT is removed
+  nat:    KUBE-SERVICES  -d ClusterIP/32 --dport P -j KUBE-SVC-…   ← now the ClusterIP appears
+          KUBE-SVC-…     masquerade rule + one jump per endpoint
+          KUBE-SEP-…     hairpin + DNAT, one chain per endpoint
+```
+
+What counts as usable:
+
+- **Ready endpoints:** a slice entry with `ready: true`.
+- **No ready endpoints, but some still serving:** endpoints with
+  `serving: true, terminating: true`, for example during a rollout. kube-proxy
+  keeps the rules, so connections still go through.
+- **Only not-ready endpoints:** the nat rules go away and the `REJECT` comes
+  back, as if there were no endpoints.
+- **No endpoints at all:** for example after scaling to 0 or deleting every Pod,
+  once the Pods have exited. The same thing happens: the nat rules go away and
+  the `REJECT` comes back. While the Pods are still terminating and serving,
+  the previous bullet applies instead.
+
+The other rule types follow the same rule:
+
+- **NodePort:** `KUBE-NODEPORTS` and `KUBE-EXT` appear together with the
+  ClusterIP rule, when the first endpoint shows up.
+- **LoadBalancer:** the LB-IP rules appear the same way (from the code,
+  §4.4.1).
+- **No endpoints:** both get a `REJECT` in filter instead. For node ports it's
+  in `KUBE-EXTERNAL-SERVICES`.
+- **Headless Service** (`clusterIP: None`): it never gets nat rules at all. DNS
+  hands out the Pod IPs directly (§4.2).
+
+##### Each case on a cluster (lab)
+
+A NodePort Service `w` (ClusterIP 10.103.0.99, port 80, node port 30090) in a
+namespace `when-demo`, in front of a Deployment that starts at 0 replicas. Its
+Pods are only ready once `/tmp/ready` exists, and a `preStop` sleep keeps a
+deleted Pod terminating for 90 seconds:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: w, namespace: when-demo}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: w}}
+  template:
+    metadata: {labels: {app: w}}
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+      - name: web
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        args: ["netexec", "--http-port=8080"]
+        readinessProbe:
+          exec: {command: ["cat", "/tmp/ready"]}   # not ready until the file exists
+          periodSeconds: 2
+          failureThreshold: 1
+        lifecycle:
+          preStop: {sleep: {seconds: 90}}         # keeps a deleted Pod terminating for 90 s
+---
+apiVersion: v1
+kind: Service
+metadata: {name: w, namespace: when-demo}
+spec:
+  type: NodePort
+  selector: {app: w}
+  ports: [{name: http, port: 80, targetPort: 8080, nodePort: 30090}]
+```
+
+After each step: the slice, every kube-proxy rule for `when-demo/w` (from
+`iptables-save` in the kube-proxy Pod, `-m comment --comment` dropped), and a
+curl to the ClusterIP from a client Pod and to `192.168.49.2:30090` from the
+node.
+
+**Step 1: Service created, 0 replicas.** No slice entries, no nat rules, two
+`REJECT`s:
+
+```text
+slice: (empty)
+-A KUBE-EXTERNAL-SERVICES -p tcp "when-demo/w:http has no endpoints" -m addrtype --dst-type LOCAL -m tcp --dport 30090 -j REJECT --reject-with icmp-port-unreachable
+-A KUBE-SERVICES -d 10.103.0.99/32 -p tcp "when-demo/w:http has no endpoints" -m tcp --dport 80 -j REJECT --reject-with icmp-port-unreachable
+curl ClusterIP: refused (exit 7)    curl nodeIP:30090: refused
+```
+
+The first `REJECT` is in `KUBE-EXTERNAL-SERVICES` (the node port), the second in
+filter `KUBE-SERVICES` (the ClusterIP).
+
+**Step 2: scaled to 1, the Pod is running but not ready.** The Pod is in the
+slice, but that changes nothing:
+
+```text
+slice: 10.244.120.118 ready=false serving=false terminating=false
+-A KUBE-EXTERNAL-SERVICES ... "when-demo/w:http has no endpoints" ... --dport 30090 -j REJECT ...
+-A KUBE-SERVICES -d 10.103.0.99/32 ... "when-demo/w:http has no endpoints" ... --dport 80 -j REJECT ...
+curl ClusterIP: refused (exit 7)    curl nodeIP:30090: refused
+```
+
+**Step 3: `touch /tmp/ready`, the Pod becomes ready.** Both `REJECT`s are gone,
+and the ClusterIP and node port rules appear together:
+
+```text
+slice: 10.244.120.118 ready=true serving=true terminating=false
+-A KUBE-SERVICES -d 10.103.0.99/32 -p tcp "when-demo/w:http cluster IP" -m tcp --dport 80 -j KUBE-SVC-4GI6F4H2OVCZ7N5B
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp "when-demo/w:http" -m tcp --dport 30090 -m nfacct --nfacct-name  localhost_nps_accepted_pkts -j KUBE-EXT-4GI6F4H2OVCZ7N5B
+-A KUBE-NODEPORTS -p tcp "when-demo/w:http" -m tcp --dport 30090 -j KUBE-EXT-4GI6F4H2OVCZ7N5B
+-A KUBE-EXT-4GI6F4H2OVCZ7N5B "masquerade traffic for when-demo/w:http external destinations" -j KUBE-MARK-MASQ
+-A KUBE-SVC-4GI6F4H2OVCZ7N5B ! -s 10.244.0.0/16 -d 10.103.0.99/32 -p tcp "when-demo/w:http cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+-A KUBE-SVC-4GI6F4H2OVCZ7N5B "when-demo/w:http -> 10.244.120.118:8080" -j KUBE-SEP-AOUMQAM4FYASX4UK
+-A KUBE-SEP-AOUMQAM4FYASX4UK -s 10.244.120.118/32 "when-demo/w:http" -j KUBE-MARK-MASQ
+-A KUBE-SEP-AOUMQAM4FYASX4UK -p tcp "when-demo/w:http" -m tcp -j DNAT --to-destination 10.244.120.118:8080
+curl nodeIP:30090: w-747c4dbbc8-smjqf
+```
+
+(`KUBE-EXT` also jumps to `KUBE-SVC`; that rule has no comment, so the grep
+missed it.) The first curl to the ClusterIP, run right after the rules were
+read, was still refused; three more a second later all reached the Pod.
+
+**Step 4: the ready Pod is deleted.** It stays terminating for 90 s (`preStop`).
+The Deployment's replacement isn't ready yet. With no ready endpoint, kube-proxy
+falls back to the terminating one that's still serving:
+
+```text
+w-...-9dwzc   1/1   Terminating   10.244.120.66
+w-...-xbnpw   0/1   Running       10.244.120.110
+
+slice: 10.244.120.66  ready=false serving=true  terminating=true
+       10.244.120.110 ready=false serving=false terminating=false
+-A KUBE-SVC-4GI6F4H2OVCZ7N5B "when-demo/w:http -> 10.244.120.66:8080" -j KUBE-SEP-QXKTDY4V5YY3JR5V
+curl ClusterIP: w-747c4dbbc8-9dwzc    curl nodeIP:30090: w-747c4dbbc8-9dwzc
+```
+
+No `REJECT` in filter, and both curls reached the terminating Pod. (Steps 4 and
+5 are from a second run of steps 3–4, so the Pod IPs differ from step 3.)
+
+**Step 5: the replacement becomes ready.** As soon as there's a ready endpoint,
+the terminating one is dropped from the rules, though it's still in the slice
+as serving:
+
+```text
+slice: 10.244.120.66  ready=false serving=true terminating=true
+       10.244.120.110 ready=true  serving=true terminating=false
+-A KUBE-SVC-4GI6F4H2OVCZ7N5B "when-demo/w:http -> 10.244.120.110:8080" -j KUBE-SEP-WM26RNQHKIXQ3QDU
+curl ClusterIP: w-747c4dbbc8-xbnpw    curl nodeIP:30090: w-747c4dbbc8-xbnpw
+```
+
+**Step 6: scaled to 0.** The Pod is terminating, so the rules stay, pointing at
+it:
+
+```text
+w-...-f2dsv   1/1   Terminating
+
+slice: 10.244.120.93 ready=false serving=true terminating=true
+-A KUBE-SVC-4GI6F4H2OVCZ7N5B "when-demo/w:http -> 10.244.120.93:8080" -j KUBE-SEP-MJALZYMCHNZ4OTBM
+curl ClusterIP: w-747c4dbbc8-f2dsv    curl nodeIP:30090: w-747c4dbbc8-f2dsv
+```
+
+**Step 7: the last Pod has exited.** Back to step 1:
+
+```text
+slice: (empty)
+-A KUBE-EXTERNAL-SERVICES ... "when-demo/w:http has no endpoints" ... --dport 30090 -j REJECT ...
+-A KUBE-SERVICES -d 10.103.0.99/32 ... "when-demo/w:http has no endpoints" ... --dport 80 -j REJECT ...
+curl ClusterIP: refused (exit 7)    curl nodeIP:30090: refused
+```
+
+In short:
+
+| Step | Endpoints in the slice | nat rules | filter `REJECT` | curl |
+|---|---|---|---|---|
+| 1. Service, 0 replicas | none | none | ClusterIP + node port | refused |
+| 2. 1 Pod, not ready | 1 not ready | none | ClusterIP + node port | refused |
+| 3. Pod ready | 1 ready | ClusterIP + node port → Pod | none | Pod |
+| 4. Pod deleted, replacement not ready | 1 terminating (serving), 1 not ready | → terminating Pod | none | terminating Pod |
+| 5. Replacement ready | 1 terminating (serving), 1 ready | → ready Pod only | none | ready Pod |
+| 6. Scaled to 0 | 1 terminating (serving) | → terminating Pod | none | terminating Pod |
+| 7. Pod exited | none | none | ClusterIP + node port | refused |
+
+The Service object never changed. Every change to the rules came from a change
+to the EndpointSlice.
+
+#### The Service object rarely changes
+
+After you create a Service, it changes only when someone or something edits it.
+Pods starting, stopping, becoming ready or failing probes never touch it. All of
+that goes to the EndpointSlices. In the "Scaling to 0 and back" example above,
+the Service's `resourceVersion` stayed the same throughout.
+
+What does change a Service:
+
+- **You edit the spec:** ports, selector, type, `externalTrafficPolicy`,
+  `sessionAffinity`, and so on. The ClusterIP can't be changed after creation;
+  you have to delete and recreate the Service.
+- **A load balancer controller writes its status:** the cloud controller
+  manager, the AWS Load Balancer Controller or MetalLB fills in
+  `status.loadBalancer.ingress` with the LB's IP or hostname. It usually
+  happens once, when the LB is created.
+- **Controllers add metadata:** for example, the finalizer
+  `service.kubernetes.io/load-balancer-cleanup` on LoadBalancer Services, so the
+  LB is deleted before the Service. Tools like Helm or Argo CD also add labels
+  and annotations, and server-side apply updates `managedFields`.
+
+Why the design splits it this way:
+
+- **Each change is sent to every watcher.** Every node's kube-proxy (plus
+  CoreDNS, ingress controllers and so on) watches all Services and all
+  EndpointSlices.
+- **Keeping the Service still makes those updates cheap.** A Pod restart sends
+  only the changed slice of up to 100 endpoints. Before slices, the whole
+  `Endpoints` object was sent, and that object could hold thousands of
+  addresses (§6.4).
+- **Each object has one writer.** You (or Helm) own the Service, and the
+  EndpointSlice controller owns the slices. They never fight over the same
+  object.
+
+##### Each kind of change, and what it does to the rules (lab)
+
+One Service `web` (ClusterIP 10.107.53.29, port `http` 80 → 8080) in a
+namespace `chg-demo`, selecting two `ver: v1` Pods (10.244.120.68, .92). A
+third Pod, `ver: v2` (10.244.120.120), carries `app: web` but isn't selected at
+first. Each change was applied on top of the previous one, then kube-proxy's
+rules for the Service were diffed against the rules before the change
+(`-m comment --comment` dropped; `<` removed, `>` added).
+
+| Change | Command | Rules |
+|---|---|---|
+| Label, annotation | `kubectl label svc web team=payments`, `kubectl annotate svc web example.com/owner=alice` | none changed |
+| Finalizer | `metadata.finalizers: [example.com/keep]` | none changed |
+| `port` 80 → 8081 | `spec.ports[0].port` | 2 rules: the `--dport` in `KUBE-SERVICES` and the masquerade rule |
+| `targetPort` 8080 → 9090 | `spec.ports[0].targetPort` | every `KUBE-SEP`, plus the `KUBE-SVC` jumps, through the slice |
+| Selector widened | `{app: web, ver: v1}` → `{app: web}` | one more endpoint, through the slice |
+| `sessionAffinity: ClientIP` | `spec.sessionAffinity` | every endpoint rule gets a `recent` match |
+| `type: NodePort` | `spec.type`, `nodePort: 30091` | `KUBE-NODEPORTS` and `KUBE-EXT` added |
+| `externalTrafficPolicy: Local` | `spec.externalTrafficPolicy` | `KUBE-EXT` rewritten, `KUBE-SVL` added |
+| `type: LoadBalancer` | `spec.type` | none changed; `EXTERNAL-IP` is `<pending>` |
+| LB status written | `status.loadBalancer.ingress: [{ip: 203.0.113.10}]` | one `KUBE-SERVICES` rule for the LB IP |
+| `clusterIP` changed | `spec.clusterIP: 10.107.53.30` | refused by the API server |
+
+The diffs:
+
+**Labels, annotations, finalizers.** The Service's `resourceVersion` changed
+(497214 → 497288 → 497295), and every node's kube-proxy received the update,
+but nothing it uses changed, so the rules stayed the same.
+
+**`port` 80 → 8081.** Only the rules that match the Service's own port:
+
+```text
+< -A KUBE-SERVICES -d 10.107.53.29/32 -p tcp "chg-demo/web:http cluster IP" -m tcp --dport 80 -j KUBE-SVC-VPOZHHPUPUFUZ4NW
+< -A KUBE-SVC-VPOZHHPUPUFUZ4NW ! -s 10.244.0.0/16 -d 10.107.53.29/32 -p tcp "chg-demo/web:http cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+> -A KUBE-SERVICES -d 10.107.53.29/32 -p tcp "chg-demo/web:http cluster IP" -m tcp --dport 8081 -j KUBE-SVC-VPOZHHPUPUFUZ4NW
+> -A KUBE-SVC-VPOZHHPUPUFUZ4NW ! -s 10.244.0.0/16 -d 10.107.53.29/32 -p tcp "chg-demo/web:http cluster IP" -m tcp --dport 8081 -j KUBE-MARK-MASQ
+```
+
+The chain name stayed `KUBE-SVC-VPOZHHPUPUFUZ4NW`: its hash comes from the
+port's name (`http`), not its number. Clients using port 80 are now refused.
+
+**`targetPort` 8080 → 9090.** kube-proxy doesn't read `targetPort`. The
+EndpointSlice controller rewrote the slice (its `ports` became `9090`), and
+kube-proxy followed the slice:
+
+```text
+< -A KUBE-SVC-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.68:8080" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-KGNLLBBNFZW3FS7Z
+< -A KUBE-SVC-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.92:8080" -j KUBE-SEP-6IC3V4VMMZCTL3CO
+< -A KUBE-SEP-KGNLLBBNFZW3FS7Z -p tcp "chg-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.68:8080
+< -A KUBE-SEP-6IC3V4VMMZCTL3CO -p tcp "chg-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.92:8080
+> -A KUBE-SVC-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.68:9090" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-IFNNBKRRVZD3JTJU
+> -A KUBE-SVC-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.92:9090" -j KUBE-SEP-QXMDWAKSCVDCPCL3
+> -A KUBE-SEP-IFNNBKRRVZD3JTJU -p tcp "chg-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.68:9090
+> -A KUBE-SEP-QXMDWAKSCVDCPCL3 -p tcp "chg-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.92:9090
+```
+
+(The hairpin rule of each `KUBE-SEP` changed the same way and is left out.)
+Every `KUBE-SEP` got a new name, because the endpoint's hash includes its port.
+Nothing listens on 9090, so this change broke the Service; it was set back to
+8080 before the next step.
+
+**Selector widened to `{app: web}`.** Like `targetPort`, this reaches the
+rules through the slice. The `v2` Pod joined, and its endpoint was added:
+
+```text
+> -A KUBE-SVC-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.120:8080" -m statistic --mode random --probability 0.33333333349 -j KUBE-SEP-XKVWLTG7W57YRGZP
+> -A KUBE-SEP-XKVWLTG7W57YRGZP -s 10.244.120.120/32 "chg-demo/web:http" -j KUBE-MARK-MASQ
+> -A KUBE-SEP-XKVWLTG7W57YRGZP -p tcp "chg-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.120:8080
+```
+
+The other two jumps didn't change: kube-proxy orders endpoints by their
+address as a string, so `10.244.120.120` comes before `10.244.120.68`, and the
+new endpoint took the first place, with 1/3. The `.68` rule kept its 0.5, and
+`.92` stayed last.
+
+**`sessionAffinity: ClientIP`.** Every endpoint rule gains a `recent` match
+that records the client and sends it back to the same endpoint for 3 hours
+(10800 s, the default `timeoutSeconds`). One endpoint shown; the other two
+changed the same way:
+
+```text
+< -A KUBE-SEP-KGNLLBBNFZW3FS7Z -p tcp "chg-demo/web:http" -m tcp -j DNAT --to-destination 10.244.120.68:8080
+> -A KUBE-SEP-KGNLLBBNFZW3FS7Z -p tcp "chg-demo/web:http" -m recent --set --name KUBE-SEP-KGNLLBBNFZW3FS7Z --mask 255.255.255.255 --rsource -m tcp -j DNAT --to-destination 10.244.120.68:8080
+> -A KUBE-SVC-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.68:8080" -m recent --rcheck --seconds 10800 --reap --name KUBE-SEP-KGNLLBBNFZW3FS7Z --mask 255.255.255.255 --rsource -j KUBE-SEP-KGNLLBBNFZW3FS7Z
+```
+
+The new `KUBE-SVC` rules come before the probability jumps: a client seen in the
+last 3 hours goes straight back to its endpoint (§4.7). Affinity was turned off
+again before the next step.
+
+**`type: NodePort`** (with `nodePort: 30091`, port now 8081). Four rules are
+added; the ClusterIP rules don't change:
+
+```text
+> -A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp "chg-demo/web:http" -m tcp --dport 30091 -m nfacct --nfacct-name  localhost_nps_accepted_pkts -j KUBE-EXT-VPOZHHPUPUFUZ4NW
+> -A KUBE-NODEPORTS -p tcp "chg-demo/web:http" -m tcp --dport 30091 -j KUBE-EXT-VPOZHHPUPUFUZ4NW
+> -A KUBE-EXT-VPOZHHPUPUFUZ4NW "masquerade traffic for chg-demo/web:http external destinations" -j KUBE-MARK-MASQ
+> -A KUBE-EXT-VPOZHHPUPUFUZ4NW -j KUBE-SVC-VPOZHHPUPUFUZ4NW
+```
+
+**`externalTrafficPolicy: Local`.** `KUBE-EXT` no longer masquerades
+everything. It now sorts callers, and outside traffic goes to a new `KUBE-SVL`
+chain (local endpoints only). `KUBE-EXT` in chain order:
+
+```text
+-A KUBE-EXT-VPOZHHPUPUFUZ4NW -s 10.244.0.0/16 "pod traffic for chg-demo/web:http external destinations" -j KUBE-SVC-VPOZHHPUPUFUZ4NW
+-A KUBE-EXT-VPOZHHPUPUFUZ4NW "masquerade LOCAL traffic for chg-demo/web:http external destinations" -m addrtype --src-type LOCAL -j KUBE-MARK-MASQ
+-A KUBE-EXT-VPOZHHPUPUFUZ4NW "route LOCAL traffic for chg-demo/web:http external destinations" -m addrtype --src-type LOCAL -j KUBE-SVC-VPOZHHPUPUFUZ4NW
+-A KUBE-EXT-VPOZHHPUPUFUZ4NW -j KUBE-SVL-VPOZHHPUPUFUZ4NW
+```
+
+```text
+> -A KUBE-SVL-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.120:8080" -m statistic --mode random --probability 0.33333333349 -j KUBE-SEP-XKVWLTG7W57YRGZP
+> -A KUBE-SVL-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.68:8080" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-KGNLLBBNFZW3FS7Z
+> -A KUBE-SVL-VPOZHHPUPUFUZ4NW "chg-demo/web:http -> 10.244.120.92:8080" -j KUBE-SEP-6IC3V4VMMZCTL3CO
+```
+
+- Pods and the node itself still go through `KUBE-SVC`, to any endpoint.
+- Outside clients go through `KUBE-SVL`, unmasqueraded, so the Pod sees the real
+  client IP.
+- `KUBE-SVL` holds only this node's endpoints. On this one-node cluster that's
+  all three; on a bigger cluster each node's `KUBE-SVL` would differ. It shares
+  the `VPOZHHPUPUFUZ4NW` hash with `KUBE-SVC` and `KUBE-EXT`.
+
+The policy was set back to `Cluster` before the next step.
+
+**`type: LoadBalancer`.** No rule changed. kube-proxy writes LB rules for the
+IPs in the Service's status, and with no LB controller running, the status was
+empty:
+
+```text
+NAME   TYPE           CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+web    LoadBalancer   10.107.53.29   <pending>     8081:30091/TCP   91s
+```
+
+**LB status written.** A cloud controller would do this once the LB exists. In
+the lab it was written by hand, standing in for one
+(`kubectl patch svc web --subresource=status`). One rule appeared, sending the
+LB IP into the same `KUBE-EXT` chain as the node port:
+
+```text
+> -A KUBE-SERVICES -d 203.0.113.10/32 -p tcp "chg-demo/web:http loadbalancer IP" -m tcp --dport 8081 -j KUBE-EXT-VPOZHHPUPUFUZ4NW
+```
+
+```text
+NAME   TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)          AGE
+web    LoadBalancer   10.107.53.29   203.0.113.10   8081:30091/TCP   95s
+```
+
+**`clusterIP` changed.** The API server refuses it:
+
+```text
+$ kubectl -n chg-demo patch svc web --type=merge -p '{"spec":{"clusterIP":"10.107.53.30","clusterIPs":["10.107.53.30"]}}'
+The Service "web" is invalid: spec.clusterIPs[0]: Invalid value: ["10.107.53.30"]: may not change once set
+```
+
+Two kinds of edit, then:
+
+- **kube-proxy reads the field directly:** `port`, `type`, `nodePort`,
+  `externalTrafficPolicy`, `sessionAffinity` and the LB status. The edit changes
+  the rules on every node.
+- **The field reaches the rules through the slice:** `selector` and
+  `targetPort`. The EndpointSlice controller rewrites the slices, and kube-proxy
+  follows those.
+
+Labels, annotations and finalizers change nothing in the rules.
 
 ## 4. Each Service type, tried
 
@@ -4295,6 +5097,268 @@ entries = Service ports × (1 ClusterIP + number of external IPs + number of LB 
 | `t-extip` | 1 | ClusterIP + 1 external IP | 2 |
 | `t-lb` | 1 | ClusterIP + 1 LB IP | 2 |
 | `t-nodeport` | 1 | ClusterIP | 1 (its node port is in `KUBE-NODEPORTS`, not here) |
+
+#### One chain per table, not one chain across tables (lab)
+
+In iptables every chain, built-in or user-defined, belongs to exactly one table.
+When the same name appears in two tables, those are two separate chains with
+their own rules and nothing linking them. There's no single chain holding rules
+from different tables.
+
+kube-proxy's `KUBE-SERVICES` shows this. It exists twice on every node:
+
+```text
+*nat
+:KUBE-SERVICES - [0:0]
+-A PREROUTING -j KUBE-SERVICES
+-A OUTPUT     -j KUBE-SERVICES
+-A KUBE-SERVICES -d 10.107.53.29/32 -p tcp --dport 80 -j KUBE-SVC-VPOZHHPUPUFUZ4NW     ← DNAT path
+-A KUBE-SERVICES -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS
+COMMIT
+
+*filter
+:KUBE-SERVICES - [0:0]
+-A FORWARD -m conntrack --ctstate NEW -j KUBE-SERVICES
+-A OUTPUT  -m conntrack --ctstate NEW -j KUBE-SERVICES
+-A KUBE-SERVICES -d 10.103.0.99/32 -p tcp --dport 80 -j REJECT                         ← no-endpoints REJECT
+COMMIT
+```
+
+(Trimmed; the two Service rules come from the labs in §3.6.)
+
+- **Each table declares its own chain:** the `:KUBE-SERVICES` line appears once
+  under `*nat` and once under `*filter`.
+- **Each has its own rules:** the nat one leads to DNAT, and the filter one holds
+  the REJECTs for Services with no endpoints.
+- **Each is entered from its own table's built-in chains:** nat's from
+  `PREROUTING` and `OUTPUT`; filter's from `FORWARD` and `OUTPUT` (new
+  connections only).
+- **A jump can't cross tables.** `-j KUBE-SVC-…` in nat can only reach a nat
+  chain. That's why every per-Service chain (`KUBE-SVC`, `KUBE-SEP`, `KUBE-EXT`,
+  `KUBE-SVL`, `KUBE-FW`) exists only in nat. The whole path from `PREROUTING`
+  to the DNAT stays in one table.
+
+Trying it on the minikube node, with throwaway chains (deleted afterwards):
+
+```text
+# a chain in nat, jumped to from filter
+$ iptables -t nat -N DEMO-CHAIN
+$ iptables -t filter -A FORWARD -j DEMO-CHAIN
+iptables v1.8.7 (nf_tables): Chain 'DEMO-CHAIN' does not exist
+
+# DNAT in a filter chain
+$ iptables -t filter -N DEMO-F
+$ iptables -t filter -A DEMO-F -p tcp -j DNAT --to-destination 10.0.0.1:80
+iptables v1.8.7 (nf_tables):  RULE_APPEND failed (Invalid argument): rule in chain DEMO-F
+
+# the same name in both tables: two chains, two sets of rules
+$ iptables -t filter -N DEMO-CHAIN
+$ iptables -t nat    -A DEMO-CHAIN -j RETURN
+$ iptables -t filter -A DEMO-CHAIN -j ACCEPT
+$ iptables-save -t nat    | grep DEMO-CHAIN
+:DEMO-CHAIN - [0:0]
+-A DEMO-CHAIN -j RETURN
+$ iptables-save -t filter | grep DEMO-CHAIN
+:DEMO-CHAIN - [0:0]
+-A DEMO-CHAIN -j ACCEPT
+```
+
+##### Why tables keep their chains apart
+
+Tables represent different jobs at different hook points in the Netfilter
+pipeline. The nat table works with connection tracking and only sees the
+**first packet** of a new connection: conntrack applies the same translation to
+every later packet. The filter table sees **every packet**. The rules each table
+allows follow from that: `DNAT`, `SNAT` and `MASQUERADE` only make sense where
+the first packet of a connection decides its translation, so the kernel accepts
+them only in nat. That's the `Invalid argument` above.
+
+In iptables (and in the `iptables-nft` front end used here) a table is a closed
+set: a jump names a chain inside the same table, and the rule is checked against
+that table's type. So a user-defined chain inherits its table's capabilities,
+and can't be shared with another table.
+
+##### nftables: tables are namespaces, and the base chain sets the type
+
+nftables works the same way at the bottom: chains belong to a table. The
+difference is that a table there is just a namespace you create, not a fixed
+type like nat or filter. You create the table first and then bind every chain
+to it by name:
+
+```bash
+nft add table inet my_table
+nft add chain inet my_table my_custom_chain                    # regular chain: no hook, only reachable by jump/goto
+nft add chain inet my_table my_input '{ type filter hook input priority 0; }'    # base chain
+```
+
+The type moves from the table to the **base chain**. A base chain declares its
+own `type` (filter, nat, route), `hook` and `priority`. So one table can hold nat
+and filter base chains side by side, and two chains in one table can't share a
+name.
+
+That's what kube-proxy's nftables mode does. Run on the same minikube cluster
+with `mode: "nftables"` in the `kube-proxy` ConfigMap (switched back to iptables
+afterwards), `nft list table ip kube-proxy` held these base chains:
+
+```text
+table ip kube-proxy {
+	chain filter-prerouting-pre-dnat {
+		type filter hook prerouting priority dstnat - 10; policy accept;
+		ct state new jump firewall-check
+	}
+	chain filter-output-pre-dnat {
+		type filter hook output priority -110; policy accept;
+		ct state new jump firewall-check
+	}
+	chain filter-input {
+		type filter hook input priority filter; policy accept;
+		ct state new jump nodeport-endpoints-check
+		ct state new jump service-endpoints-check
+	}
+	chain filter-forward {
+		type filter hook forward priority filter; policy accept;
+		ct state new jump service-endpoints-check
+		ct state new jump cluster-ips-check
+	}
+	chain filter-output {
+		type filter hook output priority filter; policy accept;
+		ct state new jump service-endpoints-check
+		ct state new jump cluster-ips-check
+	}
+	chain nat-prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		jump services
+	}
+	chain nat-output {
+		type nat hook output priority -100; policy accept;
+		jump services
+	}
+	chain nat-postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		jump masquerading
+	}
+	...
+}
+```
+
+Five filter base chains and three nat base chains, all in one table. The two
+jobs that need two `KUBE-SERVICES` chains in iptables get two differently named
+chains here:
+
+```text
+	chain services {                                   ← the nat KUBE-SERVICES: find the Service, go to its DNAT chain
+		ip daddr . meta l4proto . th dport vmap @service-ips
+		ip daddr @nodeport-ips meta l4proto . th dport vmap @service-nodeports
+	}
+	chain service-endpoints-check {                    ← the filter KUBE-SERVICES: reject Services with no endpoints
+		ip daddr . meta l4proto . th dport vmap @no-endpoint-services
+	}
+	chain reject-chain {
+		comment "helper for @no-endpoint-services / @no-endpoint-nodeports"
+		reject
+	}
+```
+
+Side by side:
+
+| Job | iptables mode | nftables mode |
+|---|---|---|
+| Find the Service, then DNAT | nat `KUBE-SERVICES`, from nat `PREROUTING`/`OUTPUT` | `services`, from `nat-prerouting`/`nat-output` |
+| Reject a Service with no endpoints | filter `KUBE-SERVICES`, from filter `FORWARD`/`OUTPUT` | `service-endpoints-check`, from `filter-forward`/`filter-output`/`filter-input` |
+| Reject a node port with no endpoints | filter `KUBE-EXTERNAL-SERVICES` | `nodeport-endpoints-check`, from `filter-input` |
+| Masquerade | nat `KUBE-POSTROUTING` | `masquerading`, from `nat-postrouting` |
+| Tables used | `nat`, `filter` (and `mangle` canaries), shared with everyone else's rules | one table, `ip kube-proxy` (plus `ip6 kube-proxy`), its own |
+
+The node's table list in nftables mode shows both worlds. The `ip nat` and
+`ip filter` tables belong to `iptables-nft` (Calico and Docker), and kube-proxy
+has its own:
+
+```text
+table ip nat
+table ip filter
+table ip6 nat
+table ip6 filter
+table ip mangle
+table ip6 mangle
+table ip raw
+table arp calico-arp
+table ip kube-proxy
+table ip6 kube-proxy
+```
+
+##### What nftables checks instead
+
+Since one table mixes nat and filter base chains, nftables can't check a rule
+against "the table". It checks each rule against the **base chains that can
+reach it**. Tested in throwaway tables from the kube-proxy Pod (the node has no
+`nft` binary; the Pod uses the node's network namespace):
+
+```text
+# a jump into another table: refused, as in iptables
+$ nft add table ip demo_a; nft add chain ip demo_a target
+$ nft add table ip demo_b; nft add chain ip demo_b base '{ type filter hook forward priority 10; }'
+$ nft add rule ip demo_b base jump target
+Error: Could not process rule: No such file or directory
+
+# dnat in a filter base chain: refused
+$ nft add rule ip demo_b base tcp dport 80 dnat to 10.0.0.1
+Error: Could not process rule: Operation not supported
+
+# a regular chain that does dnat, reached from a nat base chain: accepted
+$ nft add rule ip demo_a target tcp dport 9999 dnat to 10.0.0.1:80
+$ nft add chain ip demo_a pre '{ type nat hook prerouting priority dstnat; }'
+$ nft add rule ip demo_a pre jump target
+
+# the same dnat chain, reached from a filter base chain in the SAME table: refused
+$ nft add chain ip demo_a forward_f '{ type filter hook forward priority 10; }'
+$ nft add rule ip demo_a forward_f jump target
+Error: Could not process rule: Operation not supported
+
+# a regular chain with only `accept`, reached from both: accepted
+$ nft add chain ip demo_a other; nft add rule ip demo_a other tcp dport 22 accept
+$ nft add rule ip demo_a forward_f jump other
+$ nft add rule ip demo_a pre jump other
+```
+
+The table at the end:
+
+```text
+table ip demo_a {
+	chain target {
+		tcp dport 9999 dnat to 10.0.0.1:80
+	}
+	chain pre {
+		type nat hook prerouting priority dstnat; policy accept;
+		jump target
+		jump other
+	}
+	chain forward_f {
+		type filter hook forward priority filter + 10; policy accept;
+		jump other
+	}
+	chain other {
+		tcp dport 22 accept
+	}
+}
+```
+
+**In iptables a chain gets its abilities from its table. In nftables a regular
+chain gets them from the base chains that jump to it.**
+
+In detail:
+
+- **Jumps still stay inside one table** in both systems.
+- **iptables:** a chain gets its abilities from its table, so it can never be
+  shared between nat and filter.
+- **nftables:** a regular chain gets its abilities from the base chains that
+  jump to it. `other` is reached from a nat and a filter base chain, because
+  `accept` is valid in both. `target` can only be reached from nat ones, because
+  `dnat` isn't valid in a filter chain.
+
+kube-proxy's nftables mode keeps its nat and filter paths separate anyway: the
+`dnat` rules sit in `endpoint-*` chains reached only from `services`, which is
+reached only from the nat base chains. The rest of its nftables layout (maps,
+`numgen`, chain names) is in [nftables.md §10](nftables.md).
 
 #### Every rule, per Service, per table
 
@@ -4759,10 +5823,244 @@ externalTrafficPolicy: Local              ->  192.168.49.5:57346    # the real c
   is needed and the client IP survives. The cost is that a node with no local
   pod drops the traffic, and load follows how pods are spread across nodes.
 
+### 4.3.1 Traffic policies: `internalTrafficPolicy` and `externalTrafficPolicy` (lab)
+
+You can set `.spec.internalTrafficPolicy` and `.spec.externalTrafficPolicy` to
+control how Kubernetes routes traffic to healthy ("ready") backends (docs).
+Both take `Cluster` (the default) or `Local`:
+
+| Field | Applies to traffic sent to | `Cluster` | `Local` |
+|---|---|---|---|
+| `internalTrafficPolicy` | the ClusterIP, from Pods and nodes | any ready endpoint in the cluster | only endpoints on the caller's node |
+| `externalTrafficPolicy` | node ports, LB IPs, external IPs, from outside | any ready endpoint, source SNATed | only endpoints on the receiving node, source kept |
+
+`Local` only matters with more than one node, so a second node was added to
+minikube for this lab (`minikube node add`, removed afterwards):
+
+```text
+NAME            INTERNAL-IP     Pods
+minikube        192.168.49.2    web-n1-…-fjvmq 10.244.120.76, web-n1-…-q9pdd 10.244.120.118, client-n1
+minikube-m04    192.168.49.5    web-n2-…-n86d5 10.244.59.129, client-n2
+outside         192.168.49.6    a plain Docker container on the minikube network
+```
+
+Three Services select all three `app: web` Pods:
+
+```yaml
+# tp-default: both policies Cluster (the defaults)
+type: NodePort
+ports: [{name: http, port: 80, targetPort: 8080, nodePort: 30101}]
+---
+# tp-itp-local
+type: ClusterIP
+internalTrafficPolicy: Local
+ports: [{name: http, port: 80, targetPort: 8080}]
+---
+# tp-etp-local
+type: LoadBalancer                 # EXTERNAL-IP stays <pending>; the node port is enough
+externalTrafficPolicy: Local
+ports: [{name: http, port: 80, targetPort: 8080, nodePort: 30103}]
+# healthCheckNodePort: 30225       ← allocated automatically (LoadBalancer + Local)
+```
+
+#### `internalTrafficPolicy: Local`
+
+30 requests from a client Pod on each node:
+
+| From | To `tp-default` (Cluster) | To `tp-itp-local` (Local) |
+|---|---|---|
+| `client-n1` (node 1) | 14 fjvmq, 10 q9pdd, 6 n86d5 | 10 fjvmq, 20 q9pdd |
+| `client-n2` (node 2) | 16 fjvmq, 8 q9pdd, 6 n86d5 | 30 n86d5 |
+
+With `Cluster`, both clients reach all three Pods. With `Local`, each stays on
+its own node.
+
+Each node's kube-proxy writes a different chain for the same ClusterIP. The
+entry rule jumps to `KUBE-SVL` (local endpoints only) instead of `KUBE-SVC`,
+and there's no `KUBE-SVC` for the Service at all:
+
+```text
+# node 1
+-A KUBE-SERVICES -d 10.100.160.110/32 -p tcp "tp-demo/tp-itp-local:http cluster IP" -m tcp --dport 80 -j KUBE-SVL-APQ32VUKQCSTAL63
+-A KUBE-SVL-APQ32VUKQCSTAL63 ! -s 10.244.0.0/16 -d 10.100.160.110/32 -p tcp "tp-demo/tp-itp-local:http cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+-A KUBE-SVL-APQ32VUKQCSTAL63 "tp-demo/tp-itp-local:http -> 10.244.120.118:8080" -m statistic --mode random --probability 0.50000000000 -j KUBE-SEP-O3LQTZKN3IN6P6VU
+-A KUBE-SVL-APQ32VUKQCSTAL63 "tp-demo/tp-itp-local:http -> 10.244.120.76:8080" -j KUBE-SEP-KUG5DKKL5K4V7VO4
+
+# node 2
+-A KUBE-SERVICES -d 10.100.160.110/32 -p tcp "tp-demo/tp-itp-local:http cluster IP" -m tcp --dport 80 -j KUBE-SVL-APQ32VUKQCSTAL63
+-A KUBE-SVL-APQ32VUKQCSTAL63 ! -s 10.244.0.0/16 -d 10.100.160.110/32 -p tcp "tp-demo/tp-itp-local:http cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+-A KUBE-SVL-APQ32VUKQCSTAL63 "tp-demo/tp-itp-local:http -> 10.244.59.129:8080" -j KUBE-SEP-W3DGPO4XSJW4CKTW
+```
+
+(`KUBE-SEP` chains left out; they're the usual hairpin + DNAT.)
+
+**No local endpoint: dropped, not rejected, and no fallback.** After scaling
+the node-2 Pods to 0, node 2's nat rules for `tp-itp-local` were gone, and
+filter had a `DROP`:
+
+```text
+-A KUBE-SERVICES -d 10.100.160.110/32 -p tcp "tp-demo/tp-itp-local:http has no local endpoints" -m tcp --dport 80 -j DROP
+```
+
+```text
+client-n2 → tp-itp-local    exit 28 after 5 s (timeout)       ← node 1 has two ready Pods, but they aren't used
+client-n1 → tp-itp-local    web-n1-…-fjvmq
+client-n2 → tp-default      web-n1-…-q9pdd                    ← Cluster still works from node 2
+```
+
+- **`DROP` means a timeout.** A Service with no endpoints anywhere gets
+  `REJECT` instead, so callers fail at once (§4.6). Here the caller waits.
+- **Use `Local` only when every node that calls the Service has an endpoint,**
+  for example a DaemonSet such as a node-local DNS cache or a log agent.
+
+#### `externalTrafficPolicy: Local`
+
+From the outside container (192.168.49.6), still with no Pods on node 2:
+
+| Request | Answered by | Pod sees the client as |
+|---|---|---|
+| node 1:30101 (Cluster) | web-n1-…-fjvmq | `10.244.120.64` (node 1's pod-network address: SNAT) |
+| node 2:30101 (Cluster) | web-n1-…-q9pdd (forwarded to node 1) | `10.244.59.128` (node 2's pod-network address: SNAT) |
+| node 1:30103 (Local) | web-n1-…-q9pdd | `192.168.49.6` (the real client) |
+| node 2:30103 (Local) | nobody: timeout (exit 28) | – |
+
+- **`Cluster`:** any node forwards to any Pod, and the Pod never sees the
+  client's address.
+- **`Local`:** the client's address survives, but a node without a local Pod
+  drops the traffic.
+
+On node 2, `KUBE-EXT` had no `KUBE-SVL` to go to. Outside traffic fell
+through it without DNAT and was dropped in filter:
+
+```text
+# nat: KUBE-EXT on node 2, no local endpoints
+-A KUBE-EXT-TPPZEBOYQD6FKWIH -s 10.244.0.0/16 "pod traffic for tp-demo/tp-etp-local:http external destinations" -j KUBE-SVC-TPPZEBOYQD6FKWIH
+-A KUBE-EXT-TPPZEBOYQD6FKWIH "masquerade LOCAL traffic for tp-demo/tp-etp-local:http external destinations" -m addrtype --src-type LOCAL -j KUBE-MARK-MASQ
+-A KUBE-EXT-TPPZEBOYQD6FKWIH "route LOCAL traffic for tp-demo/tp-etp-local:http external destinations" -m addrtype --src-type LOCAL -j KUBE-SVC-TPPZEBOYQD6FKWIH
+
+# filter: the drop
+-A KUBE-EXTERNAL-SERVICES -p tcp "tp-demo/tp-etp-local:http has no local endpoints" -m addrtype --dst-type LOCAL -m tcp --dport 30103 -j DROP
+```
+
+**Pods are exempt.** The first `KUBE-EXT` rule sends Pod traffic to
+`KUBE-SVC`, the cluster-wide chain. So `client-n2`, a Pod on node 2, called
+node 2's port 30103 and got an answer from node 1:
+
+```text
+client-n2 → 192.168.49.5:30103    web-n1-…-q9pdd
+```
+
+`externalTrafficPolicy` only applies to traffic from outside the cluster. The
+node itself (`--src-type LOCAL`) is exempt in the same way.
+
+After scaling `web-n2` back to 1, node 2 got its `KUBE-SVL` and the filter
+`DROP` was removed:
+
+```text
+-A KUBE-EXT-TPPZEBOYQD6FKWIH -s 10.244.0.0/16 "pod traffic for tp-demo/tp-etp-local:http external destinations" -j KUBE-SVC-TPPZEBOYQD6FKWIH
+-A KUBE-EXT-TPPZEBOYQD6FKWIH "masquerade LOCAL traffic for tp-demo/tp-etp-local:http external destinations" -m addrtype --src-type LOCAL -j KUBE-MARK-MASQ
+-A KUBE-EXT-TPPZEBOYQD6FKWIH "route LOCAL traffic for tp-demo/tp-etp-local:http external destinations" -m addrtype --src-type LOCAL -j KUBE-SVC-TPPZEBOYQD6FKWIH
+-A KUBE-EXT-TPPZEBOYQD6FKWIH -j KUBE-SVL-TPPZEBOYQD6FKWIH
+-A KUBE-SVL-TPPZEBOYQD6FKWIH "tp-demo/tp-etp-local:http -> 10.244.59.131:8080" -j KUBE-SEP-7JMLWFTTEEM4QQM3
+```
+
+```text
+outside → node 2:30103  ×10    10 web-n2-…-ll48n                ← only the local Pod
+outside → node 2:30103         clientip 192.168.49.6
+outside → node 1:30103  ×10    6 fjvmq, 4 q9pdd                 ← only node 1's Pods
+```
+
+Each node balances only over its own Pods. If a cloud LB spreads traffic
+evenly across nodes, node 2's single Pod gets as much traffic as node 1's two
+Pods together.
+
+#### The health check node port
+
+A LoadBalancer Service with `externalTrafficPolicy: Local` gets a
+`healthCheckNodePort` (30225 here). kube-proxy answers it on every node with
+the number of local endpoints. A filter rule lets it in:
+
+```text
+-A KUBE-NODEPORTS -p tcp "tp-demo/tp-etp-local:http health check node port" -m tcp --dport 30225 -j ACCEPT
+```
+
+```text
+$ curl -i 192.168.49.2:30225/        $ curl -i 192.168.49.5:30225/   (no Pods on node 2)
+HTTP/1.1 200 OK                       HTTP/1.1 503 Service Unavailable
+  "localEndpoints": 2                   "localEndpoints": 0
+```
+
+After the node-2 Pod came back, node 2 answered `200 OK`, `"localEndpoints": 1`.
+The cloud LB probes this port and stops sending to nodes that answer 503, so
+the drops above never reach real clients. Without an LB, as with a plain
+NodePort, nothing probes it, and clients that pick the wrong node time out.
+
+#### Summary
+
+| | `internalTrafficPolicy: Local` | `externalTrafficPolicy: Local` |
+|---|---|---|
+| Who it affects | Pods and nodes calling the ClusterIP | outside clients calling a node port, LB IP or external IP |
+| Who it doesn't | outside clients | Pods and the node itself (they use `KUBE-SVC`) |
+| Chain used | `KUBE-SVL` from `KUBE-SERVICES` | `KUBE-SVL` from `KUBE-EXT` |
+| Client IP | already kept for Pod callers | kept (no SNAT) |
+| No local endpoint | filter `DROP` in `KUBE-SERVICES`: timeout | filter `DROP` in `KUBE-EXTERNAL-SERVICES`: timeout |
+| Protection | none: put an endpoint on every calling node | the LB's health checks on `healthCheckNodePort` |
+
 ### 4.4 LoadBalancer: needs something to provision it
 
-Without a cloud controller, the Service waits. It still gets its ClusterIP and
-NodePort straight away:
+What the Kubernetes docs say (docs):
+
+- On clouds that support external load balancers, `type: LoadBalancer` makes
+  the cloud provision one for the Service, in the region where the cluster runs.
+- The LB is created **asynchronously**. Details of the provisioned LB are
+  published in the Service's `.status.loadBalancer` field.
+- Kubernetes first does the equivalent of a `type: NodePort` Service. The
+  cloud-controller-manager then configures the external LB to forward traffic to
+  that node port.
+- Traffic from the LB is directed at the backend Pods; how it's balanced is up
+  to the cloud provider.
+
+The docs' example:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    app.kubernetes.io/name: MyApp
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 9376
+  clusterIP: 10.0.171.239
+  type: LoadBalancer
+status:                       # written by the controller, not by you
+  loadBalancer:
+    ingress:
+    - ip: 192.0.2.127
+```
+
+How that lines up with the rest of this note:
+
+- **`status` is not part of what you apply.** The controller writes it once the
+  LB exists. Until then `kubectl get svc` shows `EXTERNAL-IP <pending>` (below).
+  kube-proxy only writes its LB-IP rule after the status has an IP (the
+  `type: LoadBalancer` and "LB status written" rows in §3.6, "Each kind of
+  change").
+- **`clusterIP` is normally left out** and allocated by the API server. It's in
+  the example only because the docs show a created Service.
+- **"Forward traffic to that node port" is the common case, not the only one.**
+  Some LBs pass the packet through with the LB IP as its destination, and some
+  send straight to Pod IPs and skip the node port ("How outside traffic reaches
+  the LB-IP rule" below).
+- **The cloud-controller-manager is one of several controllers that can do this.**
+  The AWS Load Balancer Controller and MetalLB also fill in the status
+  ([cloud-control-manager.md](cloud-control-manager.md)).
+
+On minikube there's no cloud controller, so the Service waits. It still gets its
+ClusterIP and NodePort straight away:
 
 ```
 web-lb   LoadBalancer   10.100.138.59   <pending>     80:30650/TCP
@@ -4779,6 +6077,195 @@ web-lb   LoadBalancer   10.100.138.59   127.0.0.1     8080:30650/TCP
 The port was moved from 80 to 8080 because ports below 1024 make the tunnel ask
 for sudo. With the Docker driver on macOS, the external IP is `127.0.0.1`. In a
 real cloud, each LoadBalancer Service is usually its own billed load balancer.
+
+#### Internal load balancers (docs, not tested)
+
+In a mixed environment it's sometimes necessary to route traffic from Services
+inside the same (virtual) network address block. An internal LB gets a private
+IP from the cluster's VPC or VNet instead of a public one, so only clients that
+can route to that network reach it.
+
+To ask for one, add an annotation to the Service. Which one depends on the cloud
+and on which controller handles the Service.
+
+GKE:
+
+```yaml
+metadata:
+  name: my-service
+  annotations:
+    networking.gke.io/load-balancer-type: "Internal"
+```
+
+AWS:
+
+```yaml
+metadata:
+  name: my-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
+```
+
+Azure (AKS):
+
+```yaml
+metadata:
+  name: my-service
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+```
+
+Notes on these:
+
+- **AWS has two controllers, with different annotations and defaults.**
+  - `aws-load-balancer-scheme` is read by the **AWS Load Balancer Controller**.
+    For a Service it handles, `internal` is the default, so you set
+    `internet-facing` to get a public NLB.
+  - The older controller built into the AWS cloud provider reads
+    `service.beta.kubernetes.io/aws-load-balancer-internal: "true"` instead,
+    and makes public LBs by default.
+- **Azure** can also pick the subnet the private IP comes from, with
+  `service.beta.kubernetes.io/azure-load-balancer-internal-subnet`.
+- **OpenStack** uses `service.beta.kubernetes.io/openstack-internal-load-balancer: "true"`,
+  which skips the Floating IP (§2.2, and
+  [cloud-control-manager.md](cloud-control-manager.md) §14.4).
+- **Nothing changes inside the cluster.** The Service is still a NodePort plus
+  an LB. The controller writes a private IP into `status.loadBalancer.ingress`,
+  and kube-proxy writes the same LB-IP rule for it as for a public one.
+
+##### Split-horizon DNS: two Services, same Pods
+
+In a split-horizon DNS setup, one name resolves to different addresses
+depending on who asks: a public IP for the internet, a private IP inside the
+network. A Service has only one LB type, so serving both takes **two Services**
+with the same selector, one public and one internal (AKS shown):
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-public
+spec:
+  type: LoadBalancer                     # public IP, e.g. 20.50.10.7
+  selector: {app: web}
+  ports: [{port: 443, targetPort: 8443}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-internal
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer                     # private IP from the VNet, e.g. 10.240.0.50
+  selector: {app: web}
+  ports: [{port: 443, targetPort: 8443}]
+```
+
+```text
+public DNS   web.example.com → 20.50.10.7   (web-public's LB)   ← internet clients
+private DNS  web.example.com → 10.240.0.50  (web-internal's LB) ← VNet, VPN, peered networks
+                                   │
+                    both Services select app=web → same EndpointSlice Pods
+```
+
+- **Both Services get their own ClusterIP, node port, LB and kube-proxy
+  rules,** but their EndpointSlices list the same Pods.
+- **The DNS split lives outside Kubernetes,** for example a public zone and a
+  private zone (Azure Private DNS, Route 53 private hosted zones) holding the
+  same name.
+
+#### How outside traffic reaches the LB-IP rule (not tested)
+
+The `KUBE-EXT` chain is where every "from outside" entry point ends up. The
+LB-IP rule is one of those entry points, but it only matches if a packet
+actually reaches a node with the LB IP still as its destination. Whether that
+happens depends on how the load balancer forwards traffic.
+
+```text
+                    nat KUBE-SERVICES
+                    ├── -d ClusterIP:port        → KUBE-SVC   (in-cluster callers)
+packet arrives ───▶ ├── -d externalIP:port       → KUBE-EXT ┐
+on a node           ├── -d LB IP:port            → KUBE-EXT ┤ (or KUBE-FW first,
+                    └── (last) dst-type LOCAL    → KUBE-NODEPORTS → KUBE-EXT ┘  with loadBalancerSourceRanges)
+                                                                   │
+                                     KUBE-EXT: masquerade, or ETP Local sorting
+                                                                   ▼
+                                                    KUBE-SVC / KUBE-SVL → KUBE-SEP → Pod
+```
+
+The LB IP, an external IP and the node port all lead into the same
+`KUBE-EXT-<hash>` chain. What differs is which of those rules a given packet
+matches. That depends on what the load balancer does to the destination
+address.
+
+**1. The LB rewrites the destination to node IP:node port.** Examples are the
+AWS Classic LB, the AWS NLB in instance mode, Hetzner and DigitalOcean.
+
+```text
+client → 203.0.113.10:80 → LB → 10.0.1.5:31845 (node) → KUBE-NODEPORTS → KUBE-EXT → Pod
+```
+
+The packet reaches the node addressed to the node port. The LB-IP rule never
+matches outside traffic; the node port does all the work.
+
+**2. The LB passes the packet through with the destination unchanged.**
+Examples are GCP's network LB, Azure's LB (AKS turns on "floating IP" by
+default), and MetalLB in L2 or BGP mode.
+
+```text
+client → 203.0.113.10:80 → (routed or ARP-answered to a node) → dst still 203.0.113.10:80
+       → KUBE-SERVICES "-d 203.0.113.10/32 --dport 80" → KUBE-EXT → Pod
+```
+
+The node port isn't used for this traffic. The LB-IP rule is what catches the
+packet, and that's why kube-proxy writes it.
+
+This lab's `minikube tunnel` (Docker driver on macOS) is neither case. It
+reports `127.0.0.1` as the LB IP and forwards ports from the host over SSH, so
+it stands in for a cloud LB without behaving like one.
+
+**3. A Pod inside the cluster calls the LB IP.** With `ipMode: VIP` (the
+default), the LB-IP rule also matches traffic that starts inside the cluster:
+`KUBE-SERVICES` is reached from both `PREROUTING` (Pods) and `OUTPUT` (the node
+itself).
+
+```text
+Pod → 203.0.113.10:80 → KUBE-SERVICES LB-IP rule on its own node → KUBE-EXT → backend Pod
+```
+
+The packet never leaves the node or reaches the real load balancer. That's
+quicker, but anything the LB would have done is skipped: the PROXY protocol
+header, TLS termination, the LB's logs.
+
+- **`ipMode: Proxy`** (GA in 1.32): kube-proxy doesn't write the LB-IP rule, so
+  such calls really go out to the LB (step 6 below, and
+  [cloud-control-manager.md §13.5](cloud-control-manager.md)).
+- **AWS** reports a hostname instead of an IP, so kube-proxy has no IP to write
+  a rule for, and traffic goes out to the LB anyway.
+
+**4. The LB sends straight to Pod IPs.** Examples are the AWS Load Balancer
+Controller with `target-type: ip` and GKE NEGs.
+
+```text
+client → LB → 10.244.3.17:8080 (Pod IP) → routed straight to the Pod
+```
+
+None of kube-proxy's Service rules are involved: not the LB IP, not
+`KUBE-EXT`, not the node port. That's why `allocateLoadBalancerNodePorts: false`
+is safe here.
+
+What `KUBE-EXT` does once traffic is in (lab, see "Each kind of change, and what
+it does to the rules" in §3.6):
+
+- **`externalTrafficPolicy: Cluster`:** it marks the packet for masquerade, then
+  jumps to `KUBE-SVC`, which can pick any endpoint on any node.
+- **`externalTrafficPolicy: Local`:** it sends Pod and node-local traffic to
+  `KUBE-SVC`, and outside traffic to `KUBE-SVL`, which holds only this node's
+  endpoints. There's no masquerade, so the Pod sees the client's IP.
+- **With `loadBalancerSourceRanges`:** the LB-IP rule first jumps to
+  `KUBE-FW-<hash>`, which lets only the allowed source CIDRs on to `KUBE-EXT`
+  (step 5 below).
 
 ### 4.4.1 What kube-proxy writes for a LoadBalancer, from its code
 
@@ -5467,6 +6954,51 @@ shards of at most 100 endpoints by default (`MaxEndpointsPerSlice` in
 `pkg/controller/endpointslice/config/v1alpha1/defaults.go`; the flag goes up to
 1,000), so a change only rewrites one shard.
 
+#### Which slice changes when a Pod changes (not measured)
+
+A Service's endpoints aren't stored in one object. The EndpointSlice controller
+splits them across several EndpointSlices, each holding at most 100 endpoints
+by default. Take a Service with 250 Pods:
+
+```text
+Service "web" (250 Pods)
+  ├── EndpointSlice web-abc12   endpoints 1–100
+  ├── EndpointSlice web-def34   endpoints 101–200
+  └── EndpointSlice web-ghi56   endpoints 201–250
+```
+
+Now Pod 150 changes. What its slice records depends on what happened:
+
+- **Its container restarts.** The Pod keeps its IP. `web-def34` records it as
+  not ready, then as ready again once its readiness probe passes.
+- **The Pod is replaced** (deleted, evicted, or rolled by a Deployment). The old
+  endpoint is first marked terminating, then removed from `web-def34`. The new
+  Pod has a new IP and goes into a slice with room. That is usually
+  `web-def34`, which just freed a place, but the controller doesn't promise it.
+
+Either way:
+
+- **Only `web-def34` is rewritten** (or one more slice, if the new Pod lands
+  elsewhere). The other slices aren't touched.
+- **Each update sends that one slice to every kube-proxy:** about 100 endpoints
+  per node.
+
+Before slices, the same change rewrote the single `Endpoints` object for `web`,
+with all 250 addresses, and sent all of it to every node.
+
+At scale, for a Service with 5,000 Pods on a 1,000-node cluster:
+
+| | One Pod update sends | Across 1,000 nodes |
+|---|---|---|
+| `Endpoints`, before the 1,000-address cap existed | the whole object, ~5,000 addresses | ~5 million addresses |
+| EndpointSlices | one slice, ~100 addresses | ~100,000 addresses (50 times less) |
+
+- **A rolling update makes this worse,** because every Pod goes through it in
+  turn, each with several updates (terminating, removed, new, ready).
+- **Today the `Endpoints` object stops at 1,000 addresses** (the cap above). For
+  this Service it would be smaller, but wrong: 4,000 Pods missing. kube-proxy
+  doesn't read it anyway.
+
 ### 6.5 `ndots:5` multiplies DNS queries
 
 With CoreDNS query logging on, one `getent hosts github.com` from a pod sent
@@ -5488,6 +7020,10 @@ eight queries are wasted, and they all land on CoreDNS, which sits behind a
 Service itself.
 
 ### 6.6 Every pod gets environment variables for every Service
+
+For clients running inside the cluster, Kubernetes supports two primary ways of
+finding a Service: environment variables and DNS (docs). DNS is §3.1. This
+section is about the environment variables, and what they cost.
 
 By default the kubelet injects `<NAME>_SERVICE_HOST`, `_PORT` and Docker-links
 style variables for every Service in the pod's namespace (`getServiceEnvVarMap`
@@ -5512,15 +7048,148 @@ WEB_PORT_80_TCP_PORT=80
 WEB_PORT_80_TCP_PROTO=tcp
 ```
 
-Each Service gives 2 variables plus 5 per port, which is how 1,501 Services
-reached 10,520. They're written once, when the pod starts. A Service created
-later doesn't appear in an already-running pod, which is one more reason to
-use DNS names instead. To turn them off:
+A one-port Service gives 7 variables, which is how 1,501 Services reached
+10,520 (1,501 × 7, plus the 13 the Pod has anyway). The general count is below.
+
+#### The docs' example, tested (lab)
+
+The docs describe it this way: when a Pod is run on a Node, the kubelet adds a
+set of environment variables for each active Service. It adds
+`{SVCNAME}_SERVICE_HOST` and `{SVCNAME}_SERVICE_PORT`, where the Service name is
+upper-cased and dashes are converted to underscores. Their example is a Service
+`redis-primary` exposing TCP port 6379 on ClusterIP 10.0.0.11:
+
+```text
+REDIS_PRIMARY_SERVICE_HOST=10.0.0.11
+REDIS_PRIMARY_SERVICE_PORT=6379
+REDIS_PRIMARY_PORT=tcp://10.0.0.11:6379
+REDIS_PRIMARY_PORT_6379_TCP=tcp://10.0.0.11:6379
+REDIS_PRIMARY_PORT_6379_TCP_PROTO=tcp
+REDIS_PRIMARY_PORT_6379_TCP_PORT=6379
+REDIS_PRIMARY_PORT_6379_TCP_ADDR=10.0.0.11
+```
+
+The same Service on minikube, in a namespace `env-demo`. It selects no Pods, so
+it has no endpoints:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata: {name: redis-primary, namespace: env-demo}
+spec:
+  selector: {app: redis}            # no such Pods: the Service has no endpoints
+  ports: [{protocol: TCP, port: 6379}]
+```
+
+A `busybox` Pod started afterwards in the same namespace
+(`kubectl -n env-demo exec client -- env | grep ^REDIS_PRIMARY | sort`):
+
+```text
+REDIS_PRIMARY_PORT=tcp://10.101.214.227:6379
+REDIS_PRIMARY_PORT_6379_TCP=tcp://10.101.214.227:6379
+REDIS_PRIMARY_PORT_6379_TCP_ADDR=10.101.214.227
+REDIS_PRIMARY_PORT_6379_TCP_PORT=6379
+REDIS_PRIMARY_PORT_6379_TCP_PROTO=tcp
+REDIS_PRIMARY_SERVICE_HOST=10.101.214.227
+REDIS_PRIMARY_SERVICE_PORT=6379
+```
+
+The same seven variables, with the lab's ClusterIP. "Active" doesn't mean
+"has endpoints": a Service with no Pods behind it still gets its variables.
+
+#### A Service with several named ports (lab)
+
+The extra example: one Service with three named ports, two TCP and one UDP.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata: {name: api-gateway, namespace: env-demo}
+spec:
+  selector: {app: api}
+  ports:
+  - {name: http, protocol: TCP, port: 80, targetPort: 8080}
+  - {name: grpc, protocol: TCP, port: 9090}
+  - {name: metrics-udp, protocol: UDP, port: 8125}
+```
+
+```text
+API_GATEWAY_SERVICE_HOST=10.99.162.244
+API_GATEWAY_SERVICE_PORT=80                         ← the first port only
+API_GATEWAY_SERVICE_PORT_HTTP=80                    ← one per named port, name upper-cased
+API_GATEWAY_SERVICE_PORT_GRPC=9090
+API_GATEWAY_SERVICE_PORT_METRICS_UDP=8125           ← "metrics-udp": dash → underscore
+API_GATEWAY_PORT=tcp://10.99.162.244:80             ← the first port only
+API_GATEWAY_PORT_80_TCP=tcp://10.99.162.244:80
+API_GATEWAY_PORT_80_TCP_ADDR=10.99.162.244
+API_GATEWAY_PORT_80_TCP_PORT=80
+API_GATEWAY_PORT_80_TCP_PROTO=tcp
+API_GATEWAY_PORT_9090_TCP=tcp://10.99.162.244:9090
+API_GATEWAY_PORT_9090_TCP_ADDR=10.99.162.244
+API_GATEWAY_PORT_9090_TCP_PORT=9090
+API_GATEWAY_PORT_9090_TCP_PROTO=tcp
+API_GATEWAY_PORT_8125_UDP=udp://10.99.162.244:8125  ← protocol in the name and the URL
+API_GATEWAY_PORT_8125_UDP_ADDR=10.99.162.244
+API_GATEWAY_PORT_8125_UDP_PORT=8125
+API_GATEWAY_PORT_8125_UDP_PROTO=udp
+```
+
+- **`_SERVICE_PORT` and `_PORT` hold the first port only.** The others are
+  reached by name (`_SERVICE_PORT_<NAME>`) or by number and protocol
+  (`_PORT_<port>_<PROTO>`).
+- **`targetPort` never appears.** The variables describe the ClusterIP side; the
+  Pod port is the Service's business.
+- **The count is 3 + 4 per port + 1 per named port.** For `redis-primary`,
+  3 + 4 = 7. For `api-gateway`, 3 + 4 × 3 + 3 = 18.
+
+A port name can also come from a tool. `kubectl create service clusterip late
+--tcp=8080:8080` names its port `8080-8080`, which gives
+`LATE_SERVICE_PORT_8080_8080=8080`.
+
+#### Which Services get variables, and when (lab)
+
+From the same `client` Pod, with two more Services in the namespace:
+
+| Service | Variables? |
+|---|---|
+| `redis-primary` (ClusterIP, no endpoints) | yes, 7 |
+| `api-gateway` (ClusterIP, 3 ports) | yes, 18 |
+| `db-headless` (`clusterIP: None`) | none: no IP to put in them |
+| `ext-name` (`type: ExternalName`) | none: no IP either |
+| `default/kubernetes` (another namespace) | yes, 8 (`KUBERNETES_*`), in every Pod |
+| `late`, created after the Pod started | none in the running Pod; a Pod started later has them |
+
+The `client` Pod had 33 Service variables: 7 + 18 + 8.
+
+- **They're written once, when the Pod starts.** A Service created later doesn't
+  appear in an already-running Pod, which is one more reason to use DNS names
+  instead.
+- **Only the Pod's own namespace counts,** plus `KUBERNETES_*` for the API
+  server.
+
+To turn them off:
 
 ```yaml
 spec:
   enableServiceLinks: false
 ```
+
+A Pod started that way (`client-nolinks`) kept only the API server's
+variables:
+
+```text
+KUBERNETES_PORT=tcp://10.96.0.1:443
+KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443
+KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1
+KUBERNETES_PORT_443_TCP_PORT=443
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+KUBERNETES_SERVICE_HOST=10.96.0.1
+KUBERNETES_SERVICE_PORT=443
+KUBERNETES_SERVICE_PORT_HTTPS=443
+```
+
+In-cluster clients such as client-go need `KUBERNETES_SERVICE_HOST` and
+`KUBERNETES_SERVICE_PORT` to find the API server, so these stay.
 
 ### 6.7 Finite ranges and per-Service cost
 
