@@ -40,7 +40,7 @@ object Dependencies {
     val magnum   = "2.0.0"
     val skunk    = "2.0.0-RC3"
     val hikaricp = "7.1.0"
-    val flyway   = "13.12.1"
+    val flyway   = "13.12.2"
     val postgres = "42.7.14"
 
     // --- Security ---
