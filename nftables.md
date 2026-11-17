@@ -602,8 +602,58 @@ nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; }
 | `ip6` | IPv6 | filter, nat, route |
 | `inet` | IPv4 and IPv6 together | filter, nat, route |
 | `arp` | ARP | filter |
-| `bridge` | Frames crossing a Linux bridge | filter, nat |
+| `bridge` | Frames crossing a Linux bridge | filter (no `nat`: refused in the lab, §3.2; bridge NAT is ebtables' `nat` table) |
 | `netdev` | Everything on one network device, before or after the IP stack (`ingress`, `egress` hooks) | filter |
+
+**Who sits on top of netfilter.** iptables and nftables are both front ends to
+netfilter, and other tools are front ends to them:
+
+```
+ managers       ufw, firewalld (old iptables backend),        firewalld (default backend),
+ (write rules   kube-proxy / Docker / Calico / …              OpenWrt fw4, and kube-proxy,
+  for you)      in iptables mode                              Docker, Podman, libvirt, …
+                                                              in nftables mode
+                                   │                                          │
+                                   ▼                                          │
+ userspace             iptables (same commands, two builds)                   ▼
+                      ┌────────────┴────────────┐                 nft CLI, libnftables,
+                      ▼                         ▼                     knftables (Go)
+               iptables-legacy            iptables-nft                        │
+                      │ setsockopt              │ netlink                     │ netlink
+──────────────────────┼─────────────────────────┼─────────────────────────────┼─────────────────
+ kernel               ▼                         │                             │
+                  x_tables                      └────────► nf_tables ◄────────┘
+            (ip_tables, ip6_tables,                (tables, chains, sets,
+             arp_tables, ebtables)                  maps, bytecode VM)
+                      │                                        │
+                      ▼                                        ▼
+        ┌───────────────────────────────── netfilter hooks ─────────────────────────────────┐
+        │ prerouting, input, forward, output, postrouting (+ ingress, egress)               │
+        │ also attached here directly: defrag, conntrack, NAT core, BPF programs            │
+        └───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **"iptables" is two tools with the same commands.** `iptables-legacy`
+  replaces whole tables in the old `x_tables` engine. `iptables-nft`, the
+  default on current distributions, translates the same commands into
+  `nf_tables` objects. That's why its rules show up in `nft list ruleset` as
+  `table ip filter` and so on. `iptables -V` says which one you have:
+  `(nf_tables)` or `(legacy)`.
+- **ufw is a front end to iptables only.** On a distribution where `iptables`
+  is iptables-nft, ufw's rules still end up in `nf_tables`, through the
+  translation layer.
+- **firewalld talks to nftables directly** (its default backend, through
+  libnftables) and keeps everything in `table inet firewalld`. Its iptables
+  backend is the older option.
+- **Front ends to nftables:** the `nft` command and the libraries under it
+  (libnftables, libnftnl); knftables, the Go library kube-proxy's nftables mode
+  uses (it runs `nft`); firewalld; OpenWrt's fw4; and nftables modes in
+  Docker, Podman's netavark, libvirt, Calico and fail2ban. (From their docs,
+  not tested; several of these modes are newer than the iptables ones and
+  some are still marked experimental.)
+- **Mixing engines works but is hard to follow.** Rules from x_tables and
+  nf_tables both run on the same hooks, but `nft list ruleset` doesn't show
+  the legacy ones (§11).
 
 **Hooks belong to the kernel, not to the tool.** The netfilter framework
 defines the hooks; iptables and nftables are two front ends that attach rules
@@ -932,8 +982,42 @@ static const struct nft_chain_type nft_chain_route_ipv4 = {
 Each bit is one hook. Creating a chain on a hook outside its type's mask is
 rejected.
 
+There are exactly three chain types (`include/net/netfilter/nf_tables.h`):
+
+```c
+enum nft_chain_types {
+	NFT_CHAIN_T_DEFAULT = 0,   // "filter"
+	NFT_CHAIN_T_ROUTE,         // "route"
+	NFT_CHAIN_T_NAT,           // "nat"
+};
+```
+
+Where each is allowed, from each type's `.family` and `.hook_mask` in
+`nft_chain_filter.c`, `nft_chain_nat.c` and `nft_chain_route.c`:
+
+| Type | Families | Hooks | What it adds |
+|---|---|---|---|
+| `filter` | all: `ip`, `ip6`, `inet`, `arp`, `bridge`, `netdev` | every hook of the family (`inet` also gets `ingress`) | nothing extra: the plain rule engine. It can match, drop, accept, set marks, count, log |
+| `nat` | `ip`, `ip6`, `inet` | prerouting, input, output, postrouting | may use `dnat`, `snat`, `masquerade`, `redirect`, and sees only a connection's first packet |
+| `route` | `ip`, `ip6`, `inet` | output only | if a rule changes the packet's mark, addresses or TOS, the kernel repeats the routing decision |
+
+The kernel refuses other combinations (lab, throwaway Alpine container,
+nftables 1.0.9):
+
+```
+$ nft add chain ip t r { type route hook input priority 0; }
+Error: Chain of type "route" is not supported, perhaps kernel support is missing?
+$ nft add chain netdev n x { type nat hook ingress device eth0 priority 0; }
+Error: Could not process rule: No such file or directory          ← no nat type for netdev
+$ nft add chain bridge b n { type nat hook prerouting priority 0; }
+Error: Could not process rule: No such file or directory          ← no nat type for bridge either
+```
+
 **Priorities** order the base chains that share a hook. Lower runs first. The
-named priorities match the old iptables tables:
+named priorities match the old iptables tables (why nat needs two of them, which
+hooks each name is allowed on, and the bridge family's different values are in
+[kubernetes-services.md](kubernetes-services.md#if-chains-attach-to-hooks-what-are-tables-for-lab),
+under "Why nat has two numbers"):
 
 | Name | Value | Old iptables equivalent |
 |---|---|---|
@@ -1022,6 +1106,147 @@ as you meant.
 
 **`policy`** is the verdict for packets that reach the end of a base chain,
 either `accept` or `drop`.
+
+### 3.3 Creating tables and chains, and attaching them (lab)
+
+Ten steps run in a throwaway Alpine container (nftables 1.0.9, not the
+three-namespace lab above), each checked with real traffic.
+
+**1. Create tables, one per family or purpose**
+
+```
+$ nft add table inet fw        # inet = IPv4 and IPv6
+$ nft add table ip  nat4       # IPv4 only
+$ nft add table ip6 only6      # IPv6 only
+$ nft list tables
+table inet fw
+table ip nat4
+table ip6 only6
+```
+
+A new table is empty: it has no chains and adds nothing to any hook.
+
+**2. Base chains: attach a table to hooks**
+
+`type` + `hook` + `priority` make a chain a base chain, which is a hook entry:
+
+```
+$ nft add chain inet fw input   '{ type filter hook input   priority filter; policy accept; }'
+$ nft add chain inet fw forward '{ type filter hook forward priority filter; policy drop; }'
+$ nft add chain ip nat4 out     '{ type nat hook output      priority dstnat; }'
+$ nft add chain ip nat4 post    '{ type nat hook postrouting priority srcnat; }'
+```
+
+One table can have base chains on as many hooks as it likes: `fw` is on input
+and forward, `nat4` on output and postrouting. `filter`, `dstnat` and `srcnat`
+are names for 0, −100 and 100.
+
+**3. Regular chain: no hook, runs only when jumped to**
+
+```
+$ nft add chain inet fw icmp_rules                                       # no type/hook = regular chain
+$ nft add rule  inet fw icmp_rules icmp   type echo-request counter accept
+$ nft add rule  inet fw icmp_rules icmpv6 type echo-request counter accept
+$ nft add rule  inet fw input meta l4proto '{ icmp, ipv6-icmp }' jump icmp_rules
+
+ping 127.0.0.1: OK      ping ::1: OK
+    icmp type echo-request counter packets 1 bytes 84 accept
+    icmpv6 type echo-request counter packets 1 bytes 104 accept    ← one inet table saw both IPv4 and IPv6
+```
+
+**4. Three tables on the same hook: priority decides the order**
+
+```
+$ for each of early:-10 mid:0 late:10:
+    nft add table inet $n
+    nft add chain inet $n in "{ type filter hook input priority $p; }"
+    nft add rule  inet $n in icmp type echo-request counter
+
+ping 127.0.0.1: OK
+table inet early   … priority filter - 10 …   counter packets 1
+table inet mid     … priority filter …        counter packets 1
+table inet late    … priority filter + 10 …   counter packets 1
+table inet fw      … priority filter …        counter packets 2    ← its own chain, same hook
+```
+
+Four tables and four base chains on one hook: every one of them saw the ping.
+
+**5. A drop in one table stops the packet for all the others**
+
+```
+$ nft insert rule inet early in icmp type echo-request drop
+ping 127.0.0.1: no reply
+  mid:  packets 0
+  late: packets 0          ← early (-10) dropped it; later entries never ran
+```
+
+**6. NAT in its own table: a "Service IP" to a backend**
+
+```
+$ nc -l -p 8080 -e echo "hello from the backend on :8080" &
+$ nft add rule ip nat4 out ip daddr 10.96.0.10 tcp dport 80 counter dnat to 172.17.0.2:8080
+client -> 10.96.0.10:80 says: hello from the backend on :8080
+    ip daddr 10.96.0.10 tcp dport 80 counter packets 1 bytes 60 dnat to 172.17.0.2:8080
+```
+
+`nat4`'s output chain (`type nat`, `priority dstnat`) did what kube-proxy does
+for traffic from the node itself. The counter shows 1 packet: NAT rules see
+only a connection's first packet.
+
+**7. Sets and verdict maps belong to a table**
+
+```
+$ nft add set inet fw blocked '{ type ipv4_addr; flags interval; elements = { 10.66.0.0/16 } }'
+$ nft add rule inet fw input ip saddr @blocked counter drop
+$ nft add chain inet fw web; nft add chain inet fw ssh
+$ nft add map inet fw port_to_chain '{ type inet_service : verdict; elements = { 80 : jump web, 22 : jump ssh } }'
+$ nft add rule inet fw input tcp dport vmap @port_to_chain
+```
+
+A verdict map (`vmap`) picks a chain in one lookup. kube-proxy's nftables mode
+works this way: one map from Service IP and port to the Service's chain, in
+place of a long list of rules (§10).
+
+**8. A chain or set can't be used by another table**
+
+```
+$ nft add table inet other
+$ nft add chain inet other in '{ type filter hook input priority 5; }'
+$ nft add rule inet other in jump icmp_rules
+Error: Could not process rule: No such file or directory
+$ nft add rule inet other in ip saddr @blocked drop
+Error: No such file or directory; did you mean set 'blocked' in table inet 'fw'?
+```
+
+**9. Replace a whole table in one transaction**
+
+```
+$ cat fw2.nft
+table inet other
+delete table inet other
+table inet other {
+  set allowed { type ipv4_addr; elements = { 192.0.2.10 } }
+  chain in {
+    type filter hook input priority 5; policy accept;
+    tcp dport 9000 ip saddr != @allowed drop
+  }
+}
+$ nft -f fw2.nft          # all or nothing
+```
+
+The first line, `table inet other`, makes sure the table exists, so `delete`
+can't fail on a first run. The old and new versions swap in one commit (§2.4).
+
+**10. Handles: delete one rule; chains in use are protected**
+
+```
+$ nft -a list chain inet fw input
+    ip saddr @blocked counter packets 0 bytes 0 drop # handle 9
+$ nft delete rule inet fw input handle 9
+deleted rule handle 9
+$ nft delete chain inet fw icmp_rules
+Error: Could not process rule: Resource busy         ← input still jumps to it
+```
 
 ## 4. Rules: matches, statements and verdicts
 

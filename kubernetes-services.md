@@ -5360,6 +5360,1517 @@ kube-proxy's nftables mode keeps its nat and filter paths separate anyway: the
 reached only from the nat base chains. The rest of its nftables layout (maps,
 `numgen`, chain names) is in [nftables.md §10](nftables.md).
 
+#### If chains attach to hooks, what are tables for? (lab)
+
+Only **base chains** attach to hooks. A table is the container that holds
+chains, and every chain belongs to exactly one table. A table can hold any
+number of chains on any hooks of its family, and one hook can have base chains
+from any number of tables:
+
+```text
+                hook prerouting     hook input        hook forward      (no hook)
+                ───────────────     ──────────        ────────────      ─────────
+table inet a    chain pre (-100)    chain inbound     chain fwd (0)     chain helper  ← regular chain,
+                                    (10)                                                 reached only by
+                                                                                         jump from a's chains
+table inet b                        chain inbound
+                                    (-10)
+table ip nat    chain PREROUTING                                                       (iptables-nft)
+                (dstnat)
+
+on hook input, packets run:  b/inbound (-10)  →  a/inbound (10)       ← ordered by priority, not by table
+```
+
+In the kernel, `struct nft_table` (`include/net/netfilter/nf_tables.h`) holds
+lists of `chains`, `sets`, `objects` and `flowtables`, one `family` and its
+`flags`. It has no hook field.
+
+**What a table controls** (tested with nftables in a throwaway Alpine
+container, except Ownership):
+
+| What it controls | Lab result |
+|---|---|
+| **Family** | An `ip` table refused an `ip6 saddr` rule ("conflicting protocols"). An `inet` table accepted it. Every chain in the table gets the table's family. |
+| **Name scope** | Tables `a` and `b` both had a base chain called `inbound` on the same hook, with no conflict. |
+| **Jump scope** | `jump` from table `a` to a chain in table `b` failed with "No such file or directory". You can only jump within a table. |
+| **Set scope** | `a` couldn't use `@blocked` from `b`. nft even suggested "did you mean set 'blocked' in table inet 'b'?". Sets and maps are local to the table. |
+| **On/off switch** | `flags dormant` on table `b` unregistered all its hooks, and a ping that `b` dropped went through. Its rules stayed in place, just inactive. |
+| **Lifetime** | `delete table inet b` removed its 2 chains and its set in one step. |
+| **Ownership** (not tested) | `NFT_TABLE_F_OWNER` means the table is removed when the process that created it exits. Some tools, such as firewalld, use this so they don't leave rules behind. |
+
+**Two tables on the same hook.** Each base chain is its own hook registration,
+so the order comes from chain priority, not from the table:
+
+- `b` (priority −10) dropped the ping. `a`'s counter didn't move: it never saw
+  the packet.
+- With `b` accepting and `a` dropping, the ping was still dropped. `accept`
+  only ends the current base chain, and the packet goes on to the next one on
+  the hook, in any table. A `drop` anywhere is final.
+
+That's why each tool keeps its own table (kube-proxy's `table ip kube-proxy`,
+Docker, firewalld, Cilium) without touching anyone else's rules, while every
+tool's chains still see every packet.
+
+**In iptables the tables are fixed.** Each table is a kernel module with fixed
+hooks and one priority. For example, `iptable_filter.c` defines `filter` with
+`valid_hooks` and `priority = NF_IP_PRI_FILTER`. Its built-in chains are just
+those hook registrations. You can't create a table or choose its priority.
+That's why an iptables chain gets its abilities from its table. With
+iptables-nft, the classic tables show up as ordinary nft tables:
+
+```text
+table ip filter { … type filter hook input priority filter; … }
+table ip nat    { … type nat hook output priority dstnat; … }
+```
+
+**Tables in iptables vs nftables.** Both are front ends to the same netfilter
+hooks, and in both every chain belongs to one table and jumps stay inside it.
+What a table means differs:
+
+| | iptables | nftables |
+|---|---|---|
+| Tables | fixed: `filter`, `nat`, `mangle`, `raw`, `security` | you create your own, with any name: `table inet a` |
+| What a table decides | **what its chains can do** (only `nat` can DNAT) and which hooks they're on | family, name scope, jump and set scope, on/off, lifetime |
+| What a chain's job depends on | its table | the chain's own `type filter/nat/route` and `hook` |
+| Base chains | built in: `INPUT`, `PREROUTING`, … | you declare them: `type filter hook input priority 10` |
+
+**Do tables have fixed chains? In iptables, yes.** Each table has a fixed set of
+built-in chains, one per hook it registers, named after the hook, and the set
+differs per table. In the kernel source each table module lists its hooks in
+`valid_hooks` (`net/ipv4/netfilter/iptable_*.c`):
+
+| Table | PREROUTING | INPUT | FORWARD | OUTPUT | POSTROUTING | Its job |
+|---|:-:|:-:|:-:|:-:|:-:|---|
+| `raw` | ✓ | | | ✓ | | before conntrack (e.g. `NOTRACK`) |
+| `mangle` | ✓ | ✓ | ✓ | ✓ | ✓ | change packets, set marks |
+| `nat` | ✓ | ✓ | | ✓ | ✓ | DNAT / SNAT (only the first packet of a connection) |
+| `filter` | | ✓ | ✓ | ✓ | | accept / drop |
+| `security` | | ✓ | ✓ | ✓ | | SELinux labels |
+
+`filter` has no `PREROUTING`, and `nat` has no `FORWARD`.
+
+About the built-in chains:
+
+- **Each one is attached to a hook, but it isn't the hook.** A hook is a point
+  in the kernel's code (`NF_INET_LOCAL_IN`). A built-in chain is one table's list
+  of rules for that hook. When the table loads, `xt_hook_ops_alloc`
+  (`net/netfilter/x_tables.c`) registers `ipt_do_table` at each hook in
+  `valid_hooks`, with the table's priority. At the hook, `ipt_do_table` starts at
+  that hook's built-in chain (`private->hook_entry[hook]`). The chain is named
+  after the hook, which is why the two are easy to confuse.
+- **One hook can run several built-in chains**, one per table that uses it, in
+  priority order. The full map is below.
+- **You can't create, delete or rename them.** `iptables -t filter -N PREROUTING`
+  just makes an ordinary custom chain with that name, which no hook ever calls.
+- **Only built-in chains have a policy** (`-P INPUT DROP`). A custom chain just
+  returns to its caller when it reaches the end.
+- **They're the only way into the table.** That's why Docker has to put its jump
+  in `PREROUTING` (see below).
+
+**Every hook, and which tables run there, in order** (from the kernel source:
+priorities in `include/uapi/linux/netfilter_ipv4.h`, conntrack's hooks in
+`net/netfilter/nf_conntrack_proto.c`, nat's in `net/netfilter/nf_nat_proto.c`).
+Each table that uses a hook has its own built-in chain there, and lower
+priorities run first:
+
+```text
+        packet arrives                                               local process sends
+               │                                                              │
+               ▼                                                              ▼
+  ┌─ PREROUTING ─────────────┐                                        routing decision
+  │ -300  raw                │                                                │
+  │ -200  conntrack          │                                                ▼
+  │ -150  mangle             │                                  ┌─ OUTPUT ─────────────────┐
+  │ -100  nat (DNAT)         │                                  │ -300  raw                │
+  └────────────┬─────────────┘                                  │ -200  conntrack          │
+               ▼                                                │ -150  mangle             │
+         routing decision ── for this host ──┐                  │ -100  nat (DNAT)         │
+               │                             ▼                  │    0  filter             │
+               │                 ┌─ INPUT ──────────────────┐   │   50  security           │
+               │                 │ -150  mangle             │   └─────────────┬────────────┘
+               │                 │    0  filter             │                 │
+               │                 │   50  security           │                 │
+               │                 │  100  nat (SNAT)         │                 │
+               │                 │  max  conntrack confirm  │                 │
+               │                 └───────────┬──────────────┘                 │
+               │                             ▼                                │
+               │                       local process                          │
+               ▼                                                              │
+  ┌─ FORWARD ────────────────┐                                                │
+  │ -150  mangle             │                                                │
+  │    0  filter             │                                                │
+  │   50  security           │                                                │
+  └────────────┬─────────────┘                                                │
+               │                                                              │
+               └───────────────────►┌─ POSTROUTING ────────────┐◄─────────────┘
+                                    │ -150  mangle             │
+                                    │  100  nat (SNAT,         │
+                                    │            MASQUERADE)   │
+                                    │  max  conntrack confirm  │
+                                    └────────────┬─────────────┘
+                                                 ▼
+                                           packet leaves
+```
+
+The order is the same at every hook: **raw → conntrack → mangle → nat
+(destination) → filter → security → nat (source) → conntrack confirm**. Why
+each sits where it does:
+
+- **`raw` runs before conntrack.** That's why `NOTRACK` (skip connection
+  tracking) can only go in `raw`: later tables are too late.
+- **conntrack runs before `mangle`, `nat` and `filter`**, so they can all match
+  connection state (`-m conntrack --ctstate ESTABLISHED`).
+- **`nat` is at −100 on the destination hooks and +100 on the source hooks.**
+  DNAT runs before `filter`, so filter rules see the real destination (the Pod,
+  not the Service IP). SNAT runs after `filter`, so filter rules see the real
+  source.
+- **`nat` runs only for a connection's first packet.** Later packets are
+  translated from the conntrack entry, which is confirmed (written to the table)
+  last, at `max`.
+- **nftables uses the same numbers.** `priority raw` = −300, `mangle` = −150,
+  `dstnat` = −100, `filter` = 0, `security` = 50, `srcnat` = 100. That's why
+  the earlier lab printed `priority filter + 10` for priority 10. An nft base
+  chain at a given priority runs between the iptables tables around it.
+
+Not verified on a running kernel: `nft list hooks`, which prints this list, gave
+no output on Docker Desktop's kernel.
+
+**Where the order comes from: priority numbers.** There's no rule like "mangle
+comes after raw". Each registration carries a number, the list is sorted by it,
+and mangle ends up after raw only because −150 > −300
+(`include/uapi/linux/netfilter_ipv4.h`):
+
+```c
+enum nf_ip_hook_priorities {
+	NF_IP_PRI_FIRST = INT_MIN,
+	NF_IP_PRI_RAW_BEFORE_DEFRAG = -450,
+	NF_IP_PRI_CONNTRACK_DEFRAG = -400,
+	NF_IP_PRI_RAW = -300,
+	NF_IP_PRI_SELINUX_FIRST = -225,
+	NF_IP_PRI_CONNTRACK = -200,
+	NF_IP_PRI_MANGLE = -150,           // ← mangle
+	NF_IP_PRI_NAT_DST = -100,
+	NF_IP_PRI_FILTER = 0,
+	NF_IP_PRI_SECURITY = 50,
+	NF_IP_PRI_NAT_SRC = 100,
+	NF_IP_PRI_SELINUX_LAST = 225,
+	NF_IP_PRI_CONNTRACK_HELPER = 300,
+	NF_IP_PRI_CONNTRACK_CONFIRM = INT_MAX,
+	NF_IP_PRI_LAST = INT_MAX,
+};
+```
+
+- **A table has one number for all its points.** It's set on the table template
+  (`packet_mangler.priority = NF_IP_PRI_MANGLE`) and copied into each
+  registration by `xt_hook_ops_alloc` (`ops[i].priority = table->priority`). So
+  each of mangle's 5 callbacks carries −150, at whichever point it sits. The
+  same holds for raw (−300 at both of its points), filter (0) and security (50).
+- **nat is the exception.** Its template has no priority, and each of its 4
+  registrations sets its own: −100 (`NF_IP_PRI_NAT_DST`) at PREROUTING and
+  OUTPUT, where it changes the destination, and +100 (`NF_IP_PRI_NAT_SRC`) at
+  INPUT and POSTROUTING, where it changes the source.
+- **The order is worked out at registration**, by comparing numbers in
+  `nf_hook_entries_grow` (`net/netfilter/core.c`). The new entry goes before the
+  first existing entry whose number is equal or larger:
+
+  ```c
+  if (inserted || reg->priority > orig_ops[i]->priority) {
+  	/* keep the existing entry here, look further */
+  } else {
+  	/* put the new one here */
+  }
+  ```
+
+  Whatever order the tables load in, PREROUTING ends up as
+  −400 defrag < −300 raw < −200 conntrack < −150 mangle < −100 nat.
+- **Change the number, and the order changes.** With the module parameter
+  `raw_before_defrag=1`, raw registers at −450 (`NF_IP_PRI_RAW_BEFORE_DEFRAG`)
+  and sees fragments before defrag reassembles them.
+- **Anything else can slot in between.** An nftables chain at `priority -175`
+  lands between conntrack (−200) and mangle (−150). nft's priority names are
+  just these numbers: `raw` = −300, `mangle` = −150, `dstnat` = −100, `filter` = 0,
+  `security` = 50, `srcnat` = 100.
+- **Packets never read the numbers.** Once sorted, a packet just walks
+  `hooks[0]`, `hooks[1]`, … in array order. Each number stays in the list's
+  trailer (`orig_ops[i]->priority`), read again only when another callback
+  registers.
+
+**Why nat has two numbers.** Each of the other tables does the same job at
+every point, so one position works everywhere:
+
+- `raw` always runs before conntrack (−300).
+- `mangle` always runs early (−150).
+- `filter` always runs at 0.
+
+`nat` does two opposite jobs, and each must happen on a different side of
+`filter` and of routing:
+
+| | Changes | Must run | So the priority is |
+|---|---|---|---|
+| **DNAT** (PREROUTING, OUTPUT) | the destination | **before routing**, so the packet is routed to the new address; and **before `filter`**, so filter rules see the real destination (the Pod, not the Service IP) | −100 (`NF_IP_PRI_NAT_DST`): after conntrack (−200) and mangle (−150), before filter (0) |
+| **SNAT / MASQUERADE** (POSTROUTING, INPUT) | the source | **after routing**, because MASQUERADE needs to know the outgoing interface; and **after `filter`**, so filter rules see the original source | +100 (`NF_IP_PRI_NAT_SRC`): after filter (0) and security (50) |
+
+A single number can't be both before and after `filter`, so the nat table's
+template has no priority and each of its 4 registrations sets its own
+(`iptable_nat.c`, `nf_nat_ipv4_ops[]`).
+
+Both numbers are above conntrack's −200, because NAT keeps its decision in the
+conntrack entry, which must exist first. The kernel enforces this for nftables
+nat chains (`nf_tables_api.c`: `type->type == NFT_CHAIN_T_NAT && hook->priority
+<= NF_IP_PRI_CONNTRACK` → `-EOPNOTSUPP`). Lab (throwaway Alpine container,
+nftables 1.0.9):
+
+```text
+$ nft add chain ip t n1 '{ type nat hook prerouting priority -201; }'
+Error: Chains of type "nat" must have a priority value above -200
+$ nft add chain ip t n2 '{ type nat hook prerouting priority -199; }'
+  -199: accepted
+```
+
+**nftables uses the same numbers.** They belong to the kernel's hook lists, not
+to iptables: an nftables base chain is just another registration in the same
+list. IPv6 has its own enum (`nf_ip6_hook_priorities`) with the same values. The
+`nft` tool gives the common numbers names. Chains created with plain numbers
+were printed back by name:
+
+```text
+table ip t {
+	type filter hook prerouting  priority raw;        ← -300
+	type filter hook prerouting  priority mangle;     ← -150
+	type nat    hook prerouting  priority dstnat;     ← -100
+	type filter hook input       priority filter;     ← 0
+	type filter hook input       priority security;   ← 50
+	type nat    hook postrouting priority srcnat;     ← 100
+	type filter hook prerouting  priority -175;       ← no name: printed as the number
+```
+
+Three differences from iptables:
+
+**1. In nftables you choose the number for every chain, for nat too.** iptables'
+nat table always uses −100 and +100. In nftables you write the priority
+yourself, usually `dstnat` on prerouting and output, and `srcnat` on postrouting
+and input, following the same reasoning. Other values are allowed, as long as a
+nat chain stays above −200. You can also write `priority dstnat - 5` or
+`filter + 10` to land just before or after a standard slot.
+
+**2. The names are tied to hooks.** `nft` refuses a name that doesn't make sense
+where you use it:
+
+```text
+$ nft add chain ip t x '{ type filter hook input priority dstnat; }'
+Error: invalid priority expression value in this context.        ← dstnat isn't for input
+$ nft add chain ip t y '{ type nat hook prerouting priority srcnat; }'
+Error: invalid priority expression value in this context.        ← srcnat isn't for prerouting
+```
+
+**3. The bridge family uses different numbers for the same names.** Bridge hooks
+have their own scale:
+
+```text
+table bridge br {
+	type filter hook prerouting  priority dstnat;     ← -300 in bridge (not -100)
+	type filter hook forward     priority filter;     ← -200 in bridge (not 0)
+	type filter hook postrouting priority srcnat;     ← 300 in bridge (not 100)
+```
+
+So a name like `filter` means 0 in `ip`, `ip6` and `inet`, but −200 in `bridge`.
+When in doubt, use the number; `nft list` shows which name it matches.
+
+| Name | `ip` / `ip6` / `inet` | `bridge` |
+|---|---|---|
+| `raw` | −300 | — |
+| `mangle` | −150 | — |
+| `dstnat` | −100 | −300 |
+| `filter` | 0 | −200 |
+| `security` | 50 | — |
+| `srcnat` | 100 | 300 |
+
+**What a hook holds.** Each hook has a list of entries (`nf_hook_entries`),
+sorted by priority. Each entry is a function. With iptables, every table that
+uses the hook adds one entry. Other parts of the kernel add entries too:
+
+```text
+hook PREROUTING: entries, sorted by priority
+  -400  defrag                  (not a table: reassembles fragments for conntrack)
+  -300  ipt_do_table(raw)       → runs raw's PREROUTING chain
+  -200  conntrack               (not a table)
+  -150  ipt_do_table(mangle)    → runs mangle's PREROUTING chain
+  -100  nat core                → runs nat's PREROUTING chain, first packet only
+```
+
+`nat` is the exception in this list: `iptable_nat.c` hands its entries to the
+NAT core (`nf_nat_ipv4_register_fn`), which runs the `nat` chain only while the
+connection has no NAT decision yet (`!nf_nat_initialized(ct, …)` in
+`nf_nat_core.c`).
+
+**"Hook" means several things in the code.** In programming, to *hook* something
+means to attach a function (a callback) to a place where existing code will call
+it. Netfilter uses "hook" for the place, the function, and the things in
+between:
+
+| Name in the code | What it really is | Read it as |
+|---|---|---|
+| `NF_INET_PRE_ROUTING`, `.hooknum`, `hooks_ipv4[0]` | a **place** in the packet path | **hook point** |
+| `nf_hookfn`, `.hook` | a function called at that place | **hook function** (a callback) |
+| `struct nf_hook_ops` | a **request to attach**: function + place + priority + `priv` | **registration** |
+| `struct nf_hook_entry`, `hooks[]` | the attached functions stored at one place, in order | **callbacks at this point** |
+
+The structs, with the clearer names as comments:
+
+```c
+struct netns_nf {
+	struct nf_hook_entries *hooks_ipv4[NF_INET_NUMHOOKS];
+	//                       ^^^^^^^^^^ 5 hook POINTS: PREROUTING … POSTROUTING
+};
+
+struct nf_hook_entries {               // everything attached at ONE hook point
+	u16                  num_hook_entries;
+	struct nf_hook_entry hooks[];      // the CALLBACKS attached here, in run order
+	//                   ^^^^^ = "the hooked-in functions", not "the hook points"
+};
+
+struct nf_hook_entry {
+	nf_hookfn *hook;                   // the callback function
+	void      *priv;                   // its data (&mangle, &raw, …)
+};
+
+struct nf_hook_ops {                   // a REGISTRATION
+	nf_hookfn   *hook;                 // which callback
+	unsigned int hooknum;              // at which hook POINT (0–4)
+	int          priority;             // where in that point's list
+	void        *priv;
+};
+```
+
+So `net->nf.hooks_ipv4[NF_INET_PRE_ROUTING]->hooks[3].hook` reads as: at the
+PREROUTING **point**, the 4th attached **callback**'s **function**
+(`iptable_mangle_hook` on a node with raw and mangle loaded).
+
+The kernel's own wording mixes the meanings too: "the PREROUTING hook" (a
+point), "register a hook" (`nf_register_net_hook`, attach a callback),
+`iptable_mangle_hook` (a callback function). When a sentence says "hook", ask
+which is meant: **where** (a point, 0–4) or **what runs there** (a callback in
+`hooks[]`).
+
+**A hook stores neither tables, nor chains, nor rules.** It stores a sorted list
+of pairs: a function to call, and a pointer to pass it. For an iptables table,
+that pointer points at the table. In the kernel source:
+
+Each network namespace has one array per family, with one slot per hook. The
+complete struct (`include/net/netns/netfilter.h`):
+
+```c
+struct netns_nf {
+#if defined CONFIG_PROC_FS
+	struct proc_dir_entry *proc_netfilter;                          // /proc/net/netfilter
+#endif
+	const struct nf_logger __rcu *nf_loggers[NFPROTO_NUMPROTO];     // the LOG/NFLOG backend per family
+#ifdef CONFIG_SYSCTL
+	struct ctl_table_header *nf_log_dir_header;                     // net.netfilter.nf_log.* sysctls
+#ifdef CONFIG_LWTUNNEL
+	struct ctl_table_header *nf_lwtnl_dir_header;
+#endif
+#endif
+	struct nf_hook_entries __rcu *hooks_ipv4[NF_INET_NUMHOOKS];     // array of 5 pointers: PRE_ROUTING … POST_ROUTING
+	struct nf_hook_entries __rcu *hooks_ipv6[NF_INET_NUMHOOKS];     // array of 5 pointers, the same hooks for IPv6
+#ifdef CONFIG_NETFILTER_FAMILY_ARP
+	struct nf_hook_entries __rcu *hooks_arp[NF_ARP_NUMHOOKS];       // 3: NF_ARP_IN, NF_ARP_OUT, NF_ARP_FORWARD
+#endif
+#ifdef CONFIG_NETFILTER_FAMILY_BRIDGE
+	struct nf_hook_entries __rcu *hooks_bridge[NF_INET_NUMHOOKS];   // 5: the bridge's own PRE_ROUTING … POST_ROUTING
+#endif
+#if IS_ENABLED(CONFIG_NF_DEFRAG_IPV4)
+	unsigned int defrag_ipv4_users;                                 // how many users need IPv4 defrag (conntrack, …)
+#endif
+#if IS_ENABLED(CONFIG_NF_DEFRAG_IPV6)
+	unsigned int defrag_ipv6_users;
+#endif
+};
+```
+
+The `#if` lines mean some fields only exist when the kernel is built with that
+feature. The `netdev` family's `ingress` and `egress` hooks aren't here: they're
+per network device, so their lists hang off each `struct net_device`.
+
+It's embedded in each namespace as `struct net { … struct netns_nf nf; … }`
+(`include/net/net_namespace.h:147`). That's why the code reads
+`net->nf.hooks_ipv4[hook]`, and why every namespace has its own hook lists.
+
+The array size and each hook's index come from an enum
+(`include/uapi/linux/netfilter.h`):
+
+```c
+enum nf_inet_hooks {
+	NF_INET_PRE_ROUTING,    // 0 → hooks_ipv4[0]
+	NF_INET_LOCAL_IN,       // 1 → hooks_ipv4[1]
+	NF_INET_FORWARD,        // 2
+	NF_INET_LOCAL_OUT,      // 3
+	NF_INET_POST_ROUTING,   // 4
+	NF_INET_NUMHOOKS,       // 5 = the array size
+	NF_INET_INGRESS = NF_INET_NUMHOOKS,   // the inet family's ingress hook: not one of the 5 slots
+};
+```
+
+Each slot is a pointer, `NULL` until something registers on that hook. When
+something does, it points to a separately allocated `struct nf_hook_entries`
+(below). The pointer is swapped in one step, `rcu_assign_pointer`, whenever the
+list changes. `__rcu` marks it as a pointer that must be read with
+`rcu_dereference()` and written with `rcu_assign_pointer()`.
+
+Each slot points at a list of entries, and each entry is two fields
+(`include/linux/netfilter.h`):
+
+```c
+struct nf_hook_entries {
+	u16				num_hook_entries;
+	struct nf_hook_entry		hooks[];     // the entries, already sorted; a "flexible array":
+						     // its length is set when the block is allocated
+	/* trailer: orig_ops[] pointers, then an rcu_head */
+};
+
+struct nf_hook_entry {
+	nf_hookfn			*hook;       // function to call
+	void				*priv;       // pointer passed to it
+};
+```
+
+All of it together, for one namespace with `raw` and `mangle` loaded and nothing
+on FORWARD:
+
+```text
+struct net
+└─ nf  (struct netns_nf)
+   ├─ hooks_ipv4[0] ──► ┌─ nf_hook_entries ─────────────────────────────┐   PRE_ROUTING
+   │                    │ num_hook_entries = 2                          │
+   │                    │ hooks[0] { ipt_do_table,        &raw    }     │   -300 runs first
+   │                    │ hooks[1] { iptable_mangle_hook, &mangle }     │   -150
+   │                    │ orig_ops[0], orig_ops[1]   (the trailer)      │
+   │                    │ rcu_head                                      │
+   │                    └───────────────────────────────────────────────┘
+   ├─ hooks_ipv4[1] ──► ┌─ nf_hook_entries … ┐                               LOCAL_IN
+   ├─ hooks_ipv4[2] ──► NULL                                                 FORWARD (nothing registered)
+   ├─ hooks_ipv4[3] ──► ┌─ nf_hook_entries … ┐                               LOCAL_OUT
+   ├─ hooks_ipv4[4] ──► ┌─ nf_hook_entries … ┐                               POST_ROUTING
+   └─ hooks_ipv6[0..4] ──► the same, for IPv6
+```
+
+- **`hooks[]` is what packets read.** `nf_hook_slow` walks it from 0 upward,
+  so array order is run order.
+- **The trailer is only for registering and unregistering.** `orig_ops[i]`
+  points at the `nf_hook_ops` that created `hooks[i]`, which still holds its
+  priority. `nf_hook_entries_grow` reads it to decide where a new entry goes.
+- **Each block is allocated in one piece.** Count, entries and trailer sit
+  together, sized for exactly `num_hook_entries`. Adding an entry means a new,
+  larger block, swapped into the slot. The old one is freed through its
+  `rcu_head` once no packet still uses it.
+
+**The real PREROUTING and POSTROUTING blocks** on a typical node: iptables-legacy
+with `raw`, `mangle`, `nat` and `filter` loaded, so conntrack and the NAT core are
+active too. Every name is from the kernel source; `filter` doesn't appear because
+it has no PREROUTING or POSTROUTING chain:
+
+```text
+net->nf.hooks_ipv4[0]   (NF_INET_PRE_ROUTING)
+  │
+  ┌─ struct nf_hook_entries ────────────────────────────────────────────────────────────────────────┐
+  │ num_hook_entries = 5                                                                            │
+  │                                                                                                 │
+  │ hooks[0] { .hook = ipv4_conntrack_defrag,   .priv = NULL    }  -400 NF_IP_PRI_CONNTRACK_DEFRAG  │
+  │ hooks[1] { .hook = ipt_do_table,            .priv = &raw    }  -300 NF_IP_PRI_RAW               │
+  │ hooks[2] { .hook = ipv4_conntrack_in,       .priv = NULL    }  -200 NF_IP_PRI_CONNTRACK         │
+  │ hooks[3] { .hook = iptable_mangle_hook,     .priv = &mangle }  -150 NF_IP_PRI_MANGLE            │
+  │ hooks[4] { .hook = nf_nat_ipv4_pre_routing, .priv = lpriv   }  -100 NF_IP_PRI_NAT_DST           │
+  │                                                                                                 │
+  │ trailer:                                                                                        │
+  │ orig_ops[0] ─► &ipv4_defrag_ops[0]     static, nf_defrag_ipv4.c                                 │
+  │ orig_ops[1] ─► &raw->ops[0]            copy made by ipt_register_table                          │
+  │ orig_ops[2] ─► &ipv4_conntrack_ops[0]  static, nf_conntrack_proto.c                             │
+  │ orig_ops[3] ─► &mangle->ops[0]         copy made by ipt_register_table                          │
+  │ orig_ops[4] ─► &nat_hook_ops[0]        the NAT core's copy (nf_nat_proto.c)                     │
+  │ rcu_head                                                                                        │
+  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+   │ hooks[4].priv = lpriv
+   ▼
+  ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ───────────────────────────────────────┐
+  │ .entries ─► struct nf_hook_entries                                                              │
+  │   num_hook_entries = 1                                                                          │
+  │   hooks[0] { .hook = ipt_do_table, .priv = &nat }  -100 NF_IP_PRI_NAT_DST                       │
+  │   trailer: orig_ops[0] ─► iptable_nat's ops[0]  (PREROUTING)                                    │
+  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+net->nf.hooks_ipv4[4]   (NF_INET_POST_ROUTING)
+  │
+  ┌─ struct nf_hook_entries ────────────────────────────────────────────────────────────────────────┐
+  │ num_hook_entries = 3                                                                            │
+  │                                                                                                 │
+  │ hooks[0] { .hook = iptable_mangle_hook,     .priv = &mangle }  -150 NF_IP_PRI_MANGLE            │
+  │ hooks[1] { .hook = nf_nat_ipv4_out,         .priv = lpriv   }   100 NF_IP_PRI_NAT_SRC           │
+  │ hooks[2] { .hook = nf_confirm,              .priv = NULL    }   max NF_IP_PRI_CONNTRACK_CONFIRM │
+  │                                                                                                 │
+  │ trailer:                                                                                        │
+  │ orig_ops[0] ─► &mangle->ops[4]         mangle's 5th op = POSTROUTING                            │
+  │ orig_ops[1] ─► &nat_hook_ops[1]        the NAT core's POSTROUTING op                            │
+  │ orig_ops[2] ─► &ipv4_conntrack_ops[2]  static, nf_conntrack_proto.c                             │
+  │ rcu_head                                                                                        │
+  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+   │ hooks[1].priv = lpriv
+   ▼
+  ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ───────────────────────────────────────┐
+  │ .entries ─► struct nf_hook_entries                                                              │
+  │   num_hook_entries = 1                                                                          │
+  │   hooks[0] { .hook = ipt_do_table, .priv = &nat }   100 NF_IP_PRI_NAT_SRC                       │
+  │   trailer: orig_ops[0] ─► iptable_nat's ops[1]  (POSTROUTING)                                   │
+  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **`orig_ops[i]` points at the `nf_hook_ops` that created `hooks[i]`.** Some
+  are static arrays in the kernel (`ipv4_defrag_ops`, `ipv4_conntrack_ops`).
+  Others are per-namespace copies: `ipt_register_table` copies a table's ops
+  and sets `.priv`, and keeps them as `new_table->ops`. Each table's ops are in
+  hook-number order, so `mangle->ops[0]` is PREROUTING and `mangle->ops[4]` is
+  POSTROUTING. `raw` has only PREROUTING and OUTPUT, so `raw->ops[0]` is
+  PREROUTING.
+- **`lpriv` is the NAT core's, one per NAT hook.** `nf_nat_register_fn`
+  allocates a `struct nf_nat_lookup_hook_priv` for each and registers the NAT
+  core on the hook. `iptable_nat`'s ops then go into `lpriv->entries`, an
+  `nf_hook_entries` of their own. An nftables `type nat` chain would join the
+  same inner list.
+- **POSTROUTING holds `nf_confirm` last** (`INT_MAX`): the conntrack entry
+  is written only once the packet has passed everything else.
+
+Two common variations:
+
+- **With `br_netfilter` loaded** (most CNIs need it), PREROUTING gains
+  `{ .hook = ip_sabotage_in, .priv = NULL }` at `NF_IP_PRI_FIRST` (`INT_MIN`).
+  It becomes `hooks[0]` and everything moves down one.
+- **With iptables-nft** (the default on current distributions), each built-in
+  chain is an nftables base chain, so the table entries become
+  `{ .hook = nft_do_chain_ipv4, .priv = &chain }`, with the same priorities.
+  For example, `hooks[1]` is `{ nft_do_chain_ipv4, &PREROUTING chain of table ip raw }`.
+  The nat chains become `{ nft_nat_do_chain, &chain }` inside `lpriv->entries`.
+  Defrag, conntrack, the NAT core and `nf_confirm` are the same either way.
+
+Every hook function has the same signature (`include/linux/netfilter.h`):
+
+```c
+typedef unsigned int nf_hookfn(void *priv,                         // ← the pointer from the hook entry
+                               struct sk_buff *skb,                // the packet
+                               const struct nf_hook_state *state); // which hook, in/out device, namespace, …
+```
+
+It's `void *priv` rather than a table type because the hook is generic. The same
+slot holds entries for things that aren't tables:
+
+- conntrack passes `NULL`;
+- the NAT core passes its own lookup structure;
+- nftables passes a base chain (`ops->priv = chain` in `nf_tables_api.c`).
+
+Each function knows what its own `priv` points to and casts it
+(`const struct xt_table *table = priv;` in `ipt_do_table`).
+
+So the hook entry decides **which table**, through `priv`. The hook being run
+decides **which of that table's built-in chains**, through `state->hook`:
+`ipt_do_table` starts at `hook_entry[state->hook]` in the table's rules.
+
+**In short: each hook point has its own list of callbacks, run in priority
+order.**
+
+```text
+hooks_ipv4[PRE_ROUTING] → [ defrag ][ raw ][ conntrack ][ mangle ][ NAT core ]
+hooks_ipv4[LOCAL_IN]    → [ mangle ][ filter ][ security ][ NAT core ][ confirm ]
+hooks_ipv4[FORWARD]     → [ mangle ][ filter ][ security ]
+hooks_ipv4[LOCAL_OUT]   → [ defrag ][ raw ][ conntrack ][ mangle ][ NAT core ][ filter ][ security ]
+hooks_ipv4[POST_ROUTING]→ [ mangle ][ NAT core ][ confirm ]
+```
+
+Some of these callbacks act on tables. Those are the iptables ones:
+`{ipt_do_table, &raw}`, `{iptable_mangle_hook, &mangle}` and so on. Each runs one
+chain of its table, the chain for the point it's called from. The others act on
+an nftables chain, on their own data, or on nothing (below). The hook list
+doesn't care which: it calls them one by one and checks each verdict.
+
+**A callback is not always a table.** Each one is a pair, a **function to run**
+and **the data to run it on**:
+
+```c
+struct nf_hook_entry {
+	nf_hookfn *hook;    // WHAT to run
+	void      *priv;    // what to run it ON (may be a table, a chain, other data, or nothing)
+};
+```
+
+For iptables tables, the function is the generic rule engine and `priv` is the
+table, so that kind of callback means "run this table's rules":
+
+```text
+{ ipt_do_table,        &raw }      "run the raw table's chain for this point"
+{ iptable_mangle_hook, &mangle }   "run the mangle table's chain (and reroute on OUTPUT)"
+```
+
+Many callbacks aren't tables at all:
+
+| Callback | `.hook` | `.priv` | What it does |
+|---|---|---|---|
+| a table (iptables) | `ipt_do_table`, `iptable_mangle_hook` | the **table** | runs that table's chain for this point |
+| a base chain (nftables, iptables-nft) | `nft_do_chain_ipv4` | the **chain** | runs that chain's rules |
+| defrag | `ipv4_conntrack_defrag` | `NULL` | reassembles fragments |
+| conntrack | `ipv4_conntrack_in`, `nf_confirm` | `NULL` | finds or creates the connection, then saves it |
+| NAT core | `nf_nat_ipv4_pre_routing`, `nf_nat_ipv4_out` | its own lookup struct (`lpriv`) | runs the nat rules on a connection's first packet, then applies the saved translation |
+| br_netfilter | `ip_sabotage_in` | `NULL` | stops bridged packets being processed twice |
+| a BPF program | the BPF runner | the program | runs your eBPF code |
+
+`priv` is `NULL` when the function needs no extra data.
+
+So a hook point holds a list of things to run in order, and **a table is just
+one kind of thing**. The hook doesn't know or care whether it's calling a table,
+a chain, conntrack or a BPF program. It only calls `hook(priv, packet, state)`
+and reads the verdict. That's why `priv` is `void *`: it can point to anything.
+
+**Nothing switches on `priv`.** The function pointer already decides what `priv`
+is, because whoever registered the callback set both fields together. The whole
+dispatch is one indirect call (`include/linux/netfilter.h`):
+
+```c
+static inline int
+nf_hook_entry_hookfn(const struct nf_hook_entry *entry, struct sk_buff *skb,
+		     struct nf_hook_state *state)
+{
+	return entry->hook(entry->priv, skb, state);   // call the function, hand it its own priv
+}
+```
+
+Calling `entry->hook` jumps to whichever function was registered, and `priv` is
+passed through unopened. Each function was written for one kind of `priv`, and
+casts it:
+
+```c
+// ip_tables.c: registered with priv = a table
+unsigned int ipt_do_table(void *priv, …)
+	const struct xt_table *table = priv;                    // "my priv is always a table"
+
+// nft_chain_filter.c: registered with priv = a base chain
+static unsigned int nft_do_chain_ipv4(void *priv, …)
+	return nft_do_chain(&pkt, priv);                         // "my priv is always a chain"
+
+// nf_nat_core.c: registered with priv = the NAT core's lookup struct
+	struct nf_nat_lookup_hook_priv *lpriv = priv;            // "my priv is always lpriv"
+
+// nf_conntrack_proto.c: registered with priv = NULL
+static unsigned int ipv4_conntrack_in(void *priv, …)
+	return nf_conntrack_in(skb, state);                      // "I don't use priv at all"
+```
+
+- **The pairing is fixed at registration.** `ipt_register_table` sets each op's
+  `.hook` and `.priv = new_table` together, so an `ipt_do_table` entry can only
+  ever carry a table. It's the C version of a method bound to its object (or a
+  closure): `table.run(packet)` written as `{ipt_do_table, &table}`.
+- **"Where" comes from `state`, not `priv`.** The networking code fills in
+  `state->hook` when it enters a hook, e.g. `NF_HOOK(NFPROTO_IPV4,
+  NF_INET_PRE_ROUTING, …)` in `ip_rcv`. That's how mangle's 5 identical entries,
+  `{iptable_mangle_hook, &mangle}`, each run the right chain:
+  `private->hook_entry[state->hook]`.
+- **`hook_ops_type` isn't a dispatch tag.** `struct nf_hook_ops` has one
+  (`NF_HOOK_OP_UNDEFINED`, `NF_HOOK_OP_NF_TABLES`, `NF_HOOK_OP_BPF`, …), but it's on
+  the registration, not on the per-packet entry. It's only used when
+  registering (BPF priorities must be unique) and listing hooks.
+
+| Question | Answered by | Set when |
+|---|---|---|
+| **Which** callbacks run at this point, in what order? | the slot `hooks_ipv4[h]` and its sorted `hooks[]` | registration |
+| **What** code runs? | `entry->hook`, an indirect function call | registration |
+| **On what** object? | `entry->priv`, which only that function interprets | registration, together with `hook` |
+| **Where** is it being called from? | `state->hook` (and `state->in`, `state->out`) | for each packet, by the caller |
+
+**iptables reaches a chain through its table; nftables attaches the chain
+directly.** An iptables callback isn't "the table" either: it's "run this
+table's chain for this point", which is always exactly one built-in chain. The
+table pointer and the calling point together pick it:
+
+```text
+iptables:   { iptable_mangle_hook, &mangle }        + state->hook  → mangle.hook_entry[PRE] → the PREROUTING chain
+nftables:   { nft_do_chain_ipv4,   &chain "pre" }                  → the chain itself
+```
+
+So both systems end up with one callback per chain attached to a hook; only the
+addressing differs:
+
+| | iptables | nftables |
+|---|---|---|
+| What is attached to a hook | a built-in chain | a base chain |
+| What `priv` points at | the **table** (the chain is found inside it) | the **chain** directly |
+| How the chain is found | `hook_entry[state->hook]`, the table's index | no lookup needed |
+| Priority comes from | the table, one number for all its chains (except nat) | each chain |
+| Registered | **all of a table's built-in chains at once**, when the table is created in a namespace (`nf_register_net_hooks(net, ops, num_ops)`), and removed together | **one chain at a time**, when it's created or deleted |
+| Table's role | container **and** what registers | container only |
+
+- **Why iptables registers through the table:** its chains are fixed and share
+  the table's priority, and all of a table's rules live in one block. Replacing
+  rules swaps `table->private`. The callbacks hold `&table`, not a pointer into
+  the block, so they never need updating.
+- **Empty iptables chains still cost a call.** Once mangle exists in a
+  namespace, every packet at all five points calls `iptable_mangle_hook`, even
+  with all its chains empty (`iptables -F` doesn't unhook them). An nftables
+  table only adds callbacks at the hooks its base chains use.
+- **iptables-nft shows it's the same thing.** `iptables -t mangle` becomes an nft
+  table `ip mangle` with a base chain `PREROUTING` at −150, so the callback
+  becomes `{ nft_do_chain_ipv4, &PREROUTING chain }`. The rules and order stay
+  the same, and only the pointer moves from the table to the chain.
+
+**How the right chain is picked when the whole table is passed.** The callback
+always receives two things together: the table (in `priv`) and the hook number
+(in `state->hook`). The table holds an index from hook number to chain. So the
+hook number is a key, and the table looks it up.
+
+*Step 1: the caller writes the hook number into `state`.* When the networking
+code enters a hook point, `NF_HOOK` fills a `struct nf_hook_state`
+(`include/linux/netfilter.h`), which is passed to every callback:
+
+```c
+struct nf_hook_state {
+	u8 hook;                    // ← which point: 0 = PREROUTING, 1 = INPUT, …
+	u8 pf;                      // family (IPv4)
+	struct net_device *in;      // incoming interface
+	struct net_device *out;     // outgoing interface (once routed)
+	struct sock *sk;
+	struct net *net;
+	int (*okfn)(…);             // what runs after the hook if the packet is accepted
+};
+
+// ip_rcv():  NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING, net, NULL, skb, dev, NULL, ip_rcv_finish)
+//   → nf_hook_state_init(&state, NF_INET_PRE_ROUTING, …)   →   state.hook = 0
+```
+
+*Step 2: the callback gets both the table and the number.*
+
+```c
+verdict = entry->hook(entry->priv, skb, state);
+//        iptable_mangle_hook(&mangle, skb, state)   with state->hook = 0
+```
+
+*Step 3: the table's index picks the chain.* `ipt_do_table`
+(`net/ipv4/netfilter/ip_tables.c`):
+
+```c
+const struct xt_table *table = priv;                    // the mangle table
+unsigned int hook = state->hook;                        // 0 (PREROUTING)
+…
+private    = READ_ONCE(table->private);                 // mangle's rules block + its index
+table_base = private->entries;                          // all of mangle's rules, one block
+e = get_entry(table_base, private->hook_entry[hook]);   // index[0] → start of the PREROUTING chain
+```
+
+`hook_entry[]` is a small array in the table, also indexed by hook number. Its
+values are **byte offsets** into the rules block: where each built-in chain's
+first rule is. `underflow[]` is the same for each chain's policy rule. Real
+values, read from the kernel with `IPT_SO_GET_INFO` (the request `iptables`
+itself makes) for mangle with one PREROUTING rule (lab, `iptables-legacy` in a
+throwaway Alpine container):
+
+```text
+mangle.private                                    (7 entries, 1136 bytes)
+  hook_entry[0] =   0   underflow[0] = 200   PREROUTING   ← state->hook = 0 lands here
+  hook_entry[1] = 352   underflow[1] = 352   INPUT
+  hook_entry[2] = 504   underflow[2] = 504   FORWARD
+  hook_entry[3] = 656   underflow[3] = 656   OUTPUT
+  hook_entry[4] = 808   underflow[4] = 808   POSTROUTING
+
+  entries[]:   byte 0     [PREROUTING: -p tcp --dport 22 -j MARK]   200 bytes   ← hook_entry[0]
+               byte 200   [PREROUTING policy ACCEPT]                152 bytes   ← underflow[0]
+               byte 352   [INPUT policy ACCEPT]                                 ← hook_entry[1] = underflow[1]
+               byte 504   [FORWARD policy ACCEPT]
+               byte 656   [OUTPUT policy ACCEPT]
+               byte 808   [POSTROUTING policy ACCEPT]
+               byte 960   [ERROR: end of table]                     176 bytes
+```
+
+**Two different zeros in `hook_entry[0] = 0`.** The index 0 is the hook number
+(`NF_INET_PRE_ROUTING`). The value 0 is a byte offset: chains are laid out in
+hook-number order (`ipt_alloc_initial_table`), and mangle's first chain is
+PREROUTING, so it starts at byte 0. In a table without PREROUTING, another
+chain gets offset 0.
+
+Mangle uses hook 0, so PREROUTING is laid out first and starts at byte 0. Each
+empty chain is just its policy rule, 152 bytes long, so the next chain starts
+152 bytes later. Empty tables from the same lab: 5 (or 3) policy rules, then the
+end marker:
+
+```text
+table mangle: 6 entries, 936 bytes
+  hook 0 PREROUTING   hook_entry[0] =    0   underflow[0] =    0
+  hook 1 INPUT        hook_entry[1] =  152   underflow[1] =  152
+  hook 2 FORWARD      hook_entry[2] =  304   underflow[2] =  304
+  hook 3 OUTPUT       hook_entry[3] =  456   underflow[3] =  456
+  hook 4 POSTROUTING  hook_entry[4] =  608   underflow[4] =  608
+
+table filter: 4 entries, 632 bytes
+  hook 1 INPUT        hook_entry[1] =    0   underflow[1] =    0    ← INPUT is first, so IT is at offset 0
+  hook 2 FORWARD      hook_entry[2] =  152   underflow[2] =  152
+  hook 3 OUTPUT       hook_entry[3] =  304   underflow[3] =  304
+```
+
+Comparing empty mangle with the one-rule mangle above: PREROUTING still starts
+at 0, but its policy (`underflow[0]`) moved from 0 to 200, and every later chain
+shifted by 200.
+
+- **An empty chain is just its policy rule**, 152 bytes on 64-bit
+  (`sizeof(struct ipt_standard)`), so `hook_entry[h] = underflow[h]` and each
+  chain starts 152 bytes after the previous one.
+- **Adding a rule shifts everything after it.** One 200-byte rule in PREROUTING
+  moved PREROUTING's policy to byte 200 and every later chain by 200. That's why
+  the kernel recomputes the index (`translate_table`) whenever the rules block is
+  replaced.
+- **Filter's `hook_entry[0]` is never read.** Filter has no PREROUTING callback,
+  so no call ever arrives with `state->hook = 0`.
+
+From there `ipt_do_table` runs rules until a verdict: `ACCEPT` or `DROP` ends
+this table, `-j CHAIN` jumps to that chain's offset in the same block, and no
+match falls through to the chain's policy rule (at `underflow[hook]`). It never
+runs into another chain's rules, because each chain ends with its policy.
+
+The same packet, forwarded, later reaches FORWARD. The callback is identical,
+but the key isn't:
+
+```text
+ip_forward(): NF_HOOK(…, NF_INET_FORWARD, …)  → state->hook = 2
+iptable_mangle_hook(&mangle, skb, state) → ipt_do_table → hook_entry[2] = 504 → mangle's FORWARD chain
+```
+
+| The callback gets | From | Answers |
+|---|---|---|
+| `priv` = `&mangle` | the hook entry, fixed at registration | **which table** |
+| `state->hook` = 0 | `NF_HOOK(…)` in the networking code, set for each packet | **which point** |
+| `hook_entry[state->hook]` | the table's own index | **which chain**, and where it starts |
+
+**The PREROUTING slot, with the names used in the code.** `priv` belongs to
+each entry, not to the hook. `nf_hook_slow` passes each entry's own `priv` to
+its own function:
+
+```c
+verdict = nf_hook_entry_hookfn(&e->hooks[s], skb, state);
+```
+
+The diagram below uses C's designated-initializer notation, which is how the
+kernel source fills these structs:
+
+```c
+static const struct nf_hook_ops ipv4_conntrack_ops[] = {   // nf_conntrack_proto.c
+	{
+		.hook		= ipv4_conntrack_in,
+		.pf		= NFPROTO_IPV4,
+		.hooknum	= NF_INET_PRE_ROUTING,
+		.priority	= NF_IP_PRI_CONNTRACK,
+	},
+```
+
+`.hook = ipv4_conntrack_in` means "the field `hook` of this struct holds
+`ipv4_conntrack_in`". The diagram uses the same notation, so each entry reads as
+the struct it is: `hooks[2] = { .hook = ipv4_conntrack_in, .priv = NULL }`. Note
+the two names: `.hooknum` is the hook **point** (`NF_INET_PRE_ROUTING`), and
+`.hook` is the hook **function** called there.
+
+```text
+net->nf.hooks_ipv4[NF_INET_PRE_ROUTING]  →  struct nf_hook_entries
+  num_hook_entries = 5
+  hooks[0] = { .hook = ipv4_conntrack_defrag,    .priv = NULL      }   NF_IP_PRI_CONNTRACK_DEFRAG  (-400)   nf_defrag_ipv4.c: ipv4_defrag_ops[]
+  hooks[1] = { .hook = ipt_do_table,             .priv = new_table }   NF_IP_PRI_RAW               (-300)   iptable_raw.c: packet_raw
+  hooks[2] = { .hook = ipv4_conntrack_in,        .priv = NULL      }   NF_IP_PRI_CONNTRACK         (-200)   nf_conntrack_proto.c: ipv4_conntrack_ops[]
+  hooks[3] = { .hook = iptable_mangle_hook,      .priv = new_table }   NF_IP_PRI_MANGLE            (-150)   iptable_mangle.c: packet_mangler
+  hooks[4] = { .hook = nf_nat_ipv4_pre_routing,  .priv = priv      }   NF_IP_PRI_NAT_DST           (-100)   nf_nat_proto.c: nf_nat_ipv4_ops[]
+                                                          │
+          struct nf_nat_lookup_hook_priv ◄────────────────┘          nf_nat_core.c: nat_ops[i].priv = priv
+            .entries  →  struct nf_hook_entries
+                           hooks[0] = { .hook = ipt_do_table,  .priv = table }   NF_IP_PRI_NAT_DST   iptable_nat.c: nf_nat_ipv4_ops[], ops[i].priv = table
+```
+
+Each entry stores only the two fields inside `{ }`, `.hook` and `.priv`. The
+columns to the right are annotations, added to explain where each entry comes
+from:
+
+```text
+hooks[2] = { .hook = ipv4_conntrack_in, .priv = NULL }   NF_IP_PRI_CONNTRACK (-200)   nf_conntrack_proto.c: ipv4_conntrack_ops[]
+           └──────────── stored in the entry ─────────┘   └──────────────────── explanation only ─────────────────────────┘
+```
+
+The priority was used to sort the list when the entry was registered, so at
+packet time it shows only as the entry's position (`hooks[2]`).
+
+Where each `.priv` value is set:
+
+| `.priv` | Set in | What it is |
+|---|---|---|
+| `new_table` | `ip_tables.c`, `ipt_register_table`: `ops[i].priv = new_table;` | the namespace's copy of the table template (`packet_raw`, `packet_mangler`), a `struct xt_table *` |
+| `NULL` | defrag and conntrack ops set no `.priv` | nothing needed |
+| `priv` | `nf_nat_core.c`, `nf_nat_register_fn`: `nat_ops[i].priv = priv;` | a `struct nf_nat_lookup_hook_priv *`, holding `.entries` |
+| `table` | `iptable_nat.c`: `ops[i].priv = table;` | the nat table, a `struct xt_table *` |
+
+Notes on the names:
+
+- **`raw` has no wrapper:** it registers `ipt_do_table` directly
+  (`iptable_raw.c`). `mangle` uses `iptable_mangle_hook`, which calls
+  `ipt_do_table` and also reroutes a packet when mangle rules change it in
+  `LOCAL_OUT`.
+- **Two arrays share the name `nf_nat_ipv4_ops[]`.** The NAT core's (in
+  `nf_nat_proto.c`, `.hook = nf_nat_ipv4_pre_routing`) sits in the hook. The
+  nat table's (in `iptable_nat.c`, `.hook = ipt_do_table`) sits in the NAT
+  core's `.entries` and runs only for a connection's first packet.
+- **5 is this example's count.** Defrag and conntrack appear once connection
+  tracking is in use. Each nftables base chain on prerouting adds an entry. A
+  table whose module isn't loaded adds none. Each network namespace has its own
+  list.
+
+**Every hook has the entries its jobs need.** With conntrack, NAT and all five
+iptables tables loaded:
+
+| Hook | Entries | Count |
+|---|---|---|
+| PREROUTING | defrag, raw, conntrack, mangle, NAT (DNAT) | 5 |
+| INPUT | mangle, filter, security, NAT (SNAT), conntrack confirm | 5 |
+| FORWARD | mangle, filter, security | 3 |
+| OUTPUT | defrag, raw, conntrack, mangle, NAT (DNAT), filter, security | 7 |
+| POSTROUTING | mangle, NAT (SNAT), conntrack confirm | 3 |
+
+- **PREROUTING has these 5** because each job must see the packet before the
+  routing decision. DNAT must change the destination before routing, so the
+  packet is routed to the new address. `mangle` marks must be set before
+  routing, so `ip rule fwmark` can use them. `filter` and `security` aren't
+  here: they run after routing, at INPUT or FORWARD.
+- **OUTPUT has the most entries.** Locally created packets need everything
+  PREROUTING does: defrag (`ipv4_defrag_ops[]` registers on `NF_INET_LOCAL_OUT`
+  too), raw, conntrack and DNAT. They also need filtering, because there's no
+  INPUT or FORWARD step for them.
+- **FORWARD and POSTROUTING have only 3 entries.** By then the connection is
+  already tracked and the destination already translated.
+
+**Every hook, entry by entry, with all five iptables tables loaded.** Each
+entry is `{ .hook, .priv }`, in priority order. A table with *n* valid hooks has
+*n* entries, all with the same `.priv`. **[NAT]** marks the NAT core's entry,
+whose own list holds the `nat` table's entry (from the kernel source:
+`iptable_*.c`, `nf_conntrack_proto.c`, `nf_defrag_ipv4.c`, `nf_nat_proto.c`):
+
+```text
+hooks_ipv4[PRE_ROUTING]
+   -400  { ipv4_conntrack_defrag,   NULL }
+   -300  { ipt_do_table,            &raw }
+   -200  { ipv4_conntrack_in,       NULL }
+   -150  { iptable_mangle_hook,     &mangle }
+   -100  { nf_nat_ipv4_pre_routing, priv } [NAT] → { ipt_do_table, &nat }
+
+hooks_ipv4[LOCAL_IN]
+   -150  { iptable_mangle_hook,     &mangle }
+      0  { ipt_do_table,            &filter }
+     50  { ipt_do_table,            &security }
+    100  { nf_nat_ipv4_local_in,    priv } [NAT] → { ipt_do_table, &nat }
+    max  { nf_confirm,              NULL }
+
+hooks_ipv4[FORWARD]
+   -150  { iptable_mangle_hook,     &mangle }
+      0  { ipt_do_table,            &filter }
+     50  { ipt_do_table,            &security }
+
+hooks_ipv4[LOCAL_OUT]
+   -400  { ipv4_conntrack_defrag,   NULL }
+   -300  { ipt_do_table,            &raw }
+   -200  { ipv4_conntrack_local,    NULL }
+   -150  { iptable_mangle_hook,     &mangle }        ← reroutes on change
+   -100  { nf_nat_ipv4_local_fn,    priv } [NAT] → { ipt_do_table, &nat }
+      0  { ipt_do_table,            &filter }
+     50  { ipt_do_table,            &security }
+
+hooks_ipv4[POST_ROUTING]
+   -150  { iptable_mangle_hook,     &mangle }
+    100  { nf_nat_ipv4_out,         priv } [NAT] → { ipt_do_table, &nat }
+    max  { nf_confirm,              NULL }
+```
+
+- **Only `mangle` has its own function.** `raw`, `filter`, `security` and `nat`
+  register `ipt_do_table` directly. `iptable_mangle_hook` calls `ipt_do_table`
+  too, but on `LOCAL_OUT` it saves the mark, addresses and TOS first, and calls
+  `ip_route_me_harder` if a rule changed any of them. Locally created packets
+  are routed before OUTPUT, so this reroute is what lets a mark set there
+  change the route.
+- **`max` is `NF_IP_PRI_CONNTRACK_CONFIRM` (`INT_MAX`).** `nf_confirm` writes
+  the conntrack entry into the table after every other entry has accepted the
+  packet.
+- **`nat` has no priority of its own.** Its template (`nf_nat_ipv4_table`) has
+  none. Each of its ops carries one: −100 (`NF_IP_PRI_NAT_DST`) on PREROUTING
+  and OUTPUT, +100 (`NF_IP_PRI_NAT_SRC`) on INPUT and POSTROUTING.
+
+**Each table's rules block: where the built-in chains are.** When a table is
+built (`ipt_alloc_initial_table`), it gets one policy rule per valid hook, in
+hook-number order: PREROUTING 0, INPUT 1, FORWARD 2, OUTPUT 3, POSTROUTING 4.
+`hook_entry[h]` points at each:
+
+```text
+raw       [PREROUTING policy][OUTPUT policy][ERROR]
+mangle    [PREROUTING][INPUT][FORWARD][OUTPUT][POSTROUTING][ERROR]
+nat       [PREROUTING][INPUT][OUTPUT][POSTROUTING][ERROR]
+filter    [INPUT][FORWARD (ACCEPT, or DROP if forward=0)][OUTPUT][ERROR]
+security  [INPUT][FORWARD][OUTPUT][ERROR]
+```
+
+- **`ERROR` marks the end of the table.** Custom chains are added before it,
+  and each custom chain also starts with an `ERROR` entry carrying its name.
+- **Rules go before each built-in chain's policy.** `iptables -A FORWARD …`
+  inserts before FORWARD's policy rule, which stays last, at `underflow[h]`.
+- **filter's FORWARD policy is set in code.** `iptable_filter_table_init`
+  overwrites entry 1 (FORWARD) with DROP when the `forward` module parameter
+  is 0. Then the table is also built as soon as a namespace exists, not at
+  first use.
+- **Adding rules never touches the hook list.** `iptables -A` sends a new
+  block, the kernel checks it (`translate_table`) and swaps `table->private`.
+  The entries above still point at the same table.
+
+**How each table registers its callbacks.** A table's built-in chains are hooked
+in together, when the table is created in a namespace, and removed together.
+When a table is first used, `ipt_register_table`
+(`net/ipv4/netfilter/ip_tables.c`) runs:
+
+```c
+num_ops = hweight32(table->valid_hooks);           // how many hook points this table uses
+ops = kmemdup_array(template_ops, num_ops, …);     // one op per point, from the module's template
+for (i = 0; i < num_ops; i++)
+	ops[i].priv = new_table;                       // all point at this table
+new_table->ops = ops;                              // kept, so they can be unregistered later
+ret = nf_register_net_hooks(net, ops, num_ops);    // ← all of them, in one call
+```
+
+The ops come from `xt_hook_ops_alloc`, which runs once at module load and
+creates them in hook-number order: PREROUTING 0, INPUT 1, FORWARD 2, OUTPUT 3,
+POSTROUTING 4. `nf_register_net_hooks` is a loop over `nf_register_net_hook`,
+one per op, each rebuilding its own point's list. If one fails, the ones
+already added are removed again: all or nothing.
+
+*raw: 2 callbacks*
+
+```c
+// iptable_raw.c
+#define RAW_VALID_HOOKS ((1 << NF_INET_PRE_ROUTING) | (1 << NF_INET_LOCAL_OUT))
+rawtable_ops = xt_hook_ops_alloc(table, ipt_do_table);            // at module load
+ret = ipt_register_table(net, table, repl, rawtable_ops);         // at first use
+                                       // → nf_register_net_hooks(net, ops, 2)
+```
+
+```text
+ops[0] { ipt_do_table, &raw, hooknum 0 PRE_ROUTING, -300 }  → hooks_ipv4[0]
+ops[1] { ipt_do_table, &raw, hooknum 3 LOCAL_OUT,   -300 }  → hooks_ipv4[3]
+```
+
+*mangle: 5 callbacks*
+
+```c
+// iptable_mangle.c
+mangle_ops = xt_hook_ops_alloc(&packet_mangler, iptable_mangle_hook);
+ret = ipt_register_table(net, &packet_mangler, repl, mangle_ops);
+                                       // → nf_register_net_hooks(net, ops, 5)
+```
+
+```text
+ops[0] { iptable_mangle_hook, &mangle, 0 PRE_ROUTING,  -150 } → hooks_ipv4[0]
+ops[1] { iptable_mangle_hook, &mangle, 1 LOCAL_IN,     -150 } → hooks_ipv4[1]
+ops[2] { iptable_mangle_hook, &mangle, 2 FORWARD,      -150 } → hooks_ipv4[2]
+ops[3] { iptable_mangle_hook, &mangle, 3 LOCAL_OUT,    -150 } → hooks_ipv4[3]
+ops[4] { iptable_mangle_hook, &mangle, 4 POST_ROUTING, -150 } → hooks_ipv4[4]
+```
+
+*filter: 3 callbacks*
+
+```c
+// iptable_filter.c
+#define FILTER_VALID_HOOKS ((1 << NF_INET_LOCAL_IN) | (1 << NF_INET_FORWARD) | (1 << NF_INET_LOCAL_OUT))
+filter_ops = xt_hook_ops_alloc(&packet_filter, ipt_do_table);
+err = ipt_register_table(net, &packet_filter, repl, filter_ops);
+                                       // → nf_register_net_hooks(net, ops, 3)
+```
+
+```text
+ops[0] { ipt_do_table, &filter, 1 LOCAL_IN,  0 } → hooks_ipv4[1]
+ops[1] { ipt_do_table, &filter, 2 FORWARD,   0 } → hooks_ipv4[2]
+ops[2] { ipt_do_table, &filter, 3 LOCAL_OUT, 0 } → hooks_ipv4[3]
+```
+
+There's one difference in timing. With the module parameter `forward=0`, filter
+is registered as soon as a namespace is created (`iptable_filter_net_init`), not
+at first use. That way FORWARD's DROP policy is in place from the start.
+
+*security: 3 callbacks*
+
+```c
+// iptable_security.c
+sectbl_ops = xt_hook_ops_alloc(&security_table, ipt_do_table);
+ret = ipt_register_table(net, &security_table, repl, sectbl_ops);
+                                       // → nf_register_net_hooks(net, ops, 3)
+```
+
+```text
+ops[0] { ipt_do_table, &security, 1 LOCAL_IN,  50 } → hooks_ipv4[1]
+ops[1] { ipt_do_table, &security, 2 FORWARD,   50 } → hooks_ipv4[2]
+ops[2] { ipt_do_table, &security, 3 LOCAL_OUT, 50 } → hooks_ipv4[3]
+```
+
+*nat: 4 callbacks, one at a time, through the NAT core*
+
+nat doesn't follow the pattern. Its table is created with **no** ops, so nothing
+is hooked in at that stage. Its 4 ops are then handed to the NAT core one by one
+(`iptable_nat.c`):
+
+```c
+ret = ipt_register_table(net, &nf_nat_ipv4_table, repl, NULL);   // table only: "No template? … return 0"
+ret = ipt_nat_register_lookups(net);
+
+ipt_nat_register_lookups(net):
+	ops = kmemdup(nf_nat_ipv4_ops, …);                // iptable_nat's own 4 ops, each with its own priority
+	for (i = 0; i < 4; i++) {
+		ops[i].priv = table;                          // &nat
+		ret = nf_nat_ipv4_register_fn(net, &ops[i]);  // ← one at a time, to the NAT core
+		if (ret) { … unregister those already done …; return ret; }
+	}
+```
+
+On the **first** of those 4 calls, the NAT core finds it isn't hooked in yet. It
+hooks in its own 4 ops in one call, then files the nat table's op in its inner
+list. The other 3 calls only file ops (`nf_nat_core.c`, `nf_nat_register_fn`):
+
+```c
+if (!nat_proto_net->nat_hook_ops) {                      // NAT core not in this namespace yet?
+	nat_ops = kmemdup_array(orig_nat_ops, ops_count, …); // the NAT core's 4 ops (nf_nat_proto.c)
+	…each gets its own lpriv…
+	ret = nf_register_net_hooks(net, nat_ops, ops_count);   // ← the NAT core: all 4 at once
+}
+priv = nat_ops[hooknum].priv;
+ret = nf_hook_entries_insert_raw(&priv->entries, ops);     // nat table's op → that point's inner list
+```
+
+```text
+hook lists (registered once, by the NAT core):              inner lists (filled by iptable_nat, one by one):
+hooks_ipv4[0] { nf_nat_ipv4_pre_routing, lpriv0 }, -100  →  lpriv0->entries: { ipt_do_table, &nat }, -100
+hooks_ipv4[4] { nf_nat_ipv4_out,         lpriv1 },  100  →  lpriv1->entries: { ipt_do_table, &nat },  100
+hooks_ipv4[3] { nf_nat_ipv4_local_fn,    lpriv2 }, -100  →  lpriv2->entries: { ipt_do_table, &nat }, -100
+hooks_ipv4[1] { nf_nat_ipv4_local_in,    lpriv3 },  100  →  lpriv3->entries: { ipt_do_table, &nat },  100
+```
+
+(The order follows `nf_nat_ipv4_ops[]` in both files: PREROUTING, POSTROUTING,
+OUTPUT, INPUT.) An nftables `type nat` chain registers through the same
+`nf_nat_ipv4_register_fn`, so if one exists first, the NAT core is already
+hooked in and iptables' nat only adds to the inner lists.
+
+*All five side by side*
+
+| Table | Ops | Hook points (slots) | Priority | Call that adds them | Where they go |
+|---|---|---|---|---|---|
+| raw | 2 | 0, 3 | −300 | `nf_register_net_hooks(net, ops, 2)` | hook lists |
+| mangle | 5 | 0, 1, 2, 3, 4 | −150 | `nf_register_net_hooks(net, ops, 5)` | hook lists |
+| filter | 3 | 1, 2, 3 | 0 | `nf_register_net_hooks(net, ops, 3)` | hook lists |
+| security | 3 | 1, 2, 3 | 50 | `nf_register_net_hooks(net, ops, 3)` | hook lists |
+| nat | 4 | 0, 4, 3, 1 | −100 / +100 / −100 / +100 | 4 × `nf_nat_ipv4_register_fn` | the NAT core's inner lists (the NAT core itself: `nf_register_net_hooks(net, nat_ops, 4)`, once) |
+
+**Removal mirrors it.** When the namespace goes, `ipt_unregister_table_pre_exit`
+removes a table's callbacks together,
+`nf_unregister_net_hooks(net, table->ops, hweight32(table->valid_hooks))`, and
+`ipt_nat_unregister_lookups` takes nat's 4 ops out of the NAT core's inner lists.
+The IPv6 tables (`ip6table_*.c`) do all of this again for `hooks_ipv6[]`.
+
+**What happens when a packet hits the hook.** The kernel's loop is
+`nf_hook_slow` in `net/netfilter/core.c` (simplified):
+
+```c
+for (; s < e->num_hook_entries; s++) {
+    verdict = nf_hook_entry_hookfn(&e->hooks[s], skb, state);   // run entry s
+    switch (verdict) {
+    case NF_ACCEPT: break;        // go on to the next entry
+    case NF_DROP:   kfree_skb…;   return …;   // packet freed: later entries never run
+    case NF_QUEUE:  …             // hand it to userspace (e.g. NFQUEUE)
+    case NF_STOLEN: return …;     // the entry took the packet
+    }
+}
+```
+
+So at each hook the packet runs one chain per table, that table's chain for
+this hook, in priority order, until something stops it. At PREROUTING that's
+raw's `PREROUTING`, mangle's `PREROUTING` and nat's `PREROUTING`, not all four
+of nat's chains. Over its whole path a packet meets `nat` at most twice:
+
+| Packet | nat chains it runs | nat chains it never runs |
+|---|---|---|
+| forwarded (e.g. Pod → Pod on another node) | `PREROUTING` → `POSTROUTING` | `INPUT`, `OUTPUT` |
+| arriving for a local process | `PREROUTING` → `INPUT` | `OUTPUT`, `POSTROUTING` |
+| sent by a local process | `OUTPUT` → `POSTROUTING` | `PREROUTING`, `INPUT` |
+
+Even those run only for the connection's first packet. That's why kube-proxy
+jumps to `KUBE-SERVICES` from both nat `PREROUTING` (traffic from Pods and other
+nodes) and nat `OUTPUT` (traffic from the node itself): a packet takes one route
+or the other, never both.
+
+The rules at each entry:
+
+- **`ACCEPT` means "this table is done"**, not "let the packet through". The
+  next entry still runs, as the earlier two-table lab showed.
+- **`DROP` stops everything.** Later tables never see the packet.
+- **Each entry runs only its table's chain for this hook**, and the custom
+  chains that chain jumps to. The `mangle` entry at PREROUTING runs mangle's
+  `PREROUTING` chain, never its `FORWARD` chain.
+
+**What each verdict does to the rest of the list.** `nf_hook_slow` calls
+`hooks[0]`, `hooks[1]`, … and checks each verdict:
+
+- **`NF_ACCEPT`:** go on to the next callback.
+- **`NF_DROP`:** the packet is freed and the remaining callbacks never run. A
+  DROP rule in `raw` stops it before conntrack even sees it.
+- **`NF_STOLEN`:** the callback took the packet, and the loop stops without
+  freeing it. Defrag does this with fragments. While the packet is incomplete,
+  each fragment is held and `NF_STOLEN` returned. When the last one arrives,
+  `ip_defrag` builds the whole packet in that fragment's buffer, defrag returns
+  `NF_ACCEPT`, and the reassembled packet continues to `hooks[1]`
+  (`net/ipv4/netfilter/nf_defrag_ipv4.c`):
+
+  ```c
+  /* Gather fragments. */
+  if (ip_is_fragment(ip_hdr(skb))) {
+  	…
+  	if (nf_ct_ipv4_gather_frags(state->net, skb, user))   // ip_defrag(): not complete yet
+  		return NF_STOLEN;                                  // kept; later callbacks don't run
+  }
+  return NF_ACCEPT;                                          // whole packet: carry on
+  ```
+
+- **`NF_QUEUE`:** the packet is sent to a userspace program (`NFQUEUE`, used by
+  IPS tools such as Suricata). When the program gives a verdict, the packet
+  goes back into the list after the callback that queued it.
+
+So the list is the most that can run for a packet, not what always runs.
+
+**nftables: the same loop, but the entries are base chains rather than tables.**
+
+- Each base chain adds its own entry with its own priority.
+- A table can have entries on many hooks, and none of them has to be at the
+  same priority.
+- The verdicts mean the same thing: `accept` goes on to the next entry and
+  `drop` ends it.
+
+**Can you jump between a table's built-in chains? No** (lab, `iptables-legacy`
+in a throwaway Alpine container). You can jump from them into custom chains in
+the same table, and several built-in chains can share one custom chain if its
+rules make sense at every one of those points. The `nat` table has 4 built-in
+chains:
+
+*1. Built-in chain → built-in chain: refused*
+
+```text
+$ iptables -t nat -A PREROUTING -j OUTPUT
+    iptables: Invalid argument.
+$ iptables -t nat -A OUTPUT -j POSTROUTING
+    iptables: Invalid argument.
+```
+
+Each built-in chain is attached to a hook at a different point in the packet's
+path: `PREROUTING` when a packet arrives, `POSTROUTING` as it leaves, after
+routing. A jump only moves within the rules of the current hook call. A packet
+gets from one hook to the next by travelling through the kernel, not by
+jumping.
+
+*2. Built-in chains → one shared custom chain: allowed*
+
+```text
+$ iptables -t nat -N SVC
+$ iptables -t nat -A SVC -d 10.96.0.10 -p tcp --dport 80 -j DNAT --to-destination 10.244.0.5:8080
+$ iptables -t nat -A PREROUTING -j SVC      ✓  packets arriving from outside
+$ iptables -t nat -A OUTPUT -j SVC          ✓  packets sent by local processes
+```
+
+This is what kube-proxy does: `KUBE-SERVICES` is reached from both `PREROUTING`
+(traffic from Pods and other nodes) and `OUTPUT` (traffic from the node itself).
+
+*3. But only where the chain's rules are valid*
+
+When you add a jump, iptables checks every rule the custom chain can reach
+against the hook it's being jumped from:
+
+```text
+$ iptables -t nat -A POSTROUTING -j SVC     ✗  Invalid argument   ← DNAT isn't allowed at POSTROUTING
+$ iptables -t nat -A POSTROUTING -j MASQ    ✓
+$ iptables -t nat -A PREROUTING -j MASQ     ✗  Invalid argument   ← MASQUERADE isn't allowed at PREROUTING
+```
+
+Each target lists the hooks it allows (`.hooks` in `net/netfilter/xt_nat.c`,
+`xt_REDIRECT.c`, `xt_MASQUERADE.c`):
+
+| Target | Allowed in |
+|---|---|
+| `DNAT` / `REDIRECT` (change the destination) | `PREROUTING`, `OUTPUT`: before the routing decision, so the new destination is routed |
+| `SNAT` (change the source) | `POSTROUTING`, `INPUT`: after the routing decision |
+| `MASQUERADE` (SNAT to the outgoing interface's address) | `POSTROUTING` only: it needs to know the outgoing interface |
+
+*4. Loops: refused*
+
+```text
+$ iptables -t nat -A LOOP -j SVC
+$ iptables -t nat -A SVC -j LOOP
+    iptables: Symbolic link loop.
+```
+
+Final ruleset:
+
+```text
+-A PREROUTING -j SVC          ┐
+-A OUTPUT -j SVC              ┘ one DNAT chain, two entry points
+-A POSTROUTING -j MASQ          one SNAT chain, one entry point
+-A SVC … -j DNAT …
+-A MASQ … -j MASQUERADE
+```
+
+**nftables has no fixed chains.** A table starts empty. You create base chains,
+name them whatever you like, and choose each one's hook, type and priority:
+
+```text
+table inet a {
+  chain anything_i_like {
+    type filter hook input priority 10;   ← this line is what a built-in chain is in iptables
+  }
+}
+```
+
+iptables-nft fakes the fixed chains with ordinary nft base chains named `INPUT`,
+`PREROUTING` and so on. It seems to create one only when you first use it: in
+the lab, adding one rule to `nat OUTPUT` produced a `table ip nat` with only an
+output hook and no `PREROUTING` chain.
+
+In iptables, a table is a fixed set of hook chains with a fixed job, and you can
+only add custom chains. In nftables, a table is just a container, and chains,
+hooks and jobs are all yours to define.
+
+#### Why tables matter: two programs sharing one firewall (lab)
+
+Hooks and chains are enough to process packets. Tables matter when several
+programs manage rules on the same machine. Tested in a throwaway Alpine
+container (`iptables-legacy` and `nft`).
+
+Two programs share one firewall:
+
+- **VPN** blocks 10.66.0.0/16.
+- **WEB** opens port 8080, then restarts and swaps its rules for port 9090.
+
+**iptables: the programs share chains**
+
+**1. Names clash.** VPN created a chain called `ALLOW-LIST`. When WEB tried to
+create its own `ALLOW-LIST`:
+
+```text
+iptables: Chain already exists.
+```
+
+WEB had to choose another name. This is why real tools prefix everything:
+`KUBE-`, `DOCKER-`, `CILIUM_`.
+
+**2. Both programs' entry points are in the same chain.** Each hooks in by adding
+a jump to the built-in `INPUT` chain:
+
+```text
+-A INPUT -j ALLOW-LIST      ← VPN's
+-A INPUT -j WEB-ALLOW       ← WEB's
+```
+
+**3. WEB's cleanup breaks VPN.** WEB restarted and cleared "its" rules with
+`iptables -F INPUT`:
+
+```text
+-N ALLOW-LIST
+-N WEB-ALLOW
+-A ALLOW-LIST -s 10.66.0.0/16 -j DROP              ← VPN's rule still exists…
+-A WEB-ALLOW -p tcp -m tcp --dport 8080 -j ACCEPT
+                                                    …but nothing jumps to it any more
+```
+
+VPN's jump was in the shared `INPUT` chain, so it was flushed too. 10.66.x.x is
+no longer blocked, VPN doesn't know, and nothing reports an error. To clean up
+safely, WEB would have to find and delete exactly its own rules, one by one.
+
+**nftables: each program has its own table**
+
+```text
+table inet vpn { chain input { … ip saddr 10.66.0.0/16 drop } }
+table inet web { chain input { … tcp dport 8080 accept } }
+```
+
+- **No name clash:** both chains are called `input`, one in each table.
+- **No shared entry point:** each table has its own base chain on the input hook.
+
+When WEB restarts, it replaces its whole table in one transaction:
+
+```text
+delete table inet web
+table inet web { chain input { … tcp dport 9090 accept } }
+```
+
+Result: VPN's rule was untouched, and WEB went from 8080 straight to 9090, never
+with a moment of no rules, because the delete and the re-create were committed
+together. On a Kubernetes node, kube-proxy's nftables mode works this way: all
+its rules live in `table ip kube-proxy`.
+
+#### Can't each program just use its own custom chains? (lab)
+
+It can, and Docker does (`DOCKER`, `DOCKER-USER`, `DOCKER-ISOLATION-STAGE-1`,
+…). That isn't enough, because two things are still shared:
+
+1. **The entry points.** A custom chain runs only if a rule in a built-in chain
+   jumps to it, and the built-in chains belong to everyone. Every program has to
+   hook in by adding rules to the same `INPUT`, `FORWARD` or `PREROUTING` chain,
+   so programs' rules always sit side by side.
+2. **The table.** firewalld's reload (with its iptables backend) rewrote whole
+   tables, custom chains included.
+
+**A custom chain runs only if a built-in chain jumps to it.** Docker's setup in
+the lab: its own `DOCKER` chain, plus a jump to it from the built-in
+`PREROUTING`. The `MASQUERADE` rule sits directly in the built-in
+`POSTROUTING`:
+
+```text
+-N DOCKER                                                     ← Docker's own chain
+-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER          ← its entry point, in a built-in chain
+-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE    ← directly in a built-in chain
+-A DOCKER -p tcp -m tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80
+```
+
+When another program deletes only that one jump, the `DOCKER` chain and its DNAT
+rule are still there, but no packet ever reaches them:
+
+```text
+-N DOCKER
+-A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+-A DOCKER -p tcp -m tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80   ← dead
+```
+
+In iptables, the built-in chains (`PREROUTING`, `INPUT`, `FORWARD`, `OUTPUT`,
+`POSTROUTING`) are the only way into a table, one set per table, and every
+program must put its entry jumps there.
+
+**A whole-table reload removes everyone's chains.** firewalld's iptables backend
+rebuilt each table from its own configuration on reload, which is what
+`iptables-restore` without `--noflush` does. A firewalld-style restore of `nat`
+in the lab left only firewalld's rules:
+
+```text
+-N PRE_public
+-A PREROUTING -j PRE_public
+```
+
+Docker's chain, its DNAT rule and its `MASQUERADE` rule were all gone. This is
+what happened for years with **firewalld and Docker**: `firewall-cmd --reload`
+deleted Docker's rules, and containers lost networking until Docker was
+restarted. Neither program was buggy on its own: firewalld treated the tables
+as its own, and Docker had to put its rules in those same tables, because
+iptables has only the fixed ones. (Docker now re-adds its rules when firewalld
+signals a reload over D-Bus; from the docs, not tested.)
+
+**kube-proxy watches for this** (from the kube-proxy and kubelet source, not
+tested). It creates an empty chain, `KUBE-PROXY-CANARY`. If that chain
+disappears, kube-proxy assumes someone flushed iptables and rebuilds all its
+rules. The kubelet keeps a `KUBE-KUBELET-CANARY` chain for the same reason. They
+exist because other programs wiping their rules is expected with iptables.
+
+A custom chain gives you your own list of rules. It doesn't give you your own
+entry point or a part of the table that others won't rewrite. An nftables table
+gives you both: its own base chains on the hooks, and a container that another
+program's `delete table` or reload doesn't touch.
+
 #### Every rule, per Service, per table
 
 All four tables were dumped from the kube-proxy Pod (`iptables-save
@@ -5822,6 +7333,1353 @@ externalTrafficPolicy: Local              ->  192.168.49.5:57346    # the real c
 - **Local** only sends to pods on the node that received the traffic, so no SNAT
   is needed and the client IP survives. The cost is that a node with no local
   pod drops the traffic, and load follows how pods are spread across nodes.
+
+#### A NodePort packet, rule by rule and hook by hook (lab, k3s)
+
+A second NodePort lab, on a different cluster: a single-node k3s (v1.34, kube-proxy
+in iptables mode with iptables-nft, flannel), the AKS cluster from
+[azure-local-lab.md §7](azure-local-lab.md#7-aks). I created a NodePort Service
+`np-lab/web` with 2 Pods, then sent one request from a client container outside
+the node. The minikube version of the same rules is in
+[A NodePort Service, one port, every rule](#a-nodeport-service-one-port-every-rule-lab).
+
+```
+service/web   NodePort   10.43.208.17   80:30080/TCP
+pod  10.42.0.5:80   pod  10.42.0.6:80        node IP 172.17.0.3        client 172.17.0.4
+```
+
+**1. What NodePort adds to ClusterIP.** A NodePort Service is a ClusterIP Service
+plus one extra way in, a port on every IP the node owns. All the ClusterIP rules
+stay (`KUBE-SVC-…`, `KUBE-SEP-…`). Both paths enter through `KUBE-SERVICES`;
+kube-proxy adds a second branch, from that chain's last rule, that ends in the
+same `KUBE-SVC` chain:
+
+```
+PREROUTING / OUTPUT
+        │  -j KUBE-SERVICES          (every packet, both paths)
+        ▼
+  KUBE-SERVICES
+        ├─ rule: -d 10.43.208.17 --dport 80 ─────────────────────────────► KUBE-SVC-… ─► KUBE-SEP-… (DNAT to a Pod)
+        │        (ClusterIP)                                                   ▲
+        │                                                                      │
+        └─ last rule: --dst-type LOCAL ─► KUBE-NODEPORTS ─► KUBE-EXT-… ────────┘
+                 (NodePort: any node IP)    --dport 30080       │
+                                                                └─ KUBE-MARK-MASQ: mark 0x4000, "SNAT this later"
+```
+
+**2. The rules kube-proxy wrote (nat table).** Entry: `KUBE-SERVICES`. Its last
+rule sends anything addressed to the node itself to `KUBE-NODEPORTS`:
+
+```
+-A PREROUTING -m comment --comment "kubernetes service portals" -j KUBE-SERVICES
+-A OUTPUT     -m comment --comment "kubernetes service portals" -j KUBE-SERVICES
+
+-A KUBE-SERVICES -d 10.43.208.17/32 -p tcp … --dport 80 -j KUBE-SVC-6V2XWLK7W7RZJHNE           ← the ClusterIP rule
+-A KUBE-SERVICES … "kubernetes service nodeports; NOTE: this must be the last rule in this chain"
+                 -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS
+```
+
+- **`--dst-type LOCAL`** matches any address this node owns: `eth0` 172.17.0.3,
+  `cni0` 10.42.0.1, `lo` 127.0.0.1, `flannel.1`. That's why a NodePort answers on
+  every node IP.
+- **It must be last** because the ClusterIP rules are checked first. A packet to
+  a ClusterIP isn't addressed to the node, so it never reaches this rule.
+
+`KUBE-NODEPORTS`: one rule per NodePort, matched by port:
+
+```
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp … --dport 30080 … -j KUBE-EXT-6V2XWLK7W7RZJHNE   ← localhost:30080 (needs route_localnet)
+-A KUBE-NODEPORTS             -p tcp … --dport 30080     -j KUBE-EXT-6V2XWLK7W7RZJHNE   ← any node IP:30080
+```
+
+`KUBE-EXT-…`: the "external traffic" chain, which only exists for NodePort and
+LoadBalancer Services:
+
+```
+-A KUBE-EXT-6V2XWLK7W7RZJHNE … "masquerade traffic for np-lab/web:http external destinations" -j KUBE-MARK-MASQ
+-A KUBE-EXT-6V2XWLK7W7RZJHNE -j KUBE-SVC-6V2XWLK7W7RZJHNE
+-A KUBE-MARK-MASQ -j MARK --set-xmark 0x4000/0x4000          ← only sets a mark; SNAT happens later
+```
+
+`KUBE-SVC` and `KUBE-SEP`, the same chains the ClusterIP uses:
+
+```
+-A KUBE-SVC-6V2XWLK7W7RZJHNE ! -s 10.42.0.0/16 -d 10.43.208.17/32 … --dport 80 -j KUBE-MARK-MASQ   ← ClusterIP-only rule (not matched here)
+-A KUBE-SVC-6V2XWLK7W7RZJHNE … "-> 10.42.0.5:80" -m statistic --mode random --probability 0.5 -j KUBE-SEP-HBZKSHZKFESGC2QG
+-A KUBE-SVC-6V2XWLK7W7RZJHNE … "-> 10.42.0.6:80"                                         -j KUBE-SEP-R7HKSTCACJLQFBSC
+
+-A KUBE-SEP-R7HKSTCACJLQFBSC -s 10.42.0.6/32 … -j KUBE-MARK-MASQ                         ← hairpin (Pod calling itself)
+-A KUBE-SEP-R7HKSTCACJLQFBSC -p tcp … -j DNAT --to-destination 10.42.0.6:80
+```
+
+SNAT at the end, in POSTROUTING:
+
+```
+-A POSTROUTING -m comment --comment "kubernetes postrouting rules" -j KUBE-POSTROUTING
+-A KUBE-POSTROUTING -m mark ! --mark 0x4000/0x4000 -j RETURN                 ← not marked: leave the source alone
+-A KUBE-POSTROUTING -j MARK --set-xmark 0x4000/0x0                           ← clear the mark
+-A KUBE-POSTROUTING … "kubernetes service traffic requiring SNAT" -j MASQUERADE --random-fully
+```
+
+In the filter table, the forwarded packet is allowed by its mark:
+
+```
+-A FORWARD … -j KUBE-FORWARD
+-A KUBE-FORWARD … -m mark --mark 0x4000/0x4000 -j ACCEPT
+```
+
+**Why NodePort marks for SNAT.** The client sent its packet to the node
+(172.17.0.3:30080), and the node rewrote the destination to a Pod. The Pod's reply
+has to come back through this same node, so conntrack can undo the DNAT and the
+client gets an answer from 172.17.0.3:30080. If the Pod replied straight to the
+client from 10.42.0.6, the client would discard it: it never talked to 10.42.0.6.
+On a multi-node cluster the Pod may be on another node, and its reply would bypass
+this node entirely. Rewriting the source to this node (MASQUERADE) makes the reply
+return here. That's `externalTrafficPolicy: Cluster`, the default.
+
+**3. One packet, hook by hook.** The client `172.17.0.4:49634` sends a TCP SYN to
+`172.17.0.3:30080`. Counters were zeroed first; only this first packet goes
+through the nat rules, so each nat counter read **1**:
+
+```
+① arrives on eth0           src 172.17.0.4:49634  dst 172.17.0.3:30080
+
+② PREROUTING hook (nat, via the NAT core: first packet only)
+   PREROUTING → KUBE-SERVICES
+     ClusterIP rule?  dst isn't 10.43.208.17      → no
+     last rule: dst-type LOCAL? 172.17.0.3 is ours → KUBE-NODEPORTS            1 pkt
+   KUBE-NODEPORTS: tcp dpt 30080                    → KUBE-EXT-6V2X…            1 pkt
+   KUBE-EXT: KUBE-MARK-MASQ → mark 0x4000                                       1 pkt
+             → KUBE-SVC-6V2X…
+   KUBE-SVC: random 0.5 → not the first → KUBE-SEP-R7HK… (10.42.0.6)            1 pkt
+   KUBE-SEP: DNAT                                                               1 pkt
+                            src 172.17.0.4:49634  dst 10.42.0.6:80   (mark 0x4000)
+
+③ routing decision: 10.42.0.6 is not this node → 10.42.0.0/24 dev cni0 → FORWARD
+
+④ FORWARD hook (filter)
+   KUBE-FORWARD: mark 0x4000 → ACCEPT                                           1 pkt
+
+⑤ POSTROUTING hook (nat, SNAT side)
+   KUBE-POSTROUTING: marked → clear mark → MASQUERADE                           1 pkt
+   source := the address of the outgoing interface cni0 = 10.42.0.1, random port
+                            src 10.42.0.1:14718   dst 10.42.0.6:80
+
+⑥ out of cni0 → the Pod
+```
+
+What the Pod (`traefik/whoami`) saw:
+
+```
+Hostname: web-7998959fd-f98bx           (the 10.42.0.6 Pod)
+RemoteAddr: 10.42.0.1:14718             ← the node's cni0 address, not 172.17.0.4
+Host: 172.17.0.3:30080
+```
+
+The conntrack entry holds both translations:
+
+```
+tcp … src=172.17.0.4 dst=172.17.0.3 sport=49634 dport=30080      ← what the client sent (original direction)
+      src=10.42.0.6  dst=10.42.0.1  sport=80    dport=14718      ← what the reply looks like (after DNAT and SNAT)
+```
+
+The reply and every later packet don't run any rules. The Pod answers
+`10.42.0.6:80 → 10.42.0.1:14718`. Conntrack matches it to the reply tuple and
+reverses both changes. The SNAT is undone, so the destination becomes
+`172.17.0.4:49634`. The DNAT is undone, so the source becomes `172.17.0.3:30080`.
+The client gets its answer from the address it called. That's why every nat
+counter read 1 for the whole connection.
+
+**4. With `externalTrafficPolicy: Local`: no SNAT, real client IP.** Same Service,
+patched to `Local`. Only `KUBE-EXT` changes:
+
+```
+-A KUBE-EXT-6V2X… -s 10.42.0.0/16 … "pod traffic …"           -j KUBE-SVC-6V2X…   ← Pods: normal path
+-A KUBE-EXT-6V2X… … --src-type LOCAL -j KUBE-MARK-MASQ                            ← from the node itself: still SNAT
+-A KUBE-EXT-6V2X… … --src-type LOCAL -j KUBE-SVC-6V2X…
+-A KUBE-EXT-6V2X… -j KUBE-SVL-6V2X…                                               ← everyone else: no mark, local endpoints only
+
+-A KUBE-SVL-6V2X… "-> 10.42.0.5:80" … --probability 0.5 -j KUBE-SEP-HBZK…        ← only Pods on THIS node
+-A KUBE-SVL-6V2X… "-> 10.42.0.6:80"                     -j KUBE-SEP-R7HK…
+```
+
+The same request:
+
+```
+RemoteAddr: 172.17.0.4:59912          ← the real client IP
+KUBE-POSTROUTING:  1 RETURN   0 MARK   0 MASQUERADE    ← not marked, so not SNATed
+```
+
+- **Why skipping SNAT is safe:** traffic only goes to a Pod on this node, so the
+  reply naturally comes back through this node.
+- **The cost:** a node with no local Pod for the Service drops NodePort traffic.
+  A LoadBalancer adds a health-check NodePort so the load balancer avoids those
+  nodes. Here `healthCheckNodePort` stayed empty, because it's only allocated for
+  type `LoadBalancer`.
+
+**5. ClusterIP vs NodePort:**
+
+| | ClusterIP | NodePort |
+|---|---|---|
+| Matched by | `-d <ClusterIP> --dport <port>` | `--dst-type LOCAL --dport <nodePort>` (last rule of `KUBE-SERVICES`) |
+| Extra chains | — | `KUBE-NODEPORTS`, `KUBE-EXT-…` (+ `KUBE-SVL-…` with ETP Local) |
+| Marked for SNAT | only from outside the Pod network (`! -s 10.42.0.0/16`) | **always** (ETP Cluster); only node-local traffic (ETP Local) |
+| Backend choice | `KUBE-SVC` → random `KUBE-SEP` | the **same** `KUBE-SVC` (Cluster) or `KUBE-SVL`, local Pods only (Local) |
+| Source the Pod sees | the client Pod's IP | the node's IP (Cluster) or the real client (Local) |
+
+**6. Exactly what NodePort adds (diff).** A NodePort adds nothing to
+`KUBE-SERVICES`, `KUBE-SVC` or `KUBE-SEP`. The diff of the same Service as
+`ClusterIP`, then as `NodePort` (`externalTrafficPolicy: Cluster`), nat and
+filter tables, shows exactly 4 new rules, and none removed:
+
+```
+### rules added by NodePort:
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp … "np-lab/web:http" … --dport 30080 -j KUBE-EXT-6V2XWLK7W7RZJHNE   ← localhost:30080
+-A KUBE-NODEPORTS -p tcp …            "np-lab/web:http" … --dport 30080 -j KUBE-EXT-6V2XWLK7W7RZJHNE   ← any node IP:30080
+-A KUBE-EXT-6V2XWLK7W7RZJHNE … "masquerade traffic for np-lab/web:http external destinations" -j KUBE-MARK-MASQ
+-A KUBE-EXT-6V2XWLK7W7RZJHNE -j KUBE-SVC-6V2XWLK7W7RZJHNE
+### rules removed:
+  (none)
+```
+
+| Chain | As ClusterIP | NodePort adds |
+|---|---|---|
+| `KUBE-SERVICES` | 1 rule: `-d 10.43.208.17 --dport 80 -j KUBE-SVC-…` | **nothing**: the jump to `KUBE-NODEPORTS` (`--dst-type LOCAL`) is one shared rule that kube-proxy keeps whether or not any NodePort exists (it was in the dump taken before this Service was created) |
+| `KUBE-NODEPORTS` | — | **2 rules** per port: localhost and any node IP |
+| `KUBE-EXT-…` | doesn't exist | **a new chain, 2 rules**: mark for SNAT, then `-j KUBE-SVC-…` |
+| `KUBE-SVC-…` | 3 rules | **nothing**: reused |
+| `KUBE-SEP-…` ×2 | 2 rules each | **nothing**: reused |
+| `KUBE-MARK-MASQ`, `KUBE-POSTROUTING` | shared | **nothing** |
+
+So NodePort only adds a new entrance (`KUBE-NODEPORTS` → `KUBE-EXT`) that leads
+into the ClusterIP's existing chains.
+
+With `externalTrafficPolicy: Local` (from the dump in part 4):
+
+- `KUBE-EXT` has 4 rules instead of 2: Pod traffic, node-local traffic (mark +
+  jump), and everyone else.
+- One more chain, `KUBE-SVL-…`, has one rule per endpoint on this node.
+- `KUBE-SVC` and `KUBE-SEP` are still unchanged. `KUBE-SVL` jumps into the same
+  `KUBE-SEP` chains.
+
+**7. Where the jump to `KUBE-NODEPORTS` is.** In the nat table, it's the last
+rule of `KUBE-SERVICES`. It's a single rule shared by all NodePort Services, and
+kube-proxy writes it whether or not any NodePort exists:
+
+```
+# nat table: how a packet gets there
+-A PREROUTING -m comment --comment "kubernetes service portals" -j KUBE-SERVICES      ← packets arriving
+-A OUTPUT     -m comment --comment "kubernetes service portals" -j KUBE-SERVICES      ← packets the node sends
+
+-A KUBE-SERVICES -d 10.43.208.17/32 -p tcp … --dport 80 -j KUBE-SVC-6V2XWLK7W7RZJHNE   ← one rule per ClusterIP:port
+…                                                                                      ← (all the other Services)
+-A KUBE-SERVICES -m comment --comment "kubernetes service nodeports; NOTE: this must be the last rule in this chain"
+                 -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS                         ← the jump, always last
+```
+
+It's last so that every ClusterIP rule is checked first. Only a packet that
+matched no ClusterIP, and is addressed to one of the node's own IPs
+(`--dst-type LOCAL`), goes on to `KUBE-NODEPORTS`. Each NodePort Service only adds
+its own rules inside `KUBE-NODEPORTS`, matched by `--dport`.
+
+With kube-proxy's `--nodeport-addresses` set (e.g. `10.0.0.0/8`), NodePorts
+answer only on those addresses, and the single `addrtype` rule becomes one
+`-d <range> -j KUBE-NODEPORTS` rule per range (from kube-proxy's
+`pkg/proxy/iptables/proxier.go`; not tested here, k3s uses the default).
+
+**A second, unrelated `KUBE-NODEPORTS` in the filter table.** The filter table
+also has a chain called `KUBE-NODEPORTS`, with its own jump from INPUT:
+
+```
+# filter table
+-A INPUT -m comment --comment "kubernetes health check service ports" -j KUBE-NODEPORTS
+```
+
+These are two different chains with the same name in different tables. Chain
+names are per table ([One chain per table, not one chain across tables](#one-chain-per-table-not-one-chain-across-tables-lab)).
+
+- **nat `KUBE-NODEPORTS`:** NodePort traffic, leading to DNAT.
+- **filter `KUBE-NODEPORTS`:** allows the health-check NodePort, which only exists
+  for a `LoadBalancer` Service with `externalTrafficPolicy: Local`. It was empty
+  here, because no Service has one.
+
+**8. The trace again, rule by rule: what each NodePort rule does.** Two
+requests, with the nat counters zeroed before each and read per rule:
+
+- **A:** from an outside client, `172.17.0.4 → 172.17.0.3:30080`.
+- **B:** from the node itself, to `127.0.0.1:30080`.
+
+The 4 rules, numbered as the kernel shows them:
+
+```
+nat KUBE-NODEPORTS
+ #1  -d 127.0.0.0/8  tcp dpt:30080  -j KUBE-EXT-6V2X…        ← rule ①: localhost:30080
+ #2                  tcp dpt:30080  -j KUBE-EXT-6V2X…        ← rule ②: any other node IP:30080
+nat KUBE-EXT-6V2X…  (a chain created for this Service)
+ #1  -j KUBE-MARK-MASQ                                        ← rule ③: mark "SNAT me"
+ #2  -j KUBE-SVC-6V2X…                                        ← rule ④: hand over to the ClusterIP's chain
+```
+
+Everything else the packet passes through is either shared (`KUBE-SERVICES`'
+last rule, `KUBE-MARK-MASQ`, `KUBE-POSTROUTING`) or belongs to the ClusterIP and
+is reused (`KUBE-SVC`, `KUBE-SEP`).
+
+*A. From outside: `172.17.0.4:59608 → 172.17.0.3:30080`*
+
+```
+rule                               pkts
+KUBE-SERVICES #last                1     shared: dst is a node IP → KUBE-NODEPORTS
+KUBE-NODEPORTS #1                  0     rule ①: not 127.x → skipped
+KUBE-NODEPORTS #2                  1     rule ②: dpt 30080 → KUBE-EXT
+KUBE-EXT #1                        1     rule ③: → KUBE-MARK-MASQ
+KUBE-MARK-MASQ #1                  1     shared: mark 0x4000
+KUBE-EXT #2                        1     rule ④: → KUBE-SVC
+KUBE-SVC #1                        0     ClusterIP-only rule: needs dst 10.43.208.17 → skipped
+KUBE-SVC #2                        0     random 0.5 → lost the toss
+KUBE-SVC #3                        1     → KUBE-SEP-R7HK (10.42.0.6)
+KUBE-SEP-R7HK #2                   1     DNAT → 10.42.0.6:80
+KUBE-POSTROUTING #3                1     shared: marked → MASQUERADE
+```
+
+Step by step:
+
+1. **The packet arrives on `eth0`** (`src 172.17.0.4:59608, dst 172.17.0.3:30080`)
+   and reaches the PREROUTING hook. On a new connection, the nat callback runs
+   `PREROUTING → KUBE-SERVICES`.
+2. **`KUBE-SERVICES` (shared).** No ClusterIP rule matches: the destination is
+   172.17.0.3, not a ClusterIP. The last rule, `--dst-type LOCAL`, matches
+   because 172.17.0.3 belongs to the node. Jump to `KUBE-NODEPORTS`.
+3. **`KUBE-NODEPORTS` #1, rule ①:** `-d 127.0.0.0/8`. The destination is
+   172.17.0.3, so no match (counter 0).
+4. **`KUBE-NODEPORTS` #2, rule ②:** `tcp dpt:30080`. It matches. This is the rule
+   that ties port 30080 to this Service, so without it the node wouldn't know
+   30080 means `np-lab/web`. Jump to `KUBE-EXT-6V2X…`.
+5. **`KUBE-EXT` #1, rule ③:** `-j KUBE-MARK-MASQ`. The packet gets mark `0x4000`.
+   Nothing about the packet changes yet. The mark is a note for POSTROUTING:
+   "this came in through a NodePort, rewrite its source on the way out". Without
+   this rule, the Pod would reply to 172.17.0.4 directly from 10.42.0.6. On a
+   multi-node cluster that reply would skip this node, and the client would drop
+   it.
+6. **`KUBE-EXT` #2, rule ④:** `-j KUBE-SVC-6V2X…`. This is where the NodePort
+   joins the ClusterIP. From here, the packet takes exactly the chains a
+   ClusterIP packet takes.
+7. **`KUBE-SVC` (reused from the ClusterIP):**
+   - #1 is the ClusterIP's own masquerade check (`-d 10.43.208.17`). Counter 0:
+     the destination is still the node IP, because DNAT hasn't happened yet.
+     NodePort traffic is marked in rule ③ instead.
+   - #2 is `random 0.5` to the 10.42.0.5 Pod. Counter 0: it lost the coin toss.
+     The counter only counts packets that matched.
+   - #3 is the remaining endpoint, the 10.42.0.6 Pod. Counter 1.
+8. **`KUBE-SEP-R7HK` #2 (reused):** DNAT to `10.42.0.6:80`. The packet is now
+   `172.17.0.4:59608 → 10.42.0.6:80`, still carrying mark `0x4000`.
+9. **Routing:** 10.42.0.6 is on `cni0`, so the packet is forwarded: FORWARD hook,
+   then `KUBE-FORWARD` (shared) accepts it because of the mark.
+10. **POSTROUTING, `KUBE-POSTROUTING` (shared):**
+    - #1 (`RETURN` if not marked): no match, because ours is marked. Its counter
+      of 2 is other, unmarked traffic leaving the node in that moment.
+    - #2: clears the mark.
+    - #3: `MASQUERADE` rewrites the source to `cni0`'s address. The packet is now
+      `10.42.0.1:20485 → 10.42.0.6:80`, the result of rule ③'s mark.
+11. **The Pod's view:** `RemoteAddr: 10.42.0.1:20485`. Conntrack has recorded both
+    changes:
+
+    ```
+    src=172.17.0.4 dst=172.17.0.3 sport=59608 dport=30080   src=10.42.0.6 dst=10.42.0.1 sport=80 dport=20485
+    ```
+
+The reply `10.42.0.6:80 → 10.42.0.1:20485` comes back to this node, conntrack
+reverses both changes, and the client sees `172.17.0.3:30080 → 172.17.0.4:59608`.
+
+*B. From the node itself: `127.0.0.1 → 127.0.0.1:30080`*
+
+```
+rule                               pkts
+KUBE-SERVICES #last                1     shared: 127.0.0.1 is LOCAL too
+KUBE-NODEPORTS #1                  1     rule ①: -d 127.0.0.0/8 → KUBE-EXT     ← this time rule ① matched
+KUBE-NODEPORTS #2                  0     never reached
+KUBE-EXT #1 / KUBE-MARK-MASQ       1     rule ③: mark
+KUBE-EXT #2                        1     rule ④: → KUBE-SVC
+KUBE-SVC #3 → KUBE-SEP-R7HK #2     1     DNAT → 10.42.0.6:80
+KUBE-POSTROUTING #3                1     MASQUERADE
+```
+
+The differences from A:
+
+- **It enters through the OUTPUT hook**, because the node itself created the
+  packet: `-A OUTPUT -j KUBE-SERVICES`. From there the chains are the same.
+- **Rule ① matches instead of rule ②.** The localhost rule exists because 127.x
+  addresses are special: Linux normally refuses to route them anywhere other
+  than `lo`. kube-proxy turns on `route_localnet=1` (it read `all=1` here) so a
+  `127.0.0.1` packet can be DNATed to a Pod. In the real kube-proxy rule, it's
+  also counted separately (`nfacct localhost_nps_accepted_pkts`).
+- **Rule ③'s mark is essential here, even on one node.** The packet's source is
+  `127.0.0.1`. Without MASQUERADE, the Pod would reply to `127.0.0.1`, which is the
+  Pod itself. SNAT to `10.42.0.1` makes the reply come back to the node:
+
+  ```
+  RemoteAddr: 10.42.0.1:10151
+  conntrack: src=127.0.0.1 dst=127.0.0.1 sport=37770 dport=30080   src=10.42.0.6 dst=10.42.0.1 sport=80 dport=10151
+  ```
+
+*What each NodePort rule contributes:*
+
+| Rule | Chain | Its job in the path | If it were missing |
+|---|---|---|---|
+| ① `-d 127.0.0.0/8 --dport 30080 -j KUBE-EXT` | `KUBE-NODEPORTS` | catches `localhost:30080` from the node itself | `curl 127.0.0.1:30080` on the node fails; other addresses still work |
+| ② `--dport 30080 -j KUBE-EXT` | `KUBE-NODEPORTS` | ties port 30080 on any node IP to this Service | no NodePort at all: the packet falls out of `KUBE-NODEPORTS` and finds nothing listening on 30080 |
+| ③ `-j KUBE-MARK-MASQ` | `KUBE-EXT` | marks the packet so POSTROUTING rewrites its source | replies would go straight from the Pod to the client and be dropped (multi-node), and localhost requests would break |
+| ④ `-j KUBE-SVC` | `KUBE-EXT` | hands the packet to the ClusterIP's load balancing and DNAT | the packet is marked but never DNATed |
+
+**9. `KUBE-MARK-MASQ` isn't created by the NodePort.** `KUBE-MARK-MASQ` is a
+single shared chain that kube-proxy creates on every node, Services or not (it
+was in the dump taken before `np-lab/web` existed). Many rules jump to it, and
+NodePort is just one of them. On this node, 14 rules jump to it, and only 1
+comes from the NodePort:
+
+```
+:KUBE-MARK-MASQ - [0:0]
+-A KUBE-MARK-MASQ -j MARK --set-xmark 0x4000/0x4000      ← the whole chain: one rule, "set bit 0x4000"
+
+rules that jump to it, by chain kind:
+      6 KUBE-SVC-…     ← one per Service port (ClusterIP)
+      7 KUBE-SEP-…     ← one per endpoint
+      1 KUBE-EXT-…     ← the NodePort's
+```
+
+The chain itself is just "set the mark". What varies is why each caller jumps to
+it. Every case has the same underlying problem: a reply that wouldn't come back
+through this node unless the source is rewritten.
+
+*1. `KUBE-SVC`: a ClusterIP called from outside the Pod network.* There's one per
+Service port. The 6 here are the Services already in k3s (kubernetes,
+kube-dns ×3, metrics-server) plus `np-lab/web`:
+
+```
+-A KUBE-SVC-6V2X… ! -s 10.42.0.0/16 -d 10.43.208.17/32 … --dport 80 -j KUBE-MARK-MASQ
+```
+
+The source isn't a Pod, for example a process on the node calling the
+ClusterIP. Without SNAT the Pod's reply might not route back correctly, so it's
+marked.
+
+*2. `KUBE-SEP`: hairpin, a Pod calling its own Service and landing on itself.*
+There's one per endpoint (7 here):
+
+```
+-A KUBE-SEP-HBZK… -s 10.42.0.5/32 … -j KUBE-MARK-MASQ
+```
+
+If 10.42.0.5 calls the Service and the DNAT sends it back to 10.42.0.5, the Pod
+would get a packet from itself and reply to itself, never reaching the
+connection it opened. SNAT to the node's address makes the reply go through the
+node, where conntrack fixes it.
+
+*3. `KUBE-EXT`: NodePort and LoadBalancer traffic.* This is the one the NodePort
+added:
+
+```
+-A KUBE-EXT-6V2X… … "masquerade traffic for np-lab/web:http external destinations" -j KUBE-MARK-MASQ
+```
+
+The reply must come back through the node that received the request, as in the
+trace (step 5).
+
+Other callers don't exist on this node, because it has no such Services. These
+are from kube-proxy's code, not tested here:
+
+- **`KUBE-FW-…`:** LoadBalancer traffic sent to the load balancer's IP.
+- **external IPs:** rules for `spec.externalIPs`.
+- **`externalTrafficPolicy: Local`:** as seen earlier, `KUBE-EXT` still marks
+  traffic from the node itself (`--src-type LOCAL`).
+
+Splitting it into a mark and a later step is what lets one shared chain serve
+every Service. Each caller only decides whether SNAT is needed, and the shared
+`KUBE-POSTROUTING` does the SNAT once, in POSTROUTING, for any marked packet.
+
+**10. Why MASQUERADE picked 10.42.0.1.** MASQUERADE doesn't use a fixed address.
+It takes the address of the interface the packet is about to leave through.
+
+*The node has a bridge for its Pods: `cni0`, address 10.42.0.1.*
+
+```
+### the node's interfaces
+  lo         127.0.0.1/8
+  eth0       172.17.0.3/16     ← the node's "outside" address (Docker network)
+  flannel.1  10.42.0.0/32      ← flannel's tunnel to other nodes
+  cni0       10.42.0.1/24      ← a bridge for this node's Pods
+### who is plugged into cni0
+  veth1122e7bf  veth47f75644  veth827d2418  vethcc2de0fc  vethe00ba3b6     ← one veth per Pod
+```
+
+The CNI plugin, flannel in k3s, gives this node the Pod range `10.42.0.0/24` and
+puts the bridge on its first address:
+
+```
+/run/flannel/subnet.env
+FLANNEL_SUBNET=10.42.0.1/24        ← this node's Pod range; cni0 takes .1
+```
+
+Each Pod gets a veth pair: one end in the Pod as its `eth0` (10.42.0.6), the
+other plugged into `cni0`. The CNI config also says `"isDefaultGateway": true`
+(`/var/lib/rancher/k3s/agent/etc/cni/net.d/10-flannel.conflist`), so every Pod's
+default route points at `10.42.0.1`. From inside a Pod, 10.42.0.1 is the node,
+as its router.
+
+*After DNAT, routing sends the packet out of `cni0`.* After DNAT the packet's
+destination is `10.42.0.6`. The routing decision (step 9 of the trace) looks it
+up:
+
+```
+### the node's routing table
+  default via 172.17.0.1 dev eth0
+  10.42.0.0/24 dev cni0 proto kernel scope link src 10.42.0.1     ← matches 10.42.0.6
+  172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3
+
+### what the kernel decides for the DNATed packet
+  10.42.0.6 dev cni0 src 10.42.0.1
+```
+
+So the outgoing interface is `cni0`, and the kernel's preferred source address
+for that route is `10.42.0.1`.
+
+*MASQUERADE takes the outgoing interface's address* (`net/netfilter/nf_nat_masquerade.c`):
+
+```c
+newsrc = inet_select_addr(out, nh, RT_SCOPE_UNIVERSE);   // out = cni0  →  10.42.0.1
+```
+
+So `10.42.0.1` is cni0's address, picked because the packet leaves through cni0.
+The port `20485` is just a free port chosen at random (`--random-fully`).
+
+```
+before POSTROUTING:  172.17.0.4:59608 → 10.42.0.6:80     (DNAT done, source untouched)
+MASQUERADE:          out = cni0 → its address 10.42.0.1, random port 20485
+after:               10.42.0.1:20485  → 10.42.0.6:80
+```
+
+*Why that's the right address.* The Pod replies to `10.42.0.1:20485`. That's its
+own default gateway, the node, so the reply is guaranteed to reach the node.
+There, conntrack matches it and reverses both translations, and the result goes
+out of `eth0` to the client:
+
+```
+### route for the reply after conntrack rewrites it to dst 172.17.0.4
+  172.17.0.4 dev eth0 src 172.17.0.3
+```
+
+The address depends on where the backend is, because MASQUERADE uses whichever
+interface the route picks:
+
+| Backend Pod is | Route to it | Outgoing interface | Source after MASQUERADE |
+|---|---|---|---|
+| on this node (this lab) | `10.42.0.0/24 dev cni0` | `cni0` | **10.42.0.1** |
+| on another node | `10.42.1.0/24 via 10.42.1.0 dev flannel.1` | `flannel.1` | **10.42.0.0** (flannel.1's address) |
+| outside the cluster (e.g. Pod traffic to the internet) | `default via 172.17.0.1 dev eth0` | `eth0` | **172.17.0.3** |
+
+Only the first row was tested (this cluster has one node); the other two follow
+from the same `inet_select_addr(out, …)`. That's also why the minikube lab in
+§4.3 showed `10.244.120.64`: its node's address on the interface facing the Pod.
+
+*MASQUERADE vs plain SNAT.* MASQUERADE is the kind of SNAT that picks the
+address automatically from the outgoing interface. Plain SNAT uses an address
+you write in the rule. kube-proxy uses MASQUERADE.
+
+| Target | New source address | Typical use |
+|---|---|---|
+| `-j MASQUERADE` (nft: `masquerade`) | the outgoing interface's address, looked up for each new connection | kube-proxy, home routers, anywhere the address isn't fixed or known in advance |
+| `-j SNAT --to-source 203.0.113.10` (nft: `snat to 203.0.113.10`) | exactly the address in the rule (or a range) | a fixed public IP on a gateway, egress gateways, cloud NAT |
+
+How MASQUERADE picks "the interface's address" (`nf_nat_masquerade.c`):
+
+```c
+newsrc = inet_select_addr(out, nh, RT_SCOPE_UNIVERSE);
+```
+
+- **`out`** is the interface the route chose: `cni0` here.
+- **`nh`** is the next hop. If the interface has several addresses,
+  `inet_select_addr` prefers one in the same subnet as the next hop. With one
+  address, as on `cni0`, it simply takes that one.
+- **If the interface has no usable address, MASQUERADE drops the packet**
+  (`"%s ate my IP address"`, `NF_DROP`).
+- **It also remembers the interface** in the conntrack entry
+  (`nat->masq_index = out->ifindex`). If that interface goes down, the kernel
+  deletes those connections, since their source address may no longer be valid.
+  Plain SNAT keeps its connections, because its address doesn't depend on any
+  interface.
+
+kube-proxy needs MASQUERADE because one rule has to give the right source for
+every destination on every node: `cni0`'s address for a local Pod, `flannel.1`'s
+for a Pod on another node, `eth0`'s for traffic leaving the cluster (the table
+above). A fixed `--to-source` would be wrong for most of them.
+
+**11. The packet itself, before and after each NAT (capture).** One more
+connection (new ports, same path), captured with `tcpdump -i any` from a helper
+container sharing the node's network namespace (`docker run --net
+container:<node>`), SYN and SYN-ACK only.
+
+*The real packets, on every interface:*
+
+```
+                     interface      packet as seen there
+SYN      ① 22:48:57.685778  eth0 In        172.17.0.4.52664 > 172.17.0.3.30080   [S]    ← as the client sent it
+         ② 22:48:57.685827  cni0 Out       10.42.0.1.46374  > 10.42.0.6.80       [S]    ← after DNAT and SNAT
+         ③ 22:48:57.685834  veth827… Out   10.42.0.1.46374  > 10.42.0.6.80       [S]    ← into the Pod
+SYN-ACK  ④ 22:48:57.686170  veth827… P     10.42.0.6.80     > 10.42.0.1.46374    [S.]   ← the Pod's reply, untouched
+         ⑤ 22:48:57.686174  cni0 In        10.42.0.6.80     > 172.17.0.4.52664   [S.]   ← half undone: destination fixed
+         ⑥ 22:48:57.686177  eth0 Out       172.17.0.3.30080 > 172.17.0.4.52664   [S.]   ← fully undone: as the client expects
+```
+
+The whole round trip took 0.4 ms, about 50 µs of it inside the node for the
+SYN. In an earlier capture, the TCP sequence numbers were identical on `eth0` and
+`cni0` (`seq 100306788`): NAT changes only addresses, ports and checksums.
+
+*The SYN, step by step* (the mark and the conntrack entry aren't visible in a
+capture; they follow from the rules and code above):
+
+```
+                          IP/TCP header                          skb->mark   conntrack entry
+① arrives on eth0         172.17.0.4:52664 → 172.17.0.3:30080    0x0         (none yet)
+
+  PREROUTING  -200 conntrack: new entry, not yet in the table
+                                                                             ORIG  172.17.0.4:52664 → 172.17.0.3:30080
+                                                                             REPLY 172.17.0.3:30080 → 172.17.0.4:52664
+              -100 nat: KUBE-EXT marks, KUBE-SEP chooses DNAT
+                          the NAT core rewrites the destination
+                          (and fixes the IP and TCP checksums)
+  after DNAT:             172.17.0.4:52664 → 10.42.0.6:80        0x4000      REPLY 10.42.0.6:80 → 172.17.0.4:52664   (IPS_DST_NAT)
+
+  routing: 10.42.0.6 → dev cni0  → FORWARD: KUBE-FORWARD sees 0x4000 → ACCEPT
+
+  POSTROUTING +100 nat: KUBE-POSTROUTING sees 0x4000 → clears it → MASQUERADE
+                          the NAT core rewrites the source
+  after SNAT:             10.42.0.1:46374  → 10.42.0.6:80        0x0         REPLY 10.42.0.6:80 → 10.42.0.1:46374    (+IPS_SRC_NAT)
+              max  nf_confirm: the entry goes into the table, findable by both tuples
+
+② leaves on cni0 / ③ veth   10.42.0.1:46374 → 10.42.0.6:80
+```
+
+So at step 8 of the trace, just after the DNAT rule:
+
+- **The header** is `172.17.0.4:52664 → 10.42.0.6:80`: the destination is the Pod,
+  and the source is still the real client.
+- **The mark** is `0x4000`, a note in the kernel's copy of the packet, never on
+  the wire.
+- **The conntrack entry** exists but isn't in the table yet. Its reply tuple
+  already says replies will come from `10.42.0.6:80`.
+
+The capture never shows that in-between state: it only exists inside the node,
+between PREROUTING and POSTROUTING.
+
+*The reply is translated in two steps, which is why ⑤ is half done.* The NAT
+core changes **destinations at PREROUTING and OUTPUT**, and **sources at
+POSTROUTING and INPUT**, in both directions. For the reply, undoing the SNAT
+means changing the destination, and undoing the DNAT means changing the source:
+
+```
+④ from the Pod (veth)     10.42.0.6:80 → 10.42.0.1:46374      matches the REPLY tuple
+
+  PREROUTING  (here run on the bridge, via br_netfilter: bridge-nf-call-iptables = 1)
+              -100 NAT core, destination side: undo the SNAT
+⑤ seen on cni0            10.42.0.6:80 → 172.17.0.4:52664     ← destination already the client's
+
+  routing: 172.17.0.4 → dev eth0 → FORWARD
+
+  POSTROUTING +100 NAT core, source side: undo the DNAT
+⑥ leaves on eth0          172.17.0.3:30080 → 172.17.0.4:52664 ← source is the address the client called
+```
+
+No rules run for the reply: the NAT core compares the header with the
+connection's two tuples and applies the difference at each of its hooks. It's
+visible half done on `cni0 In` because of `br_netfilter`: the bridge runs the
+IPv4 PREROUTING hook as the Pod's packet enters it from the veth, before `cni0`'s
+receive path, where tcpdump sees it.
+
+The `mark=0` in the conntrack line (`… [ASSURED] mark=0 zone=0 use=2`) is the
+**conntrack** mark (`ct mark`), a separate number stored on the connection.
+kube-proxy's `0x4000` is the **packet** mark (`skb->mark`), which lives on one
+packet only and was cleared in `KUBE-POSTROUTING`. tcpdump can't show the packet
+mark, and conntrack doesn't record it.
+
+**12. Both DNAT and SNAT, and what each side sees.** In plain IP routing a
+packet's addresses never change from end to end; NAT is the deliberate
+exception. For this request (NodePort, `externalTrafficPolicy: Cluster`, from
+outside), both happen to the first packet, at different hooks:
+
+```
+client sends        172.17.0.4:52664 → 172.17.0.3:30080
+DNAT  (PREROUTING)  172.17.0.4:52664 → 10.42.0.6:80        destination: node:30080 → Pod:80   (KUBE-SEP, DNAT)
+SNAT  (POSTROUTING) 10.42.0.1:46374  → 10.42.0.6:80        source: client → node              (KUBE-POSTROUTING, MASQUERADE)
+```
+
+The request and the reply are two different packets. The reply is addressed
+back to whoever sent the request, as the Pod received it:
+
+```
+REQUEST (client → Pod)
+  client sends:          172.17.0.4:52664 → 172.17.0.3:30080
+  DNAT  (PREROUTING):    172.17.0.4:52664 → 10.42.0.6:80        ← DESTINATION changed (node → Pod)
+  SNAT  (POSTROUTING):   10.42.0.1:46374  → 10.42.0.6:80        ← SOURCE changed (client → node)
+  the Pod receives:      10.42.0.1:46374  → 10.42.0.6:80
+
+REPLY (Pod → client): a new packet, not the request changed
+  the Pod sends:         10.42.0.6:80     → 10.42.0.1:46374     ← the request's addresses swapped (not NAT)
+  undo SNAT (PREROUTING): 10.42.0.6:80    → 172.17.0.4:52664    ← DESTINATION changed (node → client)
+  undo DNAT (POSTROUTING): 172.17.0.3:30080 → 172.17.0.4:52664  ← SOURCE changed (Pod → node)
+  the client receives:   172.17.0.3:30080 → 172.17.0.4:52664
+```
+
+Each endpoint sees a consistent conversation: the client talks to
+`172.17.0.3:30080` both ways, and the Pod talks to `10.42.0.1:46374` both ways.
+Only the node, with its conntrack entry, sees both views.
+
+With the default `externalTrafficPolicy: Cluster`, which this capture used, the
+Pod sees the request as coming from `10.42.0.1`, the node. The client's address
+`172.17.0.4` was replaced by SNAT before the packet reached the Pod. The Pod has
+no way to find out that the real client was `172.17.0.4`. That information only
+exists in the node's conntrack entry.
+
+It does see `172.17.0.4` with `externalTrafficPolicy: Local`. There's no SNAT
+then: `KUBE-EXT` skips `KUBE-MARK-MASQ` for external traffic (part 4):
+
+```
+externalTrafficPolicy: Local  →  RemoteAddr: 172.17.0.4:59912      ← the real client
+KUBE-POSTROUTING:  1 RETURN   0 MARK   0 MASQUERADE                ← not SNATed
+```
+
+| `externalTrafficPolicy` | Source address the Pod sees | Why |
+|---|---|---|
+| `Cluster` (default) | `10.42.0.1` (the node) | SNAT, so the reply returns through this node |
+| `Local` | `172.17.0.4` (the real client) | no SNAT; the Pod is on this node, so the reply comes back through it anyway |
+
+It isn't always both. **DNAT always happens** for traffic to a Service (that's
+how the Service address becomes a Pod address). **SNAT happens only when the
+packet was marked:**
+
+| Traffic | DNAT | SNAT | Source the Pod sees |
+|---|---|---|---|
+| NodePort, `externalTrafficPolicy: Cluster` (this lab) | ✅ | ✅ (`KUBE-EXT` marks it) | the node (`10.42.0.1`) |
+| NodePort, `externalTrafficPolicy: Local` | ✅ | ❌ | the real client (`172.17.0.4`) |
+| ClusterIP, called from a Pod | ✅ | ❌ (`! -s 10.42.0.0/16` doesn't match) | the calling Pod |
+| ClusterIP, called from the node itself | ✅ | ✅ (not from the Pod network, so marked) | the node |
+| ClusterIP, a Pod reaching itself (hairpin) | ✅ | ✅ (`KUBE-SEP` marks it) | the node |
+
+**13. Where SNAT happens vs whether it happens.** Two separate questions: SNAT
+happens in POSTROUTING because the packet is leaving the node, but it happens
+to this packet because of the mark. Being forwarded isn't enough.
+
+*Where: every packet leaving the node passes POSTROUTING.*
+
+```
+packet arrives ─► PREROUTING ─► routing ─┬─► INPUT ─► a process on the node             (no POSTROUTING)
+                  (DNAT here)            └─► FORWARD ─► POSTROUTING ─► out an interface   ← our packet
+a process on the node sends ─► OUTPUT ─► routing ─► POSTROUTING ─► out an interface
+```
+
+Our packet was forwarded (in on `eth0`, out on `cni0`), so it passed
+POSTROUTING. That's the right place for SNAT for two reasons:
+
+- MASQUERADE needs to know which interface the packet leaves through, and that's
+  only decided by routing, after PREROUTING.
+- The kernel only allows MASQUERADE in POSTROUTING (`xt_MASQUERADE.c`:
+  `.hooks = 1 << NF_INET_POST_ROUTING`).
+
+*Whether: only marked packets are SNATed.* Passing POSTROUTING doesn't mean
+being SNATed. `KUBE-POSTROUTING` checks the mark first:
+
+```
+-A KUBE-POSTROUTING -m mark ! --mark 0x4000/0x4000 -j RETURN     ← not marked: leave the source alone
+…
+-A KUBE-POSTROUTING … -j MASQUERADE --random-fully                ← only marked packets get here
+```
+
+The lab shows forwarded packets that weren't SNATed:
+
+- In the same trace (part 8), `KUBE-POSTROUTING #1 (RETURN) = 2`: two other,
+  unmarked packets left the node through POSTROUTING, sources unchanged.
+- With `externalTrafficPolicy: Local` (part 4), the same NodePort request, also
+  forwarded `eth0 → cni0`, passed POSTROUTING with `1 RETURN, 0 MASQUERADE`, and
+  the Pod saw `172.17.0.4`.
+
+| | Forwarded? | Passes POSTROUTING? | Marked? | SNATed? |
+|---|---|---|---|---|
+| NodePort, ETP Cluster (this trace) | yes | yes | yes (`KUBE-EXT`) | **yes** |
+| NodePort, ETP Local | yes | yes | no | no |
+| Pod → ClusterIP → Pod on another node | yes | yes | no | no |
+| node itself → ClusterIP | no (sent by the node) | yes, via OUTPUT | yes (`KUBE-SVC` #1) | **yes** |
+
+So SNAT is applied in POSTROUTING because that's where the outgoing interface is
+known. It's applied to this packet because `KUBE-EXT` marked it in PREROUTING,
+when the node could still tell it came in through a NodePort.
+
+**14. The INPUT hook and Services.** In iptables mode, a packet to a Service is
+DNATed in PREROUTING. If the Pod it lands on uses its own Pod IP, as most do, the
+packet is no longer addressed to the node, so it goes FORWARD → POSTROUTING and
+never reaches INPUT. Every trace in this lab went that way.
+
+INPUT is still used. It handles anything that is, or stays, addressed to the
+node. These are the rules on this node's INPUT hook:
+
+```
+filter INPUT
+-A INPUT … "kube-router netpol" -j KUBE-ROUTER-INPUT                                   ← k3s NetworkPolicy, for traffic to the node
+-A INPUT --ctstate NEW … "kubernetes load balancer firewall" -j KUBE-PROXY-FIREWALL     ← loadBalancerSourceRanges
+-A INPUT … "kubernetes health check service ports" -j KUBE-NODEPORTS                    ← health-check NodePorts (ETP Local LBs)
+-A INPUT --ctstate NEW … "kubernetes externally-visible service portals" -j KUBE-EXTERNAL-SERVICES   ← Services with no endpoints
+-A INPUT -j KUBE-FIREWALL                                                                ← protect 127.0.0.0/8
+nat INPUT
+(none)
+```
+
+When Service traffic does reach INPUT:
+
+1. **The Service has no endpoints.** With no Pods there's no DNAT, so a NodePort
+   packet is still addressed to the node and goes to INPUT. There
+   `KUBE-EXTERNAL-SERVICES` rejects it. Lab: with the Deployment scaled to 0 (under
+   both traffic policies), kube-proxy wrote
+
+   ```
+   -A KUBE-EXTERNAL-SERVICES -p tcp … "np-lab/web:http has no endpoints" -m addrtype --dst-type LOCAL … --dport 30080 -j REJECT --reject-with icmp-port-unreachable
+   -A KUBE-SERVICES -d 10.43.208.17/32 -p tcp … "np-lab/web:http has no endpoints" … --dport 80 -j REJECT --reject-with icmp-port-unreachable
+   ```
+
+   and the client got `wget: can't connect to remote host (172.17.0.3): Connection refused`.
+2. **The endpoint is on the node's own IP (hostNetwork Pods).** If the Pod uses
+   `hostNetwork: true`, DNAT points at the node's address, so after routing the
+   packet is local and goes to INPUT and then to the socket. Examples: the
+   `kubernetes` Service, whose endpoint is the API server on a node IP; ingress
+   controllers or CNI agents running with hostNetwork.
+3. **kube-proxy's own health-check port.** For a `LoadBalancer` Service with
+   `externalTrafficPolicy: Local`, kube-proxy listens on the
+   `healthCheckNodePort`. The filter `KUBE-NODEPORTS` chain on INPUT lets those
+   probes through to kube-proxy.
+4. **`loadBalancerSourceRanges`.** If the load balancer's IP is on the node,
+   `KUBE-PROXY-FIREWALL` drops sources outside the allowed ranges here.
+5. **`KUBE-FIREWALL`, a safety rule.** kube-proxy turns on `route_localnet` for
+   localhost NodePorts, which opens a hole: a remote host could send packets to
+   `127.0.0.1`. This rule drops anything to `127.0.0.0/8` that didn't come from
+   127.x, unless it was DNATed by a NodePort rule (`! --ctstate … DNAT`):
+
+   ```
+   -A KUBE-FIREWALL ! -s 127.0.0.0/8 -d 127.0.0.0/8 … "block incoming localnet connections" -m conntrack ! --ctstate RELATED,ESTABLISHED,DNAT -j DROP
+   ```
+6. **nat INPUT is empty.** The NAT core has a callback at INPUT (SNAT at +100,
+   `nf_nat_ipv4_local_in`), but kube-proxy writes no rules there.
+
+In **IPVS mode** INPUT is the main hook (from kube-proxy's IPVS docs; not tested,
+this node runs iptables mode). kube-proxy puts every ClusterIP on a dummy
+interface, `kube-ipvs0`, so Service addresses count as the node's own. A packet
+to a ClusterIP is "for this host" and goes to INPUT, where IPVS (hooked at
+`NF_INET_LOCAL_IN`) picks a Pod and sends it on.
+
+| Hook | iptables mode (this lab) | IPVS mode |
+|---|---|---|
+| PREROUTING | DNAT for all Service traffic | marks only (no DNAT rules) |
+| INPUT | edge cases: no endpoints, hostNetwork endpoints, health checks, firewall | **the main hook**: IPVS takes Service traffic here |
+| FORWARD | Service traffic to Pods | traffic IPVS has already sent on |
+| POSTROUTING | SNAT (MASQUERADE) | SNAT (MASQUERADE) |
+
+**15. Cluster vs Local on two nodes: the four cases.** This lab has one node, so
+the Pod was always local. The limitation of `externalTrafficPolicy: Local` only
+shows with a node that has no Pod. Picture two nodes, and one Pod, running only
+on node B:
+
+```
+client 203.0.113.50
+                     node A  10.0.0.1      (no Pod here)
+                     node B  10.0.0.2      Pod P  10.244.2.5:80
+NodePort 30080 is open on BOTH nodes (kube-proxy runs on every node)
+```
+
+The client can send to `10.0.0.1:30080` or `10.0.0.2:30080`. Both are valid
+NodePort addresses, and nothing in Kubernetes picks one: the client uses whichever
+address it was given (DNS, an external load balancer, a list of node IPs). What
+happens depends on which node it hits and on the policy.
+
+*How node A knows Pod P exists, even though P is on node B.* kube-proxy on every
+node reads the Service's EndpointSlice, which lists all ready Pods in the
+cluster, whatever node they're on. So node A's rules include Pod P even though
+it isn't local:
+
+```
+EndpointSlice for the Service:  endpoints: 10.244.2.5 (nodeName: node-b)
+
+node A's rules (written by node A's kube-proxy):
+-A KUBE-SVC-XXXX … -j KUBE-SEP-PPPP                  ← the only endpoint: Pod P
+-A KUBE-SEP-PPPP -p tcp -j DNAT --to-destination 10.244.2.5:80
+```
+
+With `externalTrafficPolicy: Cluster`, `KUBE-SVC` uses every endpoint, so node A
+DNATs to Pod P. (With Local, node A uses `KUBE-SVL`, which only lists Pods on
+node A. For node A that's empty, and the packet is dropped: case 4.)
+
+*How the packet gets from node A to node B: ordinary routing.* After DNAT, the
+destination is `10.244.2.5`. Node A's routing decision handles it like any other
+address. The CNI gives each node its own Pod range (from `node.spec.podCIDR`) and
+installs a route on every node for the other nodes' ranges:
+
+```
+node A's routing table (native routing, e.g. a cloud VPC or Calico/flannel host-gw)
+  10.244.1.0/24 dev cni0                 ← node A's own Pods
+  10.244.2.0/24 via 10.0.0.2 dev eth0    ← node B's Pods: send to node B
+  default via 10.0.0.254 dev eth0
+
+ip route get 10.244.2.5  →  via 10.0.0.2 dev eth0      ← "send it to node B"
+```
+
+So node A forwards the packet to node B (FORWARD, then POSTROUTING, then out of
+`eth0`). Node B receives a packet for one of its own Pods, routes it to `cni0`,
+and Pod P gets it. Node B runs no Service rules on it: it's already addressed to
+a Pod IP.
+
+```
+client ─► node A                                   ─► node B             ─► Pod P
+          PREROUTING: DNAT → 10.244.2.5 (Pod P)        route: 10.244.2.0/24
+          routing:   10.244.2.0/24 via node B             is mine → cni0
+          POSTROUTING: MASQUERADE (marked)
+```
+
+With an overlay such as flannel VXLAN, the route says
+`10.244.2.0/24 via 10.244.2.0 dev flannel.1`. Node A wraps the packet in UDP and
+sends it to node B's real address, and node B unwraps it. The decision is the
+same, only the transport differs.
+
+*The SNAT address depends on that route.* MASQUERADE takes the address of the
+interface the packet leaves through (part 10). So on node A the new source
+depends on how the CNI reaches node B:
+
+| How node A reaches node B's Pods | Outgoing interface on node A | Source after MASQUERADE |
+|---|---|---|
+| native routing (`via 10.0.0.2 dev eth0`) | `eth0` | `10.0.0.1`, node A's address |
+| flannel VXLAN (`dev flannel.1`) | `flannel.1` | node A's `flannel.1` address, e.g. `10.244.1.0` |
+
+The cases below assume native routing. Either way, the reply works the same way:
+
+1. Pod P replies to the source it saw, an address belonging to node A.
+2. Node B routes that reply back to node A.
+3. Node A's conntrack entry matches it, undoes both translations, and sends it to
+   the client from `10.0.0.1:30080`.
+
+Without the SNAT, Pod P would reply directly to `203.0.113.50`. That reply would
+go out through node B's default route, never passing node A, and the client
+would get an answer from an address it never contacted.
+
+*Case 1: Cluster (default), client hits node A, which has no Pod.*
+
+```
+client ──► node A:30080
+             KUBE-SVC: choose from ALL Pods in the cluster → Pod P (on node B)
+             DNAT: destination → 10.244.2.5:80
+             route: 10.244.2.0/24 via 10.0.0.2 dev eth0 → forward to node B
+             SNAT: source 203.0.113.50 → 10.0.0.1 (node A's eth0)   ← needed, see below
+           ──► node B ──► Pod P
+Pod P sees the request coming from 10.0.0.1 (node A).   Works ✓
+Reply: Pod P → 10.0.0.1 (node A) → conntrack undoes both → node A → client
+```
+
+Node A has to SNAT. Without it, Pod P would reply straight to `203.0.113.50`,
+from its own IP. The client is waiting for an answer from `10.0.0.1:30080`, not
+from `10.244.2.5:80`, so it would throw the reply away. SNAT makes the reply
+return to node A, which translates it back.
+
+*Case 2: Cluster, client hits node B, which has the Pod.*
+
+```
+client ──► node B:30080
+             KUBE-SVC: choose from ALL Pods → Pod P (local)
+             DNAT → 10.244.2.5:80,  SNAT → node B's address
+           ──► Pod P
+Pod P sees the request coming from node B.   Works ✓
+```
+
+This is what this lab did: one node, so the Pod was always local. The Pod still
+saw the node's address (`10.42.0.1`), never the client's. So with Cluster, every
+node works, but the Pod never sees the real client IP.
+
+*Case 3: Local, client hits node B, which has the Pod.*
+
+```
+client ──► node B:30080
+             KUBE-SVL: choose only from Pods ON NODE B → Pod P
+             DNAT → 10.244.2.5:80,  no SNAT
+           ──► Pod P
+Pod P sees the request coming from 203.0.113.50 (the real client).   Works ✓
+Reply: Pod P → 203.0.113.50 goes back out through node B anyway (its gateway),
+       node B undoes the DNAT → client
+```
+
+No SNAT is needed: the Pod is on node B, so its reply goes back through node B by
+itself. This is the `RemoteAddr: 172.17.0.4` result from the lab (part 4).
+
+*Case 4: Local, client hits node A, which has no Pod.*
+
+```
+client ──► node A:30080
+             KUBE-SVL: choose only from Pods ON NODE A → there are none
+             ✗ dropped
+client gets no answer (a timeout).   Fails ✗
+```
+
+Node A isn't allowed to send the request to node B. If it did, it would have to
+SNAT, as in case 1, and the client IP would be lost again. That's exactly what
+Local exists to avoid.
+
+| Policy | Client hits | Result | Pod sees |
+|---|---|---|---|
+| Cluster | node A (no Pod) | ✓ forwarded to node B | node A's IP |
+| Cluster | node B (Pod) | ✓ | node B's IP |
+| Local | node B (Pod) | ✓ | **the real client IP** |
+| Local | node A (no Pod) | ✗ **dropped** | — |
+
+The last row is the limitation, and the reason Cluster is the default: Cluster
+works from any node with no extra setup, while Local needs something to keep
+clients off nodes without a Pod. A cloud load balancer does that by
+health-checking each node's `healthCheckNodePort`, which kube-proxy answers
+"OK" only where a local Pod exists. Cases 2 and 3 were tested; cases 1 and 4 follow
+from the rules (`KUBE-SVC` uses every endpoint, `KUBE-SVL` only local ones) and
+need a second node to test.
+
+**16. Making it a LoadBalancer: one rule, no routes.** A LoadBalancer Service adds
+one kube-proxy rule. The load balancer IP is just one more address that leads
+into the chains the NodePort already created. New chains only appear with two
+optional settings: `loadBalancerSourceRanges` and `externalTrafficPolicy: Local`.
+
+*What changed when `np-lab/web` became `type: LoadBalancer`.* The Service got a
+load balancer IP from k3s's built-in load balancer, ServiceLB:
+
+```
+web    LoadBalancer   10.43.208.17   172.17.0.3    80:30080/TCP
+status.loadBalancer: {"ingress":[{"ip":"172.17.0.3","ipMode":"VIP"}]}
+```
+
+kube-proxy added exactly one rule. No new chain: it jumps to the NodePort's
+existing `KUBE-EXT` chain. The routing table (`ip route`, and the local table)
+didn't change at all.
+
+```
++ -A KUBE-SERVICES -d 172.17.0.3/32 -p tcp … "np-lab/web:http loadbalancer IP" … --dport 80 -j KUBE-EXT-6V2XWLK7W7RZJHNE
+```
+
+```
+PREROUTING → KUBE-SERVICES
+   ├─ -d 10.43.208.17 --dport 80            → KUBE-SVC ───────────────────────────► KUBE-SEP (DNAT to a Pod)
+   ├─ -d 172.17.0.3   --dport 80  (LB IP)   → KUBE-EXT ─┐ (mark for SNAT)              ▲
+   └─ last rule: --dst-type LOCAL           → KUBE-NODEPORTS → --dport 30080 → KUBE-EXT ┘
+```
+
+So there are now three ways in to the same Service:
+
+- the ClusterIP, `10.43.208.17:80`;
+- the NodePort, any node IP on `:30080`;
+- the load balancer IP, `172.17.0.3:80`.
+
+The last two share `KUBE-EXT`, so they get the same SNAT and the same
+`externalTrafficPolicy` handling. One request to `172.17.0.3:80`, with counters:
+
+```
+PREROUTING #1 → KUBE-SERVICES          1 pkt
+KUBE-SERVICES "loadbalancer IP" rule   1 pkt
+KUBE-EXT #1 → KUBE-MARK-MASQ           1 pkt
+KUBE-EXT #2 → KUBE-SVC                 1 pkt
+Pod: RemoteAddr 10.42.0.1:34710        (SNATed, as for the NodePort)
+```
+
+*Where the IP comes from, and why kube-proxy needs a rule for it.* kube-proxy
+doesn't choose the IP and doesn't make it reachable. A load balancer controller
+does both, and writes the IP into the Service's `status.loadBalancer.ingress`.
+The controller can be the cloud controller manager (Azure, AWS, GCP), MetalLB,
+or k3s's ServiceLB. kube-proxy reads that status and adds the rule.
+
+Whether the rule is used depends on what the load balancer does to the packet
+before it reaches a node:
+
+| Load balancer sends the packet to the node as… | Which rule catches it | Examples |
+|---|---|---|
+| **dst = the LB IP** (the address is kept) | the new `-d <LB IP>` rule in `KUBE-SERVICES` | MetalLB (it announces the LB IP itself), k3s ServiceLB (LB IP = node IP, this lab), Azure Load Balancer as AKS configures it (floating IP) |
+| **dst = node IP:NodePort** (the address is rewritten) | the NodePort path, `KUBE-NODEPORTS` | AWS NLB in instance mode, classic proxy-style load balancers |
+
+That's why a LoadBalancer Service always has a NodePort too: some load balancers
+deliver to it. The `ipMode` field (`"VIP"` here) tells kube-proxy which kind it is:
+
+- **`VIP` (default):** add the LB IP rule.
+- **`Proxy`:** don't, because the load balancer rewrites the destination and may
+  also add the PROXY protocol or terminate TLS.
+
+The LB IP rule has one side effect. A Pod calling the LB IP from inside the
+cluster is caught by this rule and sent straight to a Pod, never reaching the
+load balancer. With `ipMode: Proxy`, in-cluster traffic goes out to the load
+balancer like anyone else's.
+
+The routing to the LB IP is outside kube-proxy:
+
+- **Cloud:** the provider's network routes the LB IP to its load balancer, which
+  sends to the nodes.
+- **MetalLB:** it answers ARP for the IP (L2 mode) or announces it with BGP.
+- **This lab:** the IP is the node's own address, so it needs no route at all.
+
+(The cloud, MetalLB and `ipMode: Proxy` behaviour are from their docs; only
+ServiceLB was tested.)
+
+k3s's ServiceLB also started a Pod, `svclb-web-…` (`rancher/klipper-lb`), with
+`hostPort: 80`, which forwards to the ClusterIP (`DEST_IPS=10.43.208.17`). Its
+hostPort added CNI DNAT rules (`CNI-HOSTPORT-DNAT`), but they come after
+`KUBE-SERVICES` in PREROUTING, so kube-proxy's rule caught the request first:
+
+```
+nat PREROUTING
+1  KUBE-SERVICES       ← the LB IP rule caught the packet                1 pkt
+2  CNI-HOSTPORT-DNAT   ← the svclb Pod's hostPort: never reached         0 pkts
+```
+
+*The two settings that do add chains.* `loadBalancerSourceRanges: [203.0.113.0/24]`,
+which limits who can use the LB IP:
+
+```
+- -A KUBE-SERVICES -d 172.17.0.3/32 … "loadbalancer IP" --dport 80 -j KUBE-EXT-6V2X…
++ -A KUBE-SERVICES -d 172.17.0.3/32 … "loadbalancer IP" --dport 80 -j KUBE-FW-6V2X…     ← now via a firewall chain
++ -A KUBE-FW-6V2X… -s 203.0.113.0/24 … -j KUBE-EXT-6V2X…                                ← allowed sources continue
++ -A KUBE-FW-6V2X… … "other traffic to np-lab/web:http will be dropped by KUBE-PROXY-FIREWALL"
++ -A KUBE-PROXY-FIREWALL -d 172.17.0.3/32 -p tcp … --dport 80 -j DROP                   ← filter table: the drop
+```
+
+```
+client 172.17.0.4 → LB IP 172.17.0.3:80        wget: download timed out     ← not in 203.0.113.0/24: dropped
+client 172.17.0.4 → NodePort 172.17.0.3:30080  allowed                      ← the NodePort isn't restricted
+```
+
+The range only protects the LB IP. The same Service is still open on its
+NodePort. In the cloud, a network security group usually closes NodePorts from
+outside, but nothing in kube-proxy does.
+
+`externalTrafficPolicy: Local`: the same `KUBE-EXT`/`KUBE-SVL` change as for the
+NodePort (part 4), plus a health check:
+
+```
++ -A KUBE-EXT-6V2X… … -j KUBE-SVL-6V2X…                                     (and the Pod / node-local rules)
++ -A KUBE-SVL-6V2X… "-> 10.42.0.7:80" … ;  "-> 10.42.0.8:80"
++ -A KUBE-NODEPORTS -p tcp … "np-lab/web:http health check node port" … --dport 32382 -j ACCEPT     ← filter table
+```
+
+```
+healthCheckNodePort: 32382
+GET http://172.17.0.3:32382/
+{ "service": { "namespace": "np-lab", "name": "web" }, "localEndpoints": 2, "serviceProxyHealthy": true }
+```
+
+That's kube-proxy's own HTTP server. A cloud load balancer probes it on every
+node, and only nodes reporting `localEndpoints > 0` (answering 200) get traffic.
+That's what keeps clients off the "node A without a Pod" from case 4 (part 15).
+The filter `KUBE-NODEPORTS` rule on INPUT lets the probe reach it.
+
+| Service | kube-proxy adds | New chains | Routes |
+|---|---|---|---|
+| ClusterIP | `KUBE-SERVICES` rule, `KUBE-SVC`, `KUBE-SEP`s | yes | none |
+| + NodePort | 2 `KUBE-NODEPORTS` rules, `KUBE-EXT` | `KUBE-EXT` | none |
+| + LoadBalancer | **1** `KUBE-SERVICES` rule: `-d <LB IP> -j KUBE-EXT` | **none** | **none** |
+| + `loadBalancerSourceRanges` | rule now jumps to `KUBE-FW`; a filter `DROP` | `KUBE-FW-…` | none |
+| + `externalTrafficPolicy: Local` | `KUBE-SVL`, health-check `ACCEPT`; kube-proxy serves `healthCheckNodePort` | `KUBE-SVL-…` | none |
+
+*"One rule" is for one port and one LB IP.* The rule goes into kube-proxy's
+`KUBE-SERVICES` chain, not into the built-in PREROUTING (which already jumps to
+`KUBE-SERVICES`, as OUTPUT does). kube-proxy writes one such rule per Service
+port, for each IP in `status.loadBalancer.ingress`. A Service with ports 80 and
+443 gets two, both pointing to that port's `KUBE-EXT` chain. Lab: port `https`
+(443 → 80) added to `np-lab/web`:
+
+```
+web    LoadBalancer   10.43.208.17   172.17.0.3    80:30080/TCP,443:30669/TCP
+status.loadBalancer: {"ingress":[{"ip":"172.17.0.3","ipMode":"VIP"}]}
+
+-A KUBE-SERVICES -d 10.43.208.17/32 … "np-lab/web:http cluster IP"        --dport 80  -j KUBE-SVC-6V2XWLK7W7RZJHNE
+-A KUBE-SERVICES -d 172.17.0.3/32   … "np-lab/web:http loadbalancer IP"   --dport 80  -j KUBE-EXT-6V2XWLK7W7RZJHNE
+-A KUBE-SERVICES -d 10.43.208.17/32 … "np-lab/web:https cluster IP"       --dport 443 -j KUBE-SVC-AFZYE5TTI3WVOQOL
+-A KUBE-SERVICES -d 172.17.0.3/32   … "np-lab/web:https loadbalancer IP"  --dport 443 -j KUBE-EXT-AFZYE5TTI3WVOQOL
+-A KUBE-NODEPORTS … "np-lab/web:http"  --dport 30080 -j KUBE-EXT-6V2XWLK7W7RZJHNE      (+ the localhost rule)
+-A KUBE-NODEPORTS … "np-lab/web:https" --dport 30669 -j KUBE-EXT-AFZYE5TTI3WVOQOL      (+ the localhost rule)
+```
+
+Everything below `KUBE-SERVICES` is per port: each port has its own `KUBE-EXT`,
+`KUBE-SVC` and `KUBE-SEP` chains, even when both go to the same Pods:
+
+```
+PREROUTING / OUTPUT → KUBE-SERVICES
+  │
+  ├─ port http (80)
+  │    10.43.208.17:80 ──────────────────────────────► KUBE-SVC-6V2X… ─┬─► KUBE-SEP-C24B…  DNAT 10.42.0.14:80
+  │    172.17.0.3:80   (LB IP) ─► KUBE-EXT-6V2X… ─────────▲             └─► KUBE-SEP-JE4Z…  DNAT 10.42.0.15:80
+  │    node IP:30080   (NodePort) ─► KUBE-EXT-6V2X… ──────┘
+  │
+  └─ port https (443)
+       10.43.208.17:443 ─────────────────────────────► KUBE-SVC-AFZY… ─┬─► KUBE-SEP-I35W…  DNAT 10.42.0.14:80
+       172.17.0.3:443  (LB IP) ─► KUBE-EXT-AFZY… ─────────▲             └─► KUBE-SEP-IBQQ…  DNAT 10.42.0.15:80
+       node IP:30669   (NodePort) ─► KUBE-EXT-AFZY… ──────┘
+```
+
+The chain names are hashes of namespace, name, port name and protocol, so
+`np-lab/web:http` and `np-lab/web:https` get unrelated names (`6V2X…`, `AFZY…`).
+
+With **more than one LB IP** in `status.loadBalancer.ingress` (for example a
+dual-stack Service, or a load balancer that reports several addresses), each IP
+gets its own rule for each port, all pointing to that port's `KUBE-EXT` (from
+kube-proxy's code; not tested, since ServiceLB on one node reports one IP):
+
+```
+ingress: [ {ip: 203.0.113.10}, {ip: 203.0.113.11} ],  ports 80 and 443  →  4 rules
+-A KUBE-SERVICES -d 203.0.113.10/32 … --dport 80  -j KUBE-EXT-<http>
+-A KUBE-SERVICES -d 203.0.113.11/32 … --dport 80  -j KUBE-EXT-<http>
+-A KUBE-SERVICES -d 203.0.113.10/32 … --dport 443 -j KUBE-EXT-<https>
+-A KUBE-SERVICES -d 203.0.113.11/32 … --dport 443 -j KUBE-EXT-<https>
+```
+
+(An IPv6 ingress IP goes into the IPv6 tables, `ip6tables`, not these.)
+
+**17. How to read a rule, and what `-m comment` is.** Read a rule left to right.
+Each `-m NAME` starts a match module, and the options after it (`--…`) belong to
+that module, until the next `-m` or the `-j`. Every match must be true for the
+target to run. Take this rule from the lab:
+
+```
+-A KUBE-SVC-6V2XWLK7W7RZJHNE ! -s 10.42.0.0/16 -d 10.43.208.17/32 -p tcp -m comment --comment "np-lab/web:http cluster IP" -m tcp --dport 80 -j KUBE-MARK-MASQ
+```
+
+```
+-A KUBE-SVC-6V2XWLK7W7RZJHNE                       append this rule to chain KUBE-SVC-6V2X…
+
+! -s 10.42.0.0/16                                  ┐ built-in matches (part of every rule):
+-d 10.43.208.17/32                                 │   source is NOT in 10.42.0.0/16 (not a Pod)
+-p tcp                                             ┘   destination 10.43.208.17, protocol TCP
+
+-m comment --comment "np-lab/web:http cluster IP"  ← match module "comment", its one option --comment
+                                                      checks nothing: always true, just a label
+
+-m tcp --dport 80                                  ← match module "tcp", option --dport: destination port 80
+
+-j KUBE-MARK-MASQ                                  ← target: if everything above matched, jump here
+```
+
+It reads as: "in chain `KUBE-SVC-6V2X…`, a TCP packet to `10.43.208.17:80` that
+doesn't come from a Pod → jump to `KUBE-MARK-MASQ`" (label: `np-lab/web:http
+cluster IP`). `iptables -L` shows the same rule as a table, with the comment
+between `/* */`:
+
+```
+target          prot  source          destination
+KUBE-MARK-MASQ  tcp   !10.42.0.0/16   10.43.208.17   /* np-lab/web:http cluster IP */ tcp dpt:80
+                                                     └───── -m comment ─────────────┘ └ -m tcp ┘
+```
+
+A rule with two modules:
+
+```
+-A KUBE-SVC-6V2X… -m comment --comment "np-lab/web:http -> 10.42.0.7:80" -m statistic --mode random --probability 0.5 -j KUBE-SEP-MX3S…
+                  └──────────── label: which endpoint ──────────────┘ └── module "statistic": true 50% of the time ──┘ └ jump to that endpoint's chain ┘
+```
+
+*What `-m comment` does in the kernel.* Nothing to the packet. Its match function
+(`net/netfilter/xt_comment.c`) is:
+
+```c
+comment_mt(const struct sk_buff *skb, struct xt_action_param *par)
+{
+	/* We always match */
+	return true;
+}
+```
+
+The text (at most 256 bytes, `XT_MAX_COMMENT_LEN`) is stored inside the rule, so
+`iptables-save` and `iptables -L` can show it. Removing a comment never changes
+what a rule matches, and it can sit anywhere among the matches.
+
+*Why kube-proxy labels almost every rule.* Its chain names are hashes of the
+Service's namespace, name, port and protocol (`KUBE-SVC-6V2XWLK7W7RZJHNE`), so the
+comment is what ties a rule to a Service and says why it exists:
+
+| Comment (from this lab) | Tells you |
+|---|---|
+| `np-lab/web:http cluster IP` | the rule for Service `np-lab/web`, port `http`, at its ClusterIP |
+| `np-lab/web:http -> 10.42.0.7:80` | this jump goes to the endpoint `10.42.0.7:80` |
+| `np-lab/web:http loadbalancer IP` | the rule for the load balancer IP |
+| `masquerade traffic for np-lab/web:http external destinations` | why `KUBE-EXT` marks for SNAT |
+| `np-lab/web:http has no endpoints` | why this rule REJECTs |
+| `kubernetes service nodeports; NOTE: this must be the last rule in this chain` | a warning to anyone editing the chain |
+
+That's why `iptables-save -t nat | grep 'np-lab/web'` found every rule for the
+Service throughout this lab.
+
+*Cost.* In iptables (legacy, and iptables-nft as on this node) `comment` is a
+real match: every packet that reaches the rule calls `comment_mt`, which returns
+`true` at once, and the rule carries the 256 bytes. `nft list` on this node shows
+it through the compatibility layer:
+
+```
+ip saddr != 10.42.0.0/16 ip daddr 10.43.208.17 ip protocol tcp xt match "comment" tcp dport 80 … jump KUBE-MARK-MASQ
+```
+
+Native nftables (kube-proxy's nftables mode) has a `comment "…"` keyword instead,
+stored as rule metadata (`NFTA_RULE_USERDATA`) and never evaluated for packets.
+
+**18. Every match module and target on this node.** Extracted from
+`iptables-save` of the k3s node (nat, filter, mangle, raw), with counts per
+table. Jumps to user chains (`-j KUBE-SVC-…`) aren't targets in this sense and
+are left out.
+
+*Match modules (`-m`):*
+
+| Module | Uses (nat / filter) | What it matches | Options seen | Written by | Example from the node |
+|---|---|---|---|---|---|
+| **comment** | 52 / 118 | nothing: always true, a label | `--comment "…"` | everyone | `-m comment --comment "kubernetes service portals"` |
+| **tcp** | 22 / – | TCP header fields | `--dport`, `--sport` | kube-proxy, CNI | `-p tcp -m tcp --dport 30080` |
+| **udp** | 3 / – | UDP header fields | `--dport` | kube-proxy | `-p udp … "kube-system/kube-dns:dns" -m udp -j DNAT …` |
+| **statistic** | 1 / – | true randomly, or every Nth packet | `--mode random --probability`, `--mode nth --every` | kube-proxy | `-m statistic --mode random --probability 0.5 -j KUBE-SEP-…` |
+| **addrtype** | 3 / 8 | the address's *type*, from the routing table (`LOCAL`, `UNICAST`, …) | `--dst-type`, `--src-type` | kube-proxy, CNI | `-m addrtype --dst-type LOCAL -j KUBE-NODEPORTS` |
+| **mark** | 3 / 16 | the packet mark (`skb->mark`) under a mask | `--mark V/M`, `! --mark` | kube-proxy, flannel, kube-router, CNI | `-m mark --mark 0x4000/0x4000` |
+| **conntrack** | – / 22 | the connection's state in conntrack | `--ctstate NEW,ESTABLISHED,RELATED,INVALID,DNAT…` | kube-proxy, kube-router | `-m conntrack ! --ctstate RELATED,ESTABLISHED,DNAT -j DROP` |
+| **nfacct** | 1 / 1 | always true; adds to a named counter | `--nfacct-name` | kube-proxy | `-m nfacct --nfacct-name localhost_nps_accepted_pkts` |
+| **multiport** | 1 / 2 | several ports in one rule | `--dports 80,443` | CNI portmap, kube-router | `-m multiport --dports 80 -j CNI-DN-…` |
+| **physdev** | – / 12 | the bridge port a bridged packet uses | `--physdev-is-bridged` | kube-router | `-m physdev --physdev-is-bridged … -j KUBE-POD-FW-…` |
+| **limit** | – / 6 | true at most N times per period | `--limit 10/min --limit-burst 10` | kube-router | `… -m limit --limit 10/min … -j NFLOG` |
+| **icmp** | – / 3 | ICMP type/code | `--icmp-type 8` (echo request) | kube-router | `-p icmp -m icmp --icmp-type 8 -j ACCEPT` |
+
+`-s`, `-d`, `-p`, `-i`, `-o` and `!` are built-in matches, part of every rule,
+with no `-m`. `-p tcp` makes the `tcp` module available, so `--dport` works
+without `-m tcp`; `iptables-save` then prints `-m tcp` explicitly.
+
+*Targets (`-j`):*
+
+| Target | Uses (nat / filter) | What it does | Ends the chain? | Example |
+|---|---|---|---|---|
+| **ACCEPT** | – / 22 | final: this table is done, let it continue | yes | `-m mark --mark 0x4000/0x4000 -j ACCEPT` |
+| **DROP** | – / 8 | discard silently | yes | `KUBE-FIREWALL … -j DROP` |
+| **REJECT** | – / 6 | discard and send an error back | yes | `-j REJECT --reject-with icmp-port-unreachable` |
+| **RETURN** | 5 / 3 | leave this chain, continue in the one that jumped here | ends this chain | `KUBE-POSTROUTING -m mark ! --mark 0x4000/0x4000 -j RETURN` |
+| **DNAT** | 8 / – | rewrite the destination | yes | `-j DNAT --to-destination 10.42.0.7:80` |
+| **MASQUERADE** | 4 / – | SNAT to the outgoing interface's address | yes | `-j MASQUERADE --random-fully` |
+| **MARK** | 3 / 13 | set bits in `skb->mark` | **no**: carries on | `-j MARK --set-xmark 0x4000/0x4000` |
+| **NFLOG** | – / 6 | copy the packet to a userspace logger | **no** | kube-router logging policy drops |
+
+*Who uses what:*
+
+| Program | Modules | Targets |
+|---|---|---|
+| **kube-proxy** | `comment`, `tcp`, `udp`, `statistic`, `addrtype`, `mark`, `conntrack`, `nfacct` | `DNAT`, `MASQUERADE`, `MARK`, `RETURN`, `ACCEPT`, `DROP`, `REJECT` |
+| **kube-router** (k3s NetworkPolicy) | `comment`, `mark`, `conntrack`, `physdev`, `limit`, `icmp`, `multiport` | `ACCEPT`, `REJECT`, `DROP`, `MARK`, `NFLOG` |
+| **flannel** | `mark`, `comment` | `RETURN`, `MASQUERADE` |
+| **CNI portmap** (hostPort, used by ServiceLB) | `addrtype`, `tcp`, `multiport`, `mark`, `comment` | `DNAT`, `MARK`, `MASQUERADE` |
+
+*Not on this node, but worth knowing* (from `iptables-extensions(8)`; not tested):
+
+| Module | Matches | Where you'd see it |
+|---|---|---|
+| **recent** | whether a source was seen recently (a list per rule) | kube-proxy, for `sessionAffinity: ClientIP` (`-m recent --rcheck --seconds 10800 --reap --name KUBE-SEP-…`) |
+| **sctp** | SCTP ports | kube-proxy, for SCTP Services |
+| **set** | membership in an `ipset` | Calico, kube-proxy in IPVS mode, kube-router |
+| **iprange** | a range like `10.0.0.5-10.0.0.20` | firewall scripts |
+| **owner** | the local process's UID/GID (OUTPUT only) | per-user egress rules |
+| **state** | the older form of `conntrack --ctstate` | older rulesets |
+| **connlimit** / **hashlimit** | connections per source / per-key rate limits | DDoS protection |
+| **string**, **length**, **mac**, **tos**, **policy**, **socket**, **bpf**, **u32** | payload text, length, source MAC, TOS, IPsec policy, a local socket, a BPF program, raw header bytes | special cases (TPROXY uses `socket`) |
+
+On any node, `iptables-save | grep -o -- '-m [a-z0-9_]*' | sort | uniq -c` lists the
+modules in use.
 
 ### 4.3.1 Traffic policies: `internalTrafficPolicy` and `externalTrafficPolicy` (lab)
 

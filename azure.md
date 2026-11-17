@@ -544,6 +544,486 @@ When you scale out, Azure does not change the resources (CPU/RAM) per instance. 
 
 ## 4. Identity
 
+### Users, service principals and managed identities, in plain terms
+
+When something calls Azure, Azure asks two questions: who are you, and what are you allowed to
+do? The "who" is always an object in Entra ID's directory, and it's what the token's `oid` points
+at. There are two kinds of "who":
+
+| Who | Directory object |
+|---|---|
+| a person | a **user** |
+| a piece of software | a **service principal** |
+
+So "the identity is the service principal" means: when an app calls Azure, the "who" Azure sees is
+the app's service principal. Permissions are attached to it, and the token's `oid` is its ID.
+
+**App registration = the definition behind it.** When you create a service principal yourself, you
+first create an **app registration**: a definition holding the app's name, its secrets and its
+redirect URIs. Entra then creates the service principal from it.
+
+```
+app registration  a39fc866-…   ← you added the secret HERE (the definition)
+       │ creates
+       ▼
+service principal 9088f456-…   ← this is WHO signs in; token oid = 9088f456-…; roles go HERE
+```
+
+**Managed identity = a service principal Azure manages for you.** A managed identity is also a
+service principal. The difference is who created it and who holds its credential:
+
+| | Service principal you create | Managed identity |
+|---|---|---|
+| What it is in the directory | a service principal | **a service principal** (type `ManagedIdentity`) |
+| Created by | you, through an app registration | Azure, when you create the identity or turn it on for a VM, App Service, … |
+| Credential | a secret or certificate **you** store and rotate | Azure holds and rotates it; **you never see it** |
+| How it gets a token | sends its secret to Entra | asks the platform from inside the resource (IMDS, `Metadata: true`) |
+| Used from | anywhere the secret is | only from Azure resources (or via federation, e.g. AKS Workload Identity) |
+
+```
+(no app registration you can see)
+managed identity orders-id
+   principalId dea7eff2-…   = its service principal's ID → token oid = dea7eff2-…; roles go HERE
+   clientId    fc08d3dd-…   = what you pass to IMDS to say "give me a token for THIS identity"
+```
+
+```
+directory objects that can sign in
+├── users                         (people)
+└── service principals            (software)
+    ├── from an app registration  (you manage the secret)
+    └── managed identities        (Azure manages the secret)
+```
+
+- **Service principal** is the general kind: any software account.
+- **Managed identity** is one type of service principal: the type Azure creates and manages the
+  credential for.
+
+Every managed identity is a service principal, but not every service principal is a managed
+identity.
+
+**When to use which:**
+
+- **Your code runs on Azure** (a VM, App Service, AKS, Functions): use a managed identity, so
+  there's no secret to leak or rotate.
+- **It runs outside Azure** (a laptop, GitHub Actions, another cloud): use a service principal from
+  an app registration, ideally with federation instead of a secret.
+
+#### Seen on the wire (lab)
+
+Both examples, request by request, against floci-az 0.16.0
+([azure-local-lab.md](azure-local-lab.md)). Long tokens and secrets are cut short (`…`).
+
+**`billing-worker`: an app registration and its service principal.** The app registration (Graph
+calls it an *application*):
+
+```
+→ GET /v1.0/applications/a39fc866-ae1a-4c21-b6a5-a332e1bb0971
+← HTTP 200
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#applications/$entity",
+  "id": "a39fc866-ae1a-4c21-b6a5-a332e1bb0971",          ← the application object's own id
+  "appId": "fb08020e-2d83-4be9-9a19-a2817dec3450",       ← the client_id, shared with the service principal
+  "displayName": "billing-worker",
+  "signInAudience": "AzureADMyOrg",                      ← single-tenant
+  "api": { … }, "web": { "redirectUris": [], … }, "spa": { … }, "publicClient": { … },
+  "requiredResourceAccess": [],
+  "keyCredentials": [],                                  ← certificates would go here
+  "passwordCredentials": [                               ← secrets live HERE, on the application object
+    {
+      "displayName": "ci",
+      "keyId": "546740a4-02c3-491d-ba89-d1a8c62d752d",
+      "hint": "MjC",                                     ← the first 3 characters, for recognising it
+      "secretText": null,                                ← never shown again after creation
+      "startDateTime": "2026-11-15T00:02:44.093831667Z",
+      "endDateTime": "2028-11-14T00:02:44.093831667Z"
+    }
+  ]
+}
+```
+
+Its service principal, found by the shared `appId`:
+
+```
+→ GET /v1.0/servicePrincipals?$filter=appId eq 'fb08020e-2d83-4be9-9a19-a2817dec3450'
+← HTTP 200
+{ "value": [ { "appId": "fb08020e-2d83-4be9-9a19-a2817dec3450",
+               "id": "9088f456-4c80-3cc8-9707-b966aa71b1ab" } ] }     ← a different id: the identity
+```
+
+A new secret is added to the **application object**, and returned once:
+
+```
+→ POST /v1.0/applications/a39fc866-ae1a-4c21-b6a5-a332e1bb0971/addPassword
+  Content-Type: application/json
+  {"passwordCredential":{"displayName":"notes-demo"}}
+← HTTP 200
+{
+  "displayName": "notes-demo",
+  "keyId": "d3841d41-25c2-4653-b1a6-0f46e700f1d9",
+  "hint": "7du",
+  "secretText": "7duY4-…",                               ← copy it now; GET never returns it
+  "startDateTime": "2026-11-15T00:17:04.668671510Z",
+  "endDateTime": "2028-11-14T00:17:04.668671510Z"         ← 2 years by default
+}
+```
+
+Signing in with that secret. The request names the **app** (`client_id` = `appId`); the token
+names the **service principal** (`oid`):
+
+```
+→ POST /00000000-0000-0000-0000-000000000002/oauth2/v2.0/token
+  Content-Type: application/x-www-form-urlencoded
+  grant_type=client_credentials&client_id=fb08020e-2d83-4be9-9a19-a2817dec3450
+  &client_secret=7duY4-…&scope=https://management.azure.com/.default
+← HTTP 200
+{ "token_type": "Bearer", "expires_in": 3599, "ext_expires_in": 3599, "access_token": "eyJ0eXAiOiJKV1QiLCJhbGci…" }
+
+access_token payload:
+{
+  "iss": "http://127.0.0.1:4577/00000000-0000-0000-0000-000000000002/v2.0",
+  "sub": "9088f456-4c80-3cc8-9707-b966aa71b1ab",         ← the service principal
+  "oid": "9088f456-4c80-3cc8-9707-b966aa71b1ab",         ← the service principal: roles are checked against this
+  "azp": "fb08020e-2d83-4be9-9a19-a2817dec3450",         ← the app (client_id) that asked
+  "aud": "https://management.azure.com",
+  "tid": "00000000-0000-0000-0000-000000000002",
+  "idtyp": "app",                                        ← software, not a user
+  "ver": "2.0",
+  "iat": 1794701825, "nbf": 1794701825, "exp": 1794705424,
+  "uti": "yI31f0MjzrhlLt1jvhJW-A"
+}
+```
+
+**`orders-id`: a managed identity.** It's an ARM resource, and ARM returns both of its ids:
+
+```
+→ GET /subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/lab/providers/
+      Microsoft.ManagedIdentity/userAssignedIdentities/orders-id?api-version=2023-01-31
+  Authorization: Bearer eyJ0eXAiOiJKV1Qi…
+← HTTP 200
+{
+  "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/lab/providers/Microsoft.ManagedIdentity/userAssignedIdentities/orders-id",
+  "name": "orders-id",
+  "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+  "location": "westeurope",
+  "tags": {},
+  "properties": {
+    "tenantId": "00000000-0000-0000-0000-000000000002",
+    "principalId": "dea7eff2-d136-4448-b359-6da5a2cd95d3",   ← its service principal's id: roles go here
+    "clientId": "fc08d3dd-e722-419b-8d5d-0528dc4da9a7"       ← its appId: name it when asking for a token
+  }
+}
+```
+
+There's no app registration behind it, so there's nowhere to put a secret:
+
+```
+→ GET /v1.0/applications?$filter=appId eq 'fc08d3dd-e722-419b-8d5d-0528dc4da9a7'
+← HTTP 200
+{ "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#applications", "value": [] }
+```
+
+Code running on the resource asks IMDS for a token. No secret is sent: the `Metadata: true` header
+and being on the resource are enough:
+
+```
+→ GET /metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net
+      &client_id=fc08d3dd-e722-419b-8d5d-0528dc4da9a7
+  Metadata: true
+← HTTP 200
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGci…",
+  "client_id": "fc08d3dd-e722-419b-8d5d-0528dc4da9a7",
+  "resource": "https://vault.azure.net",
+  "token_type": "Bearer",
+  "expires_in": "3599", "ext_expires_in": "3599",         ← IMDS returns numbers as strings
+  "expires_on": "1794705424", "not_before": "1794701825"
+}
+
+access_token payload:
+{
+  "iss": "http://127.0.0.1:4577/00000000-0000-0000-0000-000000000002/",
+  "sub": "dea7eff2-d136-4448-b359-6da5a2cd95d3",         ← principalId
+  "oid": "dea7eff2-d136-4448-b359-6da5a2cd95d3",         ← principalId: roles are checked against this
+  "appid": "fc08d3dd-e722-419b-8d5d-0528dc4da9a7",       ← clientId (v1 token, so appid rather than azp)
+  "aud": "https://vault.azure.net",
+  "tid": "00000000-0000-0000-0000-000000000002",
+  "idtyp": "app",
+  "ver": "1.0",
+  "xms_mirid": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/lab/providers/Microsoft.ManagedIdentity/userAssignedIdentities/orders-id",
+  "iat": 1794701825, "nbf": 1794701825, "exp": 1794705424,
+  "uti": "Wj2Oy1uDhRtORkWUFbGHJQ"
+}
+```
+
+Side by side:
+
+| | `billing-worker` (app registration) | `orders-id` (managed identity) |
+|---|---|---|
+| Request names | `client_id` = appId `fb08020e-…` + **a secret** | `client_id` = clientId `fc08d3dd-…` + `Metadata: true`, **no secret** |
+| Token `oid` (who) | `9088f456-…` = the service principal | `dea7eff2-…` = `principalId` |
+| Token `azp` / `appid` (which app) | `fb08020e-…` | `fc08d3dd-…` |
+| Where the credential is | `passwordCredentials` on the application object | nowhere you can see |
+
+In floci-az, IMDS answers at `localhost:4577`; in Azure it's `169.254.169.254`, reachable only from
+inside the resource. That, plus the required header, is what stands in for a secret.
+
+### User and application identities
+
+Just as a person needs a **user** account in Entra ID before they can be given access, an
+application needs an identity of its own. That identity is a **service principal**: the "account"
+an application signs in as, gets tokens for, and is given permissions through. Entra calls these
+non-human identities **workload identities**: service principals from app registrations,
+managed identities, and the federated credentials that let outside workloads use them.
+
+| | User | Service principal (application or managed identity) |
+|---|---|---|
+| Who | a person | an app, script, pipeline, VM, Pod |
+| Signs in with | password, passkey, MFA, interactively | secret, certificate, federated token, or the platform (managed identity), never interactively |
+| Conditional Access, MFA | yes | MFA never; Conditional Access only for single-tenant service principals, with Workload ID licences |
+| Token claims that say who | `upn` / `preferred_username`, `oid` | `oid` = the service principal's object id, `idtyp: app`, no `upn` |
+| Permissions shown as | `scp` (delegated scopes) | `roles` (app roles granted to it) |
+
+#### Users and apps both authenticate
+
+The difference is the kind of directory object each signs in as:
+
+- **A person** signs in as a **user** object.
+- **An app** signs in as a **service principal**, which is the app's equivalent of a user account.
+
+Without a service principal in the tenant, an app has nothing to sign in as. Entra refuses it with
+`AADSTS7000229`: "the client application is missing service principal in the tenant".
+
+```
+person ── password / passkey / MFA ──────────────────► user object         ─┐
+                                                                             ├─► token
+app ───── secret / certificate / federated token ────► service principal   ─┘
+          (or the platform, for a managed identity)
+```
+
+#### Where the credential lives vs who signs in
+
+There's a subtlety for app registrations: the credential and the identity are on different objects.
+
+| Object | Holds | Role at sign-in |
+|---|---|---|
+| **Application object** (app registration) | the secret, certificate or federated credential; redirect URIs; requested permissions | the **definition**: Entra checks the credential against it |
+| **Service principal** (in each tenant that uses the app) | role assignments, consented permissions, sign-in logs | the **identity**: the token's `oid` is its ID, and its permissions apply |
+
+So you add a secret to the app registration, but the identity that signs in and gets access is the
+service principal. Two consequences:
+
+- **A multi-tenant app has one app registration and one service principal per tenant.** Each
+  tenant's admin grants permissions to its own service principal.
+- **A managed identity has no app registration you can see.** The platform holds its credential and
+  only the service principal is visible, which is why it can't be given a secret.
+
+#### When a user signs in through an app
+
+Both authenticate in the same exchange:
+
+- **The user** proves who they are (password or MFA).
+- **The app** identifies itself as the OAuth client, in one of two ways:
+  - **A confidential client** (a web server, a daemon) also proves itself with a secret or
+    certificate.
+  - **A public client** (an SPA, a mobile app, a CLI) can't keep a secret. It's identified by its
+    `client_id` and redirect URI, and PKCE protects the code exchange.
+
+The app still needs a service principal in the user's tenant. It's usually created the first time
+someone consents to the app. The token is the user's (`oid`, `scp`), but `azp` records which app
+asked for it.
+
+Tested against floci-az in
+[azure-local-lab.md §12](azure-local-lab.md#12-signing-in-as-a-user-or-as-an-app): the secret sits on the
+application object while the token's `oid` is the service principal's; a public and a confidential
+client both get the user's token with `azp` = the app. floci-az doesn't enforce the service
+principal requirement (an unknown `client_id` still gets a token) or keep one service principal per
+tenant.
+
+**Two permission systems, and a service principal can hold both.** "IAM" usually means the first:
+
+```
+                       ┌─ Azure RBAC: "Access control (IAM)" on a management group, subscription,
+                       │   resource group or resource
+                       │     role assignment = principalId (SP object id) + role + scope
+                       │     → ARM actions ("Contributor") and data actions ("Key Vault Secrets User")
+service principal ─────┤
+                       ├─ Entra API permissions: on the app registration, granted by admin consent
+                       │     application permissions (app roles, e.g. Graph User.Read.All) → roles claim
+                       │     delegated permissions (e.g. User.Read)                        → scp claim
+                       │
+                       └─ Entra directory roles: e.g. "Application Administrator"
+                             → manage Entra itself (users, apps), not Azure resources
+```
+
+So "can this app read that Key Vault secret?" is an **Azure RBAC** question, while "can this app
+list all users?" is an **Entra API permission** question (Graph `User.Read.All`, application type,
+admin-consented). One doesn't imply the other.
+
+**Permissions are assigned to the service principal.** Permissions always land on the
+service principal, the identity, never on the app registration (the definition). That holds in
+all three permission systems above, though where you *request* a permission can differ from where
+it's *granted*.
+
+| Permission system | Assigned to | Identified by | Example |
+|---|---|---|---|
+| **Azure RBAC** ("Access control (IAM)") | the service principal | its **object id** (`principalId`) | `az role assignment create --assignee-object-id <SP object id> --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User" --scope <vault id>` |
+| **Entra API permissions** (Graph etc.) | requested on the **app registration**, granted to the **service principal** | an app role assignment on the SP | admin consent for `User.Read.All` creates `appRoleAssignment { principalId: <SP>, appRoleId: …, resourceId: <Graph's SP> }` |
+| **Entra directory roles** | the service principal | its object id | "Application Administrator" assigned to the SP |
+| Data-plane RBAC in some services (Key Vault, Cosmos DB, Storage) | the service principal | its object id | Cosmos DB: `sqlRoleAssignments` with `principalId` = the SP's object id |
+| Key Vault access policies (older model) | the service principal | its object id | `accessPolicies[].objectId` |
+
+The **object id** of the service principal is the id permissions are granted to:
+
+- for an app registration, the service principal's `id` (`9088f456-…` for `billing-worker` in
+  "Seen on the wire" above), not the app registration's id (`a39fc866-…`) and not the `appId`;
+- for a managed identity, its `principalId` (`dea7eff2-…` for `orders-id`).
+
+It's the same value that appears as `oid` in the identity's tokens: Azure decides access by
+comparing a token's `oid` with the `principalId` of each assignment.
+
+API permissions take two steps. The app registration lists what the app **wants**; admin consent
+creates what it **has**, on the service principal:
+
+```
+app registration "hr-sync"                       service principal of hr-sync (in your tenant)
+  requiredResourceAccess:                        appRoleAssignments:
+    Graph → User.Read.All (Role)   ── admin ──►    { principalId: <hr-sync SP>,
+  ("what this app WANTS")            consent        resourceId:  <Graph's SP>,
+                                                     appRoleId:   df021288-… (User.Read.All) }
+                                                  ("what this app HAS")  → token gets "roles": ["User.Read.All"]
+```
+
+In a multi-tenant app, each tenant's admin grants permissions to that tenant's own service
+principal.
+
+- **Groups:** a service principal can be a group member, and roles can be assigned to the group;
+  it then gets them through membership.
+- **The `appId` shortcut:** `az role assignment create --assignee <appId>` accepts an `appId`, but
+  `az` looks up the matching service principal and assigns to its object id. ARM templates and
+  Terraform need the object id directly (`principalId`); passing the `appId` there is a common
+  mistake, rejected as an unknown principal.
+
+floci-az 0.16.0 can't show assignments (no `Microsoft.Authorization`, no `appRoleAssignments`, and
+Cosmos DB and Key Vault accept any token), but its tokens do carry the service principal's object
+id as `oid`: [azure-local-lab.md §11–12](azure-local-lab.md#11-user-and-application-identities).
+
+**An app acting as itself vs acting for a user:**
+
+| | App-only (as itself) | Delegated (on behalf of a signed-in user) |
+|---|---|---|
+| OAuth flow | client credentials, managed identity | authorization code (+ PKCE), on-behalf-of |
+| Whose permissions | the service principal's | the **user's**, limited to the scopes the app was consented for |
+| Token | `idtyp: app`, `roles`, no user | `scp`, the user's `oid` and `upn` |
+| Typical use | background jobs, daemons, service-to-service | web and mobile apps that sign users in |
+
+In the delegated case the app still has a service principal in the tenant (that's what the user
+consents to), but what it can reach is capped by what the **user** can reach: an app with delegated
+`User.Read` can't read other users, even if it asks.
+
+Checked against floci-az 0.16.0 in
+[azure-local-lab.md §11](azure-local-lab.md#11-user-and-application-identities):
+
+- **The token shapes match.** The app-only token has `idtyp: app`, the service principal's `oid` and
+  no user claims. The delegated token has the user's `oid`, `preferred_username` and `scp`.
+- **No permission system could be tested.** There's no `roles` claim, no app role assignments
+  (admin consent), no directory roles, and no Azure RBAC in that version. Graph answered a
+  `User.Read` token, and no token at all, with `200` where Azure would say `403` or `401`.
+
+The permission parts of this section are from Microsoft's documentation.
+
+### A managed identity is a service principal
+
+Close, but not quite "also called". **Every managed identity is a service principal, but not
+every service principal is a managed identity.** A managed identity is the kind of service
+principal whose credentials Azure creates, holds and rotates for you.
+
+Three Entra objects are involved:
+
+```
+application object  (an "app registration")         the definition: name, redirect URIs, API permissions,
+  appId = 1111…                                       secrets/certificates. Lives in its home tenant.
+        │ one per tenant that uses the app
+        ▼
+service principal   (an "enterprise application")   the identity inside one tenant: what signs in,
+  id    = 3333…  (object id)                          gets tokens, and is given roles.
+  appId = 1111…
+  servicePrincipalType = Application | ManagedIdentity | Legacy | SocialIdp
+
+managed identity    = a service principal with servicePrincipalType = ManagedIdentity,
+                      no app registration you can see or edit, and no secret you can read
+```
+
+When people say "a service principal" they usually mean the `Application` kind: an app
+registration plus its service principal, with a secret or certificate you manage
+(`az ad sp create-for-rbac`). A managed identity is the same kind of object, minus the credential
+handling.
+
+**A managed identity is one kind of service principal.** A service principal is a user account for
+software; Entra records which kind it is in `servicePrincipalType`:
+
+```
+directory objects that can sign in
+├── users                              (people)
+└── service principals                 (software)
+    ├── Application                    from an app registration
+    │   ├── your own apps              you created the app registration in this tenant
+    │   ├── other publishers' apps     a multi-tenant app (SaaS, a partner's API) consented in this tenant
+    │   └── Microsoft's own apps       Microsoft Graph, Azure Portal, Azure CLI, … (in every tenant)
+    ├── ManagedIdentity                created by Azure for a resource; Azure holds the credential
+    │   ├── system-assigned            tied to one resource, deleted with it
+    │   └── user-assigned              a resource of its own, attachable to many
+    ├── Legacy                         created before app registrations existed; no app registration
+    └── SocialIdp                      for internal use (Microsoft's docs give no more)
+```
+
+| `servicePrincipalType` | Has an app registration? | Who holds the credential | Example |
+|---|---|---|---|
+| `Application` | yes: in this tenant (your app) or in the publisher's tenant (multi-tenant app) | you (secret, certificate) or nobody (public clients sign in users only) | a CI pipeline's service principal; Microsoft Graph's own service principal (`appId 00000003-0000-0000-c000-000000000000`) |
+| `ManagedIdentity` | no | Azure | a VM's system-assigned identity; a user-assigned identity used by AKS Workload Identity |
+| `Legacy` | no; its credentials sit on the service principal itself | you | apps from old tooling (MSOnline PowerShell, early Azure AD); only usable in the tenant that created them |
+| `SocialIdp` | — | — | internal use |
+
+- **`Application` covers more than "your apps".** Every tenant holds service principals for
+  Microsoft's own apps and APIs. When an app asks for Graph's `User.Read`, it's asking for a
+  permission defined on Graph's service principal in your tenant. Consenting to a third-party
+  multi-tenant app creates its service principal in your tenant, while its app registration stays in
+  the publisher's tenant.
+- **In the portal:** all four kinds are listed under **Enterprise applications** (filter by
+  "Application type"). **App registrations** lists only application objects, so managed identities
+  and `Legacy` service principals never appear there.
+
+From Microsoft Graph's `servicePrincipal` reference; not tested in a real tenant. floci-az leaves
+`servicePrincipalType` empty (`null`) for every service principal, including the seeded app's.
+
+**The two ids of a managed identity**, and where each shows up:
+
+| Managed identity property | Service principal property | Token claim | Used for |
+|---|---|---|---|
+| `principalId` | `id` (object id) | `oid`, `sub` | **role assignments**, Key Vault access policies, Graph lookups |
+| `clientId` | `appId` | `appid` (v1) / `azp` (v2) | **asking for a token** as this identity (`client_id=` on IMDS, `azure.workload.identity/client-id` on a ServiceAccount) |
+| `tenantId` | (its tenant) | `tid` | |
+
+Mixing these up is a common mistake: a role assignment needs the `principalId`, while choosing which
+identity to sign in as needs the `clientId`.
+
+**Application service principal vs managed identity:**
+
+| | Application (app registration + SP) | Managed identity |
+|---|---|---|
+| Credential | secret or certificate **you** create, store and rotate | created and rotated by Azure; you never see it |
+| How it gets a token | sends its secret or certificate to Entra | asks the platform (IMDS, App Service's identity endpoint) from inside an Azure resource |
+| Usable from outside Azure | yes, anywhere the secret is | only through a **federated identity credential** (AKS Workload Identity, GitHub Actions, another cloud) on a user-assigned identity |
+| Multi-tenant | can be | no, single tenant |
+| Lifecycle | until you delete it | **system-assigned**: created and deleted with its resource. **user-assigned**: a resource of its own, attachable to many resources |
+| Typical use | CI/CD outside Azure, multi-tenant SaaS, apps that sign in users | anything running on Azure calling Azure (Key Vault, Storage, SQL, ARM) |
+
+In Entra (from Microsoft's docs, not tested in a real tenant): managed identities appear under
+**Enterprise applications** with the "Managed Identities" filter, not under App registrations.
+`az ad sp show --id <principalId>` returns `"servicePrincipalType": "ManagedIdentity"`, and its
+`alternativeNames` include the identity's resource id (with `isExplicit=True` for a user-assigned
+identity, `isExplicit=False` for a system-assigned one).
+
 ### Managed identities in AKS: node vs Pod
 
 ```
@@ -563,6 +1043,58 @@ Uses projected ServiceAccount tokens + OIDC federation:
 5. The SDK sends that JWT to Entra ID as a client assertion and gets an access token for the managed identity.
 
 No IMDS and no privileged DaemonSet are involved. The full details are in [workload-identity.md](workload-identity.md).
+
+### Entra ID locally: floci-az (from the source, not run)
+
+[floci-az](https://github.com/floci-io/floci-az) is a local Azure emulator, the Azure sibling of the
+AWS emulator [floci](https://github.com/floci-io/floci). Its Entra ID
+(`src/main/java/io/floci/az/services/entra/`) is a local OpenID Connect and OAuth 2.0 token server
+shaped like `login.microsoftonline.com`. It hands out real RS256-signed JWTs, and the rest of the
+emulator checks them. Same URL paths as real Entra, with `localhost:4577` in place of the Microsoft
+host:
+
+| Path | Real Entra equivalent | Purpose |
+|---|---|---|
+| `POST /{tenant}/oauth2/v2.0/token` (and v1 `/oauth2/token`) | same | get a token |
+| `GET /{tenant}/oauth2/v2.0/authorize` | same | browser sign-in (auth code + PKCE) |
+| `GET /{tenant}/v2.0/.well-known/openid-configuration` | same | discovery: lists the other URLs |
+| `GET /{tenant}/discovery/v2.0/keys` | same | JWKS: the public key that verifies tokens |
+| `GET /metadata/identity/oauth2/token` | IMDS at `169.254.169.254` | managed identity token |
+
+Defaults: tenant `00000000-0000-0000-0000-000000000002`, client
+`11111111-1111-1111-1111-111111111111`, user `dev-user@floci-az.local`.
+
+**Managed identity.** `ManagedIdentityHandler.java` emulates the IMDS token call an app makes from
+inside Azure:
+
+```
+GET /metadata/identity/oauth2/token?resource=https://vault.azure.net&client_id=…
+Metadata: true                         ← required, as in real IMDS (blocks SSRF-style calls)
+```
+
+It signs with the same key as Entra. The token is v1, `idtyp=app`, `sub`/`oid` = the identity's
+`principalId`, plus `xms_mirid` naming the identity's resource ID. App Service's version
+(`/msi/token` with `X-IDENTITY-HEADER`) is there too. Federated identity credentials, which
+Workload Identity (above) uses, can be created and stored. The `client_assertion` that Workload
+Identity sends, however, is accepted without verification, so floci-az can't show whether a
+federation is set up correctly.
+
+**The full flow, e.g. Terraform → ARM:**
+
+```
+azurerm provider ──POST /{tenant}/oauth2/v2.0/token──► TokenEndpoint
+  grant_type=client_credentials                          ├─ ClientAuthenticator (permissive by default)
+  scope=https://management.azure.com/.default            ├─ ClientCredentialsGrant: aud = management.azure.com, idtyp=app
+                                                         └─ TokenIssuer: RS256 JWT signed with SigningKeyProvider's key
+         ◄──────────── access_token ──────────────────────┘
+azurerm ──PUT /subscriptions/…  Authorization: Bearer …──► ARM handler
+                                                         └─ (strict only) TokenValidator: kid, signature, exp, iss↔tid, aud
+```
+
+Read from the source at commit `6e52c73` (2026-11-14). Every service was then tried against a running
+floci-az 0.16.0, with real output, in [azure-local-lab.md](azure-local-lab.md): Entra ID, Graph,
+VNets, VMs, managed identity, Key Vault, AKS, Container Apps, ARM templates and RBAC, plus a table
+of where it differs from Azure.
 
 ---
 
@@ -1033,3 +1565,6 @@ All of these are part of Azure Monitor.
 - [Azure hub and spoke 2.0](https://blog.cloudtrooper.net/2022/11/29/azure-hub-and-spoke-2-0/)
 - [What language does the Azure Gateway Load Balancer speak?](https://blog.cloudtrooper.net/2021/11/11/what-language-does-the-azure-gateway-load-balancer-speak/)
 - [Computer Networks: A Systems Approach, Foundation](https://book.systemsapproach.org/foundation.html)
+- floci-az, local Azure emulator (Entra ID, managed identity): https://github.com/floci-io/floci-az
+- Microsoft Graph, servicePrincipal resource type (servicePrincipalType): https://learn.microsoft.com/graph/api/resources/serviceprincipal
+- Microsoft Learn, Application and service principal objects in Microsoft Entra ID: https://learn.microsoft.com/entra/identity-platform/app-objects-and-service-principals

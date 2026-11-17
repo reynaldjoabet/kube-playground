@@ -186,3 +186,535 @@ Now here's the key fact about each zone, across all machines in the building:
 | Zone 1 - parent prefix (24 bits) | identical on every single device in the company - everyone is inside 192.168.1 | differences never occur (inside your network) |
 | Zone 2 - borrowed bits (2) | identical within a subnet, different between subnets | this is what distinguishes your subnets |
 | Zone 3 - host bits (6) | different per machine within a subnet | distinguishes machines |
+
+## Linux routing: route scopes and routing tables
+
+For every destination IP address, the kernel decides one of three things:
+
+- **The address belongs to this machine:** deliver it locally.
+- **The address is on a directly connected network:** send it straight out of an
+  interface to that address.
+- **The address is remote:** send it to a next-hop router. **The next hop must
+  itself be directly reachable,** that is, on a connected network.
+
+### Route scopes
+
+A route's **scope** says how far away the destination is: how visible the route
+is.
+
+| Scope | Value | Destinations | Example |
+|---|---|---|---|
+| `host` | 254 | addresses **on this machine** | `local 172.17.0.2 dev eth0 … scope host` |
+| `link` | 253 | addresses on a **directly connected network**, reached without a router | `172.17.0.0/16 dev eth0 … scope link` |
+| `global` (also called `universe`) | 0 | destinations **beyond the local network**, reached through one or more routers | `default via 172.17.0.1 dev eth0` (the default gateway) |
+
+Two more exist, rarely used: `site` (200, IPv6 site-local) and `nowhere`
+(255, a destination that doesn't exist). The names come from
+`/etc/iproute2/rt_scopes`.
+
+`ip route` doesn't print `scope global`, because it's the default. `ip -d route`
+shows it:
+
+```text
+$ ip route show table main
+default via 172.17.0.1 dev eth0
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2
+
+$ ip -d route show table main
+unicast default via 172.17.0.1 dev eth0 proto boot scope global
+unicast 172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2
+```
+
+You can query all routing tables for one scope:
+
+```text
+$ ip route show table all scope host        # addresses on this machine
+local 127.0.0.0/8 dev lo table local proto kernel src 127.0.0.1
+local 127.0.0.1 dev lo table local proto kernel src 127.0.0.1
+local 172.17.0.2 dev eth0 table local proto kernel src 172.17.0.2
+
+$ ip route show table all scope link        # directly connected networks
+172.17.0.0/16 dev eth0 proto kernel src 172.17.0.2
+broadcast 127.255.255.255 dev lo table local proto kernel src 127.0.0.1
+broadcast 172.17.255.255 dev eth0 table local proto kernel src 172.17.0.2
+
+$ ip route show table all scope global      # through a router
+default via 172.17.0.1 dev eth0
+```
+
+`ip route get` shows which kind of route a destination uses:
+
+```text
+$ ip route get 172.17.0.2      # this machine's own address    → local (host scope)
+local 172.17.0.2 dev lo src 172.17.0.2
+$ ip route get 172.17.0.1      # on the connected network      → straight out of eth0 (link scope)
+172.17.0.1 dev eth0 src 172.17.0.2
+$ ip route get 8.8.8.8         # remote                         → via the gateway (global scope)
+8.8.8.8 via 172.17.0.1 dev eth0 src 172.17.0.2
+```
+
+### The next hop must be directly reachable
+
+A route `via <gateway>` is accepted only if the gateway is reachable through a
+**link-scope** route, so that it sits on a connected network. Otherwise the kernel
+refuses it:
+
+```text
+$ ip route add 198.51.100.0/24 via 192.0.2.1          # 192.0.2.1 is on no connected network
+Error: Nexthop has invalid gateway.
+$ ip route add 198.51.100.0/24 via 172.17.0.1         # the connected gateway
+$ ip route show 198.51.100.0/24
+198.51.100.0/24 via 172.17.0.1 dev eth0
+```
+
+`onlink` tells the kernel to trust that the gateway is on the link anyway, even
+if no route covers it:
+
+```text
+$ ip route add 203.0.113.0/24 via 192.0.2.1 dev eth0 onlink
+$ ip route show 203.0.113.0/24
+203.0.113.0/24 via 192.0.2.1 dev eth0 onlink
+```
+
+Kubernetes CNIs work within this rule. The AWS VPC CNI gives each Pod a default
+route via `169.254.1.1`, an address no interface owns. To make that a valid next
+hop, it first adds a link-scope route for it inside the Pod
+([cloud-kubernetes.md](cloud-kubernetes.md)):
+
+```text
+169.254.1.1 dev eth0 scope link        ← makes the gateway "directly reachable"
+default via 169.254.1.1 dev eth0       ← now accepted
+```
+
+### Routing tables
+
+Routes are grouped into **tables**, and a machine can have many. Four table IDs
+are reserved (`/etc/iproute2/rt_tables`):
+
+| ID | Name | Holds |
+|---|---|---|
+| 255 | `local` | host-scope routes for the machine's own addresses, and broadcast routes. Filled by the kernel |
+| 254 | `main` | the routes `ip route` shows and changes by default: connected networks, the default gateway |
+| 253 | `default` | empty by default; a last-resort table |
+| 0 | `unspec` | "any table" in queries such as `ip route show table all` |
+
+```text
+$ ip route show table local
+local 127.0.0.0/8 dev lo proto kernel scope host src 127.0.0.1
+local 127.0.0.1 dev lo proto kernel scope host src 127.0.0.1
+broadcast 127.255.255.255 dev lo proto kernel scope link src 127.0.0.1
+local 172.17.0.2 dev eth0 proto kernel scope host src 172.17.0.2
+broadcast 172.17.255.255 dev eth0 proto kernel scope link src 172.17.0.2
+```
+
+**"Up to 255 tables" was the old limit.** The original netlink field for the
+table ID was 8 bits. Linux replaced it with a 32-bit attribute long ago, so
+table IDs now run up to about 4.29 billion. In the lab, all four of these worked:
+
+```text
+$ ip route add default via 172.17.0.1 table 100
+$ ip route add default via 172.17.0.1 table 1000
+$ ip route add default via 172.17.0.1 table 100000
+$ ip route add default via 172.17.0.1 table 4294967294
+$ ip route show table 4294967294
+default via 172.17.0.1 dev eth0
+```
+
+Give a table a name by adding a line such as `1000 vpn` to
+`/etc/iproute2/rt_tables`.
+
+### Which table is used: policy rules
+
+A table is only consulted if a **rule** points to it. `ip rule` lists the rules,
+checked in priority order. By default, `local` is checked first, then `main`, then
+`default`:
+
+```text
+$ ip rule
+0:      from all lookup local
+1000:   from 10.9.9.9 lookup 1000          ← added: traffic from 10.9.9.9 uses table 1000
+32766:  from all lookup main
+32767:  from all lookup default
+```
+
+The same destination then goes different ways depending on the source address:
+
+```text
+$ ip route show table 1000
+default via 172.17.0.254 dev eth0 onlink
+
+$ ip route get 8.8.8.8 from 172.17.0.2
+8.8.8.8 from 172.17.0.2 via 172.17.0.1 dev eth0                   ← main table
+$ ip route get 8.8.8.8 from 10.9.9.9
+8.8.8.8 from 10.9.9.9 via 172.17.0.254 dev eth0 table 1000        ← the rule picked table 1000
+```
+
+This is how the AWS VPC CNI sends each Pod's traffic out of the right network
+interface: one table per ENI, and one `from <pod IP>` rule per Pod
+([cloud-kubernetes.md](cloud-kubernetes.md)).
+
+*Lab: every output above is from a throwaway `alpine:3.20` container with
+`--cap-add NET_ADMIN` and `iproute2` installed. The container has its own network
+namespace, so the host's routes weren't touched.*
+
+### Worked example: a router with two internet links (lab)
+
+A classic use of several tables: a router with **two uplinks** (WAN1, WAN2) and
+**two LANs**. LAN1 should leave through WAN1, and LAN2 through WAN2. One main
+table can only have one default route, so each WAN gets **its own table with its
+own default route**, and **rules pick the table by the client's source subnet**.
+
+```text
+                       ┌──────────── router ────────────┐
+ LAN1 10.100.0.0/24 ──►│ lan1                      wan1 │──► 192.168.10.200 (WAN1 gateway) ──┐
+                       │                                │                                    ├──► internet (8.8.8.8)
+ LAN2 10.200.0.0/24 ──►│ lan2                      wan2 │──► 192.168.12.254 (WAN2 gateway) ──┘
+                       └────────────────────────────────┘
+```
+
+The lab rebuilds this inside one throwaway `--privileged` container, with
+network namespaces for the router, both gateways, the "internet" (8.8.8.8 on a
+loopback) and a client in each LAN. The router masquerades out of each WAN.
+Paths are shown with `traceroute` from the clients; the second hop is the
+gateway used.
+
+**Step 1: before any policy routing.** The main table has one default route, via
+WAN1, so both LANs leave through WAN1:
+
+```text
+router$ ip route show table main
+default via 192.168.10.200 dev wan1
+10.100.0.0/24 dev lan1 proto kernel scope link src 10.100.0.1
+10.200.0.0/24 dev lan2 proto kernel scope link src 10.200.0.1
+192.168.10.0/24 dev wan1 proto kernel scope link src 192.168.10.1
+192.168.12.0/24 dev wan2 proto kernel scope link src 192.168.12.1
+
+LAN1 client → 8.8.8.8 hops: 10.100.0.1  192.168.10.200  8.8.8.8
+LAN2 client → 8.8.8.8 hops: 10.200.0.1  192.168.10.200  8.8.8.8     ← also WAN1
+```
+
+**Step 2: name two tables and give each a default route.**
+
+```text
+router$ printf '100\twan1\n200\twan2\n' >> /etc/iproute2/rt_tables
+router$ ip route add default via 192.168.10.200 table wan1
+router$ ip route add default via 192.168.12.254 table wan2
+```
+
+Each table has its own default. **`ip route show` without `table` only shows
+`main`**, so the new routes are easy to miss:
+
+```text
+router$ ip route show scope global                 ← main only
+default via 192.168.10.200 dev wan1
+router$ ip route show scope global table wan1
+default via 192.168.10.200 dev wan1
+router$ ip route show scope global table wan2
+default via 192.168.12.254 dev wan2
+router$ ip route show table all scope global       ← every table, labelled
+default via 192.168.10.200 dev wan1 table wan1
+default via 192.168.12.254 dev wan2 table wan2
+default via 192.168.10.200 dev wan1
+```
+
+Nothing changes yet. LAN2 still leaves via `192.168.10.200`, because **no rule
+sends anything to the new tables**. A table on its own is never consulted.
+
+**Step 3: rules that pick the table by source.**
+
+```text
+router$ ip rule add from 10.100.0.0/24 table wan1      # "table" and "lookup" mean the same here
+router$ ip rule add from 10.200.0.0/24 table wan2
+router$ ip rule
+0:      from all lookup local
+32764:  from 10.200.0.0/24 lookup wan2
+32765:  from 10.100.0.0/24 lookup wan1
+32766:  from all lookup main
+32767:  from all lookup default
+```
+
+Without `priority`, each new rule gets the number just below the lowest existing
+one (above 0). So **the rule added last is checked first** (32764 before
+32765). That doesn't matter here, because the two never match the same traffic.
+When they could overlap, set `priority` explicitly.
+
+The router's decision for a packet arriving from each LAN (`iif` simulates
+"arrived on that interface"), and the real paths:
+
+```text
+router$ ip route get 8.8.8.8 from 10.100.0.10 iif lan1
+8.8.8.8 from 10.100.0.10 via 192.168.10.200 dev wan1 table wan1
+router$ ip route get 8.8.8.8 from 10.200.0.10 iif lan2
+8.8.8.8 from 10.200.0.10 via 192.168.12.254 dev wan2 table wan2
+
+LAN1 client → 8.8.8.8 hops: 10.100.0.1  192.168.10.200  8.8.8.8     ← WAN1
+LAN2 client → 8.8.8.8 hops: 10.200.0.1  192.168.12.254  8.8.8.8     ← WAN2
+```
+
+**Pitfall 1: traffic between the LANs now goes to the internet.** The rule says
+"everything from 10.100.0.0/24 uses table wan1", and table `wan1` has only a
+default route. The connected route to LAN2 lives in `main`, which is never
+reached:
+
+```text
+router$ ip route get 10.200.0.10 from 10.100.0.10 iif lan1
+10.200.0.10 from 10.100.0.10 via 192.168.10.200 dev wan1 table wan1     ← out to WAN1!
+LAN1 client: ping 10.200.0.10 → 0 packets received
+```
+
+The fix is a rule, **checked before the source rules**, that sends internal
+destinations to `main`:
+
+```text
+router$ ip rule add to 10.0.0.0/8 lookup main priority 100
+router$ ip route get 10.200.0.10 from 10.100.0.10 iif lan1
+10.200.0.10 from 10.100.0.10 dev lan2
+LAN1 client: ping 10.200.0.10 → 2 packets received
+```
+
+The other common fix is to copy the connected routes into each custom table
+(`ip route add 10.200.0.0/24 dev lan2 table wan1`, …).
+
+**Pitfall 2: an empty table falls through silently.** When the chosen table has
+**no matching route**, the kernel doesn't stop. It continues with the next rule:
+
+```text
+router$ ip route del default table wan2
+router$ ip route get 8.8.8.8 from 10.200.0.10 iif lan2
+8.8.8.8 from 10.200.0.10 via 192.168.10.200 dev wan1                   ← fell through to main
+LAN2 client → 8.8.8.8 hops: 10.200.0.1  192.168.10.200  8.8.8.8
+```
+
+The same happens when **the WAN2 link goes down**. The kernel removes routes
+through a downed interface, so `table wan2` becomes empty and LAN2 moves to WAN1:
+
+```text
+router$ ip link set wan2 down
+router$ ip route show table wan2
+(empty)
+router$ ip route get 8.8.8.8 from 10.200.0.10 iif lan2
+8.8.8.8 from 10.200.0.10 via 192.168.10.200 dev wan1
+```
+
+Sometimes that's what you want: automatic failover. Sometimes it isn't, for
+example when LAN2 must never leave through WAN1 (a different ISP, a different
+public IP, a compliance boundary). To **fail closed** instead, put a
+`blackhole` route with a worse metric in the table. It stays when the link goes
+down, so the lookup never falls through:
+
+```text
+router$ ip route add blackhole default metric 1000 table wan2
+router$ ip route show table wan2
+default via 192.168.12.254 dev wan2
+blackhole default metric 1000
+router$ ip link set wan2 down
+router$ ip route show table wan2
+blackhole default metric 1000
+LAN2 client: ping 8.8.8.8 → 0 packets received          ← dropped, not leaked through WAN1
+```
+
+What a production version also needs (not part of this lab):
+
+- **The router's own traffic.** Rules such as `from 192.168.12.1 lookup wan2`, so
+  replies leaving from a WAN address go back out of the same WAN.
+- **NAT per uplink.** One `MASQUERADE` per WAN interface (`-o wan1`, `-o wan2`),
+  as in the lab, so each LAN appears under that WAN's public address.
+- **Reverse-path filtering.** `rp_filter` set to strict (1) can drop replies that
+  come back on an interface the main table wouldn't use. Loose mode (2) is the
+  usual setting on multi-WAN routers.
+- **Other selectors.** Rules can match more than the source: `to`, `iif`
+  (incoming interface), `fwmark` (a mark set by iptables/nftables, for example
+  per destination port), `uidrange`, `ipproto` and `dport`.
+
+### More policy-routing examples (lab)
+
+Rules can choose a table by much more than the source subnet. Each example
+below ran in the same lab: the dual-WAN router from the worked example, with
+tables `wan1` and `wan2`, and a rule `to 10.0.0.0/8 lookup main priority 40`
+for LAN-to-LAN traffic. Which uplink a packet really used was counted with
+iptables counters on the router's `POSTROUTING` chain, per output interface and
+port.
+
+| Example | Rule matches on | Real-world users |
+|---|---|---|
+| A | a packet **mark** (`fwmark`) set by iptables/nftables | multi-WAN routers (OpenWrt mwan3), split-tunnel VPNs |
+| B | the **user** that owns the socket (`uidrange`) | Android (per-app networks), per-user VPNs |
+| C | the **source address** of the router's own replies | servers with several NICs, AWS VPC CNI |
+| D | a mark, pointing at a table that delivers **any address locally** | Istio (TPROXY mode), Cilium's L7 proxy |
+| E | the **absence** of a mark (`not fwmark`), plus `suppress_prefixlength` | `wg-quick`, Tailscale |
+| F | source + destination, with a **blocking action** instead of a table | simple segmentation |
+
+#### A. By packet mark: HTTPS via WAN2, everything else via WAN1
+
+iptables marks LAN1's port-443 traffic, and a rule sends marked packets to table
+`wan2`. Routing itself can't see ports, but a mark can carry any match iptables
+or nftables can make (port, protocol, connection state, …):
+
+```text
+router$ iptables -t mangle -A PREROUTING -i lan1 -p tcp --dport 443 -j MARK --set-mark 0x2
+router$ ip rule add fwmark 0x2 lookup wan2 priority 50
+router$ ip rule
+0:      from all lookup local
+40:     from all to 10.0.0.0/8 lookup main
+50:     from all fwmark 0x2 lookup wan2
+32766:  from all lookup main
+32767:  from all lookup default
+
+router$ ip route get 8.8.8.8 from 10.100.0.10 iif lan1
+8.8.8.8 from 10.100.0.10 via 192.168.10.200 dev wan1
+router$ ip route get 8.8.8.8 from 10.100.0.10 iif lan1 mark 0x2
+8.8.8.8 from 10.100.0.10 via 192.168.12.254 dev wan2 table wan2 mark 2
+```
+
+The LAN1 client connected to 8.8.8.8 on port 80 and on port 443. Packets that
+left each uplink:
+
+```text
+out wan1:80   1        out wan1:443  0
+out wan2:80   0        out wan2:443  1          ← only HTTPS took WAN2
+```
+
+#### B. By user: one user's traffic via WAN2
+
+`uidrange` matches the owner of the socket, for traffic the machine itself
+sends. Here user 1000 on the router uses WAN2 and everyone else uses WAN1:
+
+```text
+router$ ip rule add uidrange 1000-1000 lookup wan2 priority 60
+router$ ip route get 8.8.8.8
+8.8.8.8 via 192.168.10.200 dev wan1 src 192.168.10.1 uid 0
+router$ ip route get 8.8.8.8 uid 1000
+8.8.8.8 via 192.168.12.254 dev wan2 table wan2 src 192.168.12.1 uid 1000
+```
+
+Root connected to port 80, and user `app` (UID 1000) to port 443:
+
+```text
+out wan1:80   1        out wan1:443  0
+out wan2:80   0        out wan2:443  1          ← user 1000's connection took WAN2
+```
+
+Android is built on this: each app has its own UID, and rules (with UID
+ranges and marks) send each app's traffic to the table of the network it should
+use: Wi-Fi, mobile data, or a VPN.
+
+#### C. Replies from the right interface (a host with two networks)
+
+A host with an address on each of two networks gets a request on one of them,
+but its main table sends the reply out of the other. With **strict reverse-path
+filtering** (`rp_filter=1`, the default on many distributions) it gets worse: the
+request is dropped on arrival, because the kernel checks that a reply would leave
+by the interface the request came in on. The internet host pinged the
+router's **WAN2** address, 192.168.12.1:
+
+```text
+router$ sysctl -w net.ipv4.conf.all.rp_filter=1 net.ipv4.conf.wan2.rp_filter=1
+router$ ip route get 172.31.2.2 from 192.168.12.1
+172.31.2.2 from 192.168.12.1 via 192.168.10.200 dev wan1                 ← reply would leave via WAN1
+internet$ ping 192.168.12.1 → 0 packets received
+
+router$ ip rule add from 192.168.12.1 lookup wan2 priority 70
+router$ ip route get 172.31.2.2 from 192.168.12.1
+172.31.2.2 from 192.168.12.1 via 192.168.12.254 dev wan2 table wan2      ← back the way it came
+internet$ ping 192.168.12.1 → 2 packets received
+```
+
+"Replies from address X use the table of X's interface" is the standard fix for
+multi-NIC servers. It's also what the AWS VPC CNI does per Pod, so each Pod's
+traffic leaves by the ENI its IP belongs to.
+
+#### D. Deliver any destination locally: transparent proxying (TPROXY)
+
+A table whose only route is `local 0.0.0.0/0 dev lo` makes **every** address
+count as local. Packets marked for that table are delivered to the machine
+itself, whatever their destination. With iptables' `TPROXY` target, which marks
+the packet and steers it to a proxy's port, the proxy receives a connection that
+was addressed to somewhere else:
+
+```text
+router$ ip route add local 0.0.0.0/0 dev lo table 133
+router$ ip rule add fwmark 0x1 lookup 133 priority 80
+router$ iptables -t mangle -A PREROUTING -i lan1 -p tcp -d 8.8.8.8 --dport 80 \
+          -j TPROXY --on-port 15001 --tproxy-mark 0x1/0x1
+router$ socat TCP4-LISTEN:15001,ip-transparent,fork SYSTEM:'echo answered by a proxy on the ROUTER'
+
+router$ ip route show table 133
+local default dev lo scope host
+router$ ip route get 8.8.8.8 from 10.100.0.10 iif lan1 mark 0x1
+local 8.8.8.8 from 10.100.0.10 dev lo table 133 mark 1
+
+LAN1 client → 8.8.8.8:80 says: answered by a proxy on the ROUTER
+router's socket during the connection:  local 8.8.8.8:80   peer 10.100.0.10:43271
+```
+
+The router's socket **is 8.8.8.8:80**. The client thinks it's talking to
+8.8.8.8, and the proxy sees the original destination without NAT. This is how
+Istio's TPROXY interception mode and Cilium's L7 proxy hand traffic to Envoy.
+
+The routing rule alone isn't enough. Without `TPROXY` and a socket with
+`IP_TRANSPARENT`, the lab's router received the SYN (seen with `tcpdump`) but
+never answered. The reply has to come *from* 8.8.8.8, an address the router
+doesn't own, and only a transparent socket is allowed to send from it.
+
+#### E. Everything through a tunnel, except the tunnel's own packets (`wg-quick`)
+
+To send all traffic through a VPN tunnel, the default route must point at the
+tunnel. But the tunnel's own encrypted packets must still leave by the normal
+route, or they'd loop back into the tunnel. `wg-quick` solves it with two rules
+(here with a dummy `wg0` device in place of WireGuard):
+
+```text
+router$ ip route add default dev wg0 table 51820
+router$ ip rule add not fwmark 51820 table 51820 priority 90         # unmarked traffic → the tunnel table
+router$ ip rule add table main suppress_prefixlength 0 priority 89   # main, but ignore its default route
+router$ ip rule
+0:      from all lookup local
+40:     from all to 10.0.0.0/8 lookup main
+80:     from all fwmark 0x1 lookup 133                ← left over from example D
+89:     from all lookup main suppress_prefixlength 0
+90:     not from all fwmark 0xca6c lookup 51820
+32766:  from all lookup main
+32767:  from all lookup default
+
+router$ ip route get 8.8.8.8
+8.8.8.8 dev wg0 table 51820 src 10.99.0.1                      ← normal traffic: the tunnel
+router$ ip route get 8.8.8.8 mark 51820
+8.8.8.8 via 192.168.10.200 dev wan1 src 192.168.10.1 mark 0xca6c   ← the tunnel's packets: the real uplink
+router$ ip route get 10.200.0.10
+10.200.0.10 dev lan2 src 10.200.0.1                            ← connected networks: still direct
+```
+
+- **The tunnel software marks its own encrypted packets with 51820** (`0xca6c`),
+  so the "not fwmark" rule skips them and they use `main`.
+- **`suppress_prefixlength 0`** means "use `main`, but reject any route whose
+  prefix is `/0` or shorter", that is, ignore its default route. Specific routes
+  in `main`, such as connected LANs, still win. Only the default is replaced by
+  the tunnel.
+
+Tailscale uses the same idea, with its own table (52) and marks.
+
+#### F. Rules that block: `prohibit`, `unreachable`, `blackhole`
+
+A rule can end the lookup with an action instead of a table:
+
+```text
+router$ ip rule add from 10.200.0.0/24 to 10.100.0.0/24 prohibit priority 30
+router$ ip rule show priority 30
+30:     from 10.200.0.0/24 to 10.100.0.0/24 prohibit
+
+LAN2 → LAN1 ping: 1 packets transmitted, 0 packets received
+LAN1 → LAN2 ping: 1 packets transmitted, 0 packets received      ← blocked too!
+```
+
+The second result is the catch. **Routing rules are stateless.** LAN1's ping
+reaches LAN2, but LAN2's reply goes from 10.200.0.0/24 to 10.100.0.0/24 and
+matches the rule. For "LAN1 may start connections to LAN2, but not the other
+way round", use a firewall with connection tracking (iptables/nftables
+`ct state`), not a routing rule.
+
+The three actions differ in what the sender is told (from the `ip-rule` man
+page; the lab's BusyBox `ping` only showed the loss, not the ICMP message):
+
+- `prohibit`: an ICMP "administratively prohibited" error is sent back;
+- `unreachable`: an ICMP "network unreachable" error is sent back;
+- `blackhole`: the packet is dropped silently.
