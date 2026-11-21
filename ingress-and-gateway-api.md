@@ -645,6 +645,83 @@ To filter on the **original** client, do it before connection 2 (not tested):
 - **In the proxy:** an allowlist on the client address it sees, for example ingress-nginx's `nginx.ingress.kubernetes.io/whitelist-source-range` annotation. The proxy only sees the real client if the client IP survives to it: `externalTrafficPolicy: Local` on its Service, or the PROXY protocol from the LB.
 - **In the app:** read `X-Forwarded-For` or `X-Real-IP`, which the proxy adds. These are headers, so a NetworkPolicy can't use them.
 
+(The same kind of policy, allowing only an ingress-nginx-labelled Pod on a named port, was tested
+with kube-router in [network-policy.md](network-policy.md) §7.5.)
+
+#### In iptables terms: two connections, one set of kube-proxy rules (lab)
+
+An Ingress itself creates **no iptables rules**. It's only routing configuration that the ingress
+controller reads. In iptables terms, an Ingress request is two separate TCP connections, and
+kube-proxy's rules apply only to the first:
+
+```text
+leg 1: client ──► node:NodePort ──[kube-proxy DNAT (+SNAT)]──► Traefik Pod :8000        (kernel, iptables)
+                                                                   │  ends TCP, reads Host/path,
+                                                                   │  picks a backend Pod itself
+leg 2:                                       Traefik Pod ─────────► backend Pod IP :8080  (plain routing, no DNAT)
+```
+
+**Setup.** The three-node k3s cluster from [network-policy.md](network-policy.md) §6, with
+Traefik installed from the hand-written manifests in §2.1 below (Gateway provider and its RBAC
+left out), pinned to np-server, behind a NodePort Service `traefik/traefik` on 30880. Backend:
+Pod `lab3/c` (traefik/whoami on 8080) on np-agent2, Service `c-svc` (80 → 8080), and an Ingress
+`c-ing` for host `ing.example.com` → `c-svc:80`.
+
+| What | Address | Node |
+|---|---|---|
+| client (a container on the node network) | 172.19.0.5 | — |
+| np-agent (where the request enters) | 172.19.0.3, `flannel.1` 10.42.1.0 | np-agent |
+| Traefik Pod | 10.42.0.15:8000 | np-server |
+| backend Pod `c` | 10.42.2.2:8080 | np-agent2 |
+
+The request goes to np-agent, a node running neither Traefik nor the backend, so it touches all
+three nodes:
+
+```text
+$ wget -qO- --header "Host: ing.example.com" http://172.19.0.3:30880/
+Hostname: c
+RemoteAddr: 10.42.0.15:43568          ← the TCP peer is Traefik, not the client
+X-Forwarded-For: 10.42.1.0            ← who Traefik thought the client was: np-agent's flannel.1 (SNAT on leg 1)
+Host: ing.example.com
+```
+
+conntrack on each node (flushed before the request):
+
+```text
+np-agent   (leg 1 enters)  src=172.19.0.5 dst=172.19.0.3 dport=30880    reply: src=10.42.0.15 dst=10.42.1.0 sport=8000
+                           └ DNAT to Traefik 10.42.0.15:8000, and SNAT to 10.42.1.0 (ETP Cluster, Pod on another node)
+np-server  (leg 1 arrives) src=10.42.1.0  dst=10.42.0.15 dport=8000     reply: mirror → no further NAT
+np-server  (leg 2 starts)  src=10.42.0.15 dst=10.42.2.2  dport=8080     reply: mirror → no NAT at all
+np-agent2  (leg 2 arrives) src=10.42.0.15 dst=10.42.2.2  dport=8080     reply: mirror
+```
+
+**c-svc's own `KUBE-SVC` chain counter on np-server: 0 before, 0 after.** Leg 2 never touched the
+backend Service's iptables rules. Traefik read `c-svc`'s EndpointSlice and connected straight to
+the Pod IP `10.42.2.2:8080`.
+
+| Part | Who does it | In iptables? |
+|---|---|---|
+| the Ingress object (`host`, `path` → `c-svc:80`) | stored in the API, read by Traefik | **no** |
+| client → controller (leg 1) | kube-proxy's rules for the **controller's** Service | **yes**: `KUBE-NODEPORTS` → `KUBE-EXT` → `KUBE-SVC` → DNAT, plus SNAT in `Cluster` mode |
+| choosing the backend by host/path | Traefik, in user space | no |
+| controller → backend Pod (leg 2) | ordinary routing (flannel VXLAN here) | **no DNAT**: the backend Service's `KUBE-SVC` isn't used |
+| NetworkPolicy on the backend | the policy engine, in FORWARD | yes: it sees **Traefik's Pod IP** as the source |
+
+- **The backend never sees the client's TCP connection,** only Traefik's. The client's address
+  only travels in headers (`X-Forwarded-For`), and even that showed `10.42.1.0` here, because
+  leg 1 was SNATed. To get the real client IP, the controller's Service needs
+  `externalTrafficPolicy: Local` (and traffic sent only to nodes running the controller), or the
+  PROXY protocol from the LB.
+- **The backend Service's ClusterIP is only used for its EndpointSlice,** which tells the
+  controller where the Pods are. Some controllers can be told to use the ClusterIP instead
+  (Traefik's `nativeLB`, ingress-nginx's `service-upstream`). Then leg 2 would go through
+  `KUBE-SERVICES` and be DNATed too. **(not tested)**
+- **There are two load-balancing decisions:** kube-proxy picks a controller Pod on leg 1, and the
+  controller picks a backend Pod on leg 2.
+- **Leg 2 was still `ESTABLISHED` after the request finished.** Traefik keeps a pool of open
+  connections to backends and reuses them for later requests, while leg 1 had already ended
+  (`TIME_WAIT`).
+
 ### 2.1 Two parts: the object and the controller
 
 ```
@@ -1079,29 +1156,29 @@ Most introductions draw Ingress like this:
 
 | Service | Type | Selects | Job |
 |---|---|---|---|
-| ① the "Load Balancer" icon (e.g. `ingress-nginx-controller`) | `LoadBalancer` | the **ingress controller's** Pods | carries traffic **to the proxy**; it's why the cloud LB exists |
-| ② `foo-service` | `ClusterIP` | foo-app Pods | a **lookup**: "which Pods are foo-app?" |
-| ③ `bar-service` | `ClusterIP` | bar-app Pods | a **lookup**: "which Pods are bar-app?" |
+| (1) the "Load Balancer" icon (e.g. `ingress-nginx-controller`) | `LoadBalancer` | the **ingress controller's** Pods | carries traffic **to the proxy**; it's why the cloud LB exists |
+| (2) `foo-service` | `ClusterIP` | foo-app Pods | a **lookup**: "which Pods are foo-app?" |
+| (3) `bar-service` | `ClusterIP` | bar-app Pods | a **lookup**: "which Pods are bar-app?" |
 
 The same picture with what's really there:
 
 ```
             outside the cluster │ inside the cluster
                                 │
- curl ──► cloud LB (provider) ──┼─► ① ingress-nginx-controller Service   type: LoadBalancer
+ curl ──► cloud LB (provider) ──┼─► 1 ingress-nginx-controller Service   type: LoadBalancer
           203.0.113.10          │      selector: the controller Pods (not your apps)
                                 │          │  nodePort + kube-proxy
                                 │          ▼
                                 │   controller Pod (nginx)  ◄── reads the Ingress OBJECT (the rules)
-                                │      /foo ─► looks up ② foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
-                                │      /bar ─► looks up ③ bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
+                                │      /foo ─► looks up 2 foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
+                                │      /bar ─► looks up 3 bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
                                 │          │
                                 │          └──► connects straight to a foo-app or bar-app Pod IP
 ```
 
 The picture simplifies three things:
 
-1. **The "Load Balancer" icon is two things merged.** The **cloud LB** is a provider machine outside the cluster. **Service ①** is a Kubernetes object inside it, and the CCM creates the cloud LB *because* Service ① has `type: LoadBalancer` (§1.1 "A LoadBalancer Service, more closely"). Drawing one SVC icon on the cluster boundary fits that well.
+1. **The "Load Balancer" icon is two things merged.** The **cloud LB** is a provider machine outside the cluster. **Service (1)** is a Kubernetes object inside it, and the CCM creates the cloud LB *because* Service (1) has `type: LoadBalancer` (§1.1 "A LoadBalancer Service, more closely"). Drawing one SVC icon on the cluster boundary fits that well.
 2. **The "Ingress" box is the controller Pod**, the nginx reverse proxy. The Ingress **object** is only the `/foo` and `/bar` rules the controller reads. It never touches a packet: without a controller, it just sits there (the test above).
 3. **The arrows through foo-service and bar-service are references, not the packet path.** nginx turns each Service into Pod IPs ahead of time and connects to the Pod directly, skipping the ClusterIP and kube-proxy (§4). The picture is right about *which Service names which Pods*, not about *where the bytes go*.
 
@@ -1110,21 +1187,21 @@ Read it as "who points at whom": correct. Read it as "where the bytes go": the h
 **A real install has more Services than the picture.** ingress-nginx's standard manifests also create `ingress-nginx-controller-admission` (ClusterIP, port 443). The **API server** calls it to reach the validating webhook (§2.3). It carries no client traffic. It's in the official manifest (see "Installing the controller" above), though not listed live in this lab. Where to see each piece:
 
 ```sh
-kubectl -n ingress-nginx get svc                 # ① (and the admission Service)
-kubectl -n shop get ingress                      # the rules; ADDRESS = ①'s external IP
-kubectl -n shop get svc,endpointslice            # ② ③ and the Pod IPs nginx actually uses
+kubectl -n ingress-nginx get svc                 # 1 (and the admission Service)
+kubectl -n shop get ingress                      # the rules; ADDRESS = 1's external IP
+kubectl -n shop get svc,endpointslice            # 2 3 and the Pod IPs nginx actually uses
 ```
 
 **The same picture with Gateway API** has the same shape, with different names:
 
 ```
- curl ─► cloud LB ─► ① envoy-infra-public-… (LoadBalancer, created by Envoy Gateway for the Gateway)
+ curl ─► cloud LB ─► 1 envoy-infra-public-… (LoadBalancer, created by Envoy Gateway for the Gateway)
                          ─► Envoy Pod ◄── reads Gateway + HTTPRoute objects
                                /foo ─► foo-service ─► EndpointSlice ─► foo Pod IP
                                /bar ─► bar-service ─► EndpointSlice ─► bar Pod IP
 ```
 
-The one difference is who creates Service ①. With ingress-nginx, it comes from the install manifests. With Envoy Gateway, the controller creates one per Gateway object (§3.3, §4.1). The full Gateway version of this diagram and of the walkthrough is at the end of §3.4.
+The one difference is who creates Service (1). With ingress-nginx, it comes from the install manifests. With Envoy Gateway, the controller creates one per Gateway object (§3.3, §4.1). The full Gateway version of this diagram and of the walkthrough is at the end of §3.4.
 
 #### Inside an ingress controller: a reverse proxy plus a config generator
 
@@ -1139,7 +1216,7 @@ touches a request.
  Service (port → targetPort)  ──┼─watch─► translate into the proxy's ──deliver──► nginx / Envoy / HAProxy /
  EndpointSlice (Pod IPs)      ──┤         own config language                     Traefik / a cloud LB
  Secret (TLS certificates)    ──┘                                                       │
-                                                                                         ▼
+                                                                                        ▼
                                                                          client requests ─► Pods
 ```
 
@@ -4580,7 +4657,7 @@ At a glance:
 ```
 kubectl apply Gateway "public" ─► API server stores it ─► watch ─► ENVOY GATEWAY (controller, Deployment envoy-gateway)
                                                                    a. class "envoy" → controllerName mine?
-                                                                   b. create Deployment + Service ① envoy-infra-public-8d55c10f
+                                                                   b. create Deployment + Service 1 envoy-infra-public-8d55c10f
                                                                       (type: LoadBalancer → CCM / minikube tunnel → external IP)
                                                                    c. copy that IP into Gateway status; Programmed=True
 
@@ -4596,7 +4673,7 @@ kubectl apply HTTPRoute "shop" ─► API server stores it ─► watch ─► E
 
 then, per request (the controller isn't involved):
 
-client ─► LB ─► Service ① nodePort ─► Envoy: ends TLS → matches listener + host → matches /api → picks a Pod IP ─► api Pod
+client ─► LB ─► Service 1 nodePort ─► Envoy: ends TLS → matches listener + host → matches /api → picks a Pod IP ─► api Pod
 ```
 
 What the lab shows for each step:
@@ -4604,7 +4681,7 @@ What the lab shows for each step:
 | Step | Evidence |
 |---|---|
 | a | `kubectl get gatewayclass envoy` → `CONTROLLER gateway.envoyproxy.io/gatewayclass-controller`, `ACCEPTED True` (§3.3) |
-| b | Service ① carries the labels `gateway.envoyproxy.io/owning-gateway-name: public` and `owning-gateway-namespace: infra`. Its `ownerReferences` point at the **GatewayClass** `envoy`, not the Gateway. The Envoy Pod has two containers, `envoy` and `shutdown-manager`. |
+| b | Service (1) carries the labels `gateway.envoyproxy.io/owning-gateway-name: public` and `owning-gateway-namespace: infra`. Its `ownerReferences` point at the **GatewayClass** `envoy`, not the Gateway. The Envoy Pod has two containers, `envoy` and `shutdown-manager`. |
 | c | the before/after `minikube tunnel` output in §3.3 |
 | d | wrong namespace → `NotAllowedByListeners`; wrong host → `NoMatchingListenerHostname` (§3.4) |
 | e, f | Envoy's `/clusters` lists Pod IPs per rule, `httproute/shop/shop/rule/N`, and no ClusterIPs (§4.2) |
@@ -4617,8 +4694,8 @@ Notes:
 
 - **No reload, ever.** ingress-nginx re-renders `nginx.conf` and reloads for route changes (§2.1). Envoy receives new routes and endpoints as xDS updates on a gRPC stream that's already open.
 - **Status says why, not only whether.** An Ingress with an empty ADDRESS just looks unclaimed (§2.1). A Gateway says `AddressNotAssigned`, and a route says `NotAllowedByListeners` or `RefNotPermitted`. Debugging starts with `kubectl get gateway,httproute -o yaml`.
-- **The controller owns the proxy's lifecycle.** Delete the Gateway and Envoy Gateway is expected to remove its Deployment and Service ①, and with it the cloud LB. Because the `ownerReferences` point at the GatewayClass, it's the controller that does this cleanup, not Kubernetes garbage collection. Tested with a second Gateway, `corp` (§3.3): deleting it removed its `envoy-infra-corp-…` Deployment and Service. With ingress-nginx, the proxy and its Service come from the install manifests and outlive every Ingress.
-- **One Gateway, one proxy, one IP** (with Envoy Gateway). A second Gateway (`internal`) gets its own Service ① and its own LB (§3.3).
+- **The controller owns the proxy's lifecycle.** Delete the Gateway and Envoy Gateway is expected to remove its Deployment and Service (1), and with it the cloud LB. Because the `ownerReferences` point at the GatewayClass, it's the controller that does this cleanup, not Kubernetes garbage collection. Tested with a second Gateway, `corp` (§3.3): deleting it removed its `envoy-infra-corp-…` Deployment and Service. With ingress-nginx, the proxy and its Service come from the install manifests and outlive every Ingress.
+- **One Gateway, one proxy, one IP** (with Envoy Gateway). A second Gateway (`internal`) gets its own Service (1) and its own LB (§3.3).
 
 #### Reading a typical Gateway diagram
 
@@ -4627,7 +4704,7 @@ Draw the Ingress picture from §2.1 for Gateway API, and the single "Ingress" bo
 ```
                                    │ cluster
                                    │
- curl ─► cloud LB (provider) ──────┼─► ① envoy-infra-public-8d55c10f   (LoadBalancer, created by Envoy Gateway)
+ curl ─► cloud LB (provider) ──────┼─► 1 envoy-infra-public-8d55c10f   (LoadBalancer, created by Envoy Gateway)
          ADDRESS of the Gateway    │       selector: owning-gateway-name=public → Envoy Pods
                                    │          │  nodePort 32053 + kube-proxy
                                    │          ▼
@@ -4636,8 +4713,8 @@ Draw the Ingress picture from §2.1 for Gateway API, and the single "Ingress" bo
                                    │      │                            Gateway public         (platform team: ports, TLS, who may attach)
                                    │      │                            HTTPRoute shop         (app team: hosts, paths, weights)
                                    │      │
-                                   │      ├─ /foo ─► looks up ② foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
-                                   │      └─ /bar ─► looks up ③ bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
+                                   │      ├─ /foo ─► looks up 2 foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
+                                   │      └─ /bar ─► looks up 3 bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
                                    │      │
                                    │      └──► connects straight to a foo-app or bar-app Pod IP
 ```
@@ -4646,33 +4723,33 @@ Draw the Ingress picture from §2.1 for Gateway API, and the single "Ingress" bo
 
 | Service | Type | Selects | Job |
 |---|---|---|---|
-| ① `envoy-infra-public-8d55c10f` | `LoadBalancer` | the Envoy Pods of Gateway `public` | carries client traffic to the proxy; one per Gateway |
-| ② `foo-service` | `ClusterIP` | foo-app Pods | lookup for Pod IPs |
-| ③ `bar-service` | `ClusterIP` | bar-app Pods | lookup for Pod IPs |
+| (1) `envoy-infra-public-8d55c10f` | `LoadBalancer` | the Envoy Pods of Gateway `public` | carries client traffic to the proxy; one per Gateway |
+| (2) `foo-service` | `ClusterIP` | foo-app Pods | lookup for Pod IPs |
+| (3) `bar-service` | `ClusterIP` | bar-app Pods | lookup for Pod IPs |
 | `envoy-gateway` | `ClusterIP` | the controller | control plane only (xDS, webhook, metrics); **no client traffic**. This is the Gateway counterpart of ingress-nginx's admission Service. |
 
 What the Gateway picture makes clearer than the Ingress picture:
 
 1. **Rules and listeners are separate objects.** The `Gateway` holds ports, TLS and which namespaces may attach, and the platform team owns it. The `HTTPRoute` holds `/foo` and `/bar`, and the app team owns it (§3.1). In the Ingress picture they're one object in one namespace.
-2. **Who creates Service ① is explicit.** The controller creates it from the Gateway object, so the Gateway and its LB share a lifecycle.
+2. **Who creates Service (1) is explicit.** The controller creates it from the Gateway object, so the Gateway and its LB share a lifecycle.
 3. **Service arrows are still references.** Envoy sends to Pod IPs (§4.2), and Service settings that only kube-proxy applies, such as `sessionAffinity`, are ignored (§4.7).
 
 Where to see each piece:
 
 ```sh
 kubectl get gatewayclass                                             # who implements it
-kubectl -n infra get gateway public                                  # ADDRESS = ①'s external IP, PROGRAMMED
+kubectl -n infra get gateway public                                  # ADDRESS = 1's external IP, PROGRAMMED
 kubectl -n envoy-gateway-system get svc,deploy \
-  -l gateway.envoyproxy.io/owning-gateway-name=public                # ① and the Envoy Deployment
+  -l gateway.envoyproxy.io/owning-gateway-name=public                # 1 and the Envoy Deployment
 kubectl get httproute -A                                             # the rules, per namespace
-kubectl -n shop get svc,endpointslice                                # ② ③ and the Pod IPs Envoy uses
+kubectl -n shop get svc,endpointslice                                # 2 3 and the Pod IPs Envoy uses
 ```
 
 #### Following one request into the proxy Pod (live)
 
-The usual question about the diagram above: does the request "hit the Service" and then "reach the controller"? Partly. It hits the **proxy's** Service ①, which is only kube-proxy rules. Then it reaches the **proxy** process (envoy). It never reaches the controller (envoy-gateway). Checked on the lab, with the `deploy/lab` apps running.
+The usual question about the diagram above: does the request "hit the Service" and then "reach the controller"? Partly. It hits the **proxy's** Service (1), which is only kube-proxy rules. Then it reaches the **proxy** process (envoy). It never reaches the controller (envoy-gateway). Checked on the lab, with the `deploy/lab` apps running.
 
-**Service ①, and the one Pod behind it:**
+**Service (1), and the one Pod behind it:**
 
 ```
 $ kubectl -n envoy-gateway-system get svc envoy-infra-public-8d55c10f -o 'jsonpath=…'
@@ -4741,7 +4818,7 @@ The whole path, with who touches each hop:
 
 ```
  curl ─► 192.168.49.2:32053                                 (on a cloud: LB IP:443 → node:32053 first)
-   │  kernel, kube-proxy's rules for Service ①  — no process involved
+   │  kernel, kube-proxy's rules for Service 1  — no process involved
    │  DNAT → 10.244.120.112:10443, SNAT → 10.244.120.64
    ▼
  envoy process, Pod 10.244.120.112, listening :10443
@@ -4753,12 +4830,12 @@ The whole path, with who touches each hop:
 
 | Process | Sees the request? | Its job |
 |---|---|---|
-| kube-proxy | no: it wrote the rules earlier | turns Service ① into the NAT rules above |
+| kube-proxy | no: it wrote the rules earlier | turns Service (1) into the NAT rules above |
 | envoy (the proxy) | **yes** | ends TLS, matches host/path, opens the connection to the app Pod |
 | envoy-gateway (the controller) | no | watched the Gateway and HTTPRoute and pushed config over xDS beforehand |
 | kube-apiserver | no | not in the traffic path |
 
-With ingress-nginx, only the names change. Service ① is `ingress-nginx-controller` (ports `80→http`, `443→https`), nginx workers listen on 80/443 inside the Pod, and the `/nginx-ingress-controller` process in the same container stays out of the path, just like envoy-gateway ("The Service in the code", §2.1).
+With ingress-nginx, only the names change. Service (1) is `ingress-nginx-controller` (ports `80→http`, `443→https`), nginx workers listen on 80/443 inside the Pod, and the `/nginx-ingress-controller` process in the same container stays out of the path, just like envoy-gateway ("The Service in the code", §2.1).
 
 #### What the generated Envoy config looks like: names in routes, Pod IPs in EDS
 

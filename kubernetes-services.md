@@ -564,20 +564,20 @@ that address.
 How the Pod IP gets into the DNAT rule:
 
 ```
-① EndpointSlice controller (in kube-controller-manager)
+1 EndpointSlice controller (in kube-controller-manager)
      watches Services + Pods
      Pods matching the selector → EndpointSlice  envoy-infra-public-8d55c10f-tx46b
                                     endpoints: 10.244.120.112, ports 10080/10443, ready=true
 
-② kube-proxy (on every node)
+2 kube-proxy (on every node)
      watches Services + EndpointSlices
      writes the rules:
        KUBE-NODEPORTS  :31845           ─┐
        KUBE-SERVICES   10.99.63.149:80  ─┼─► KUBE-SVC-Z2K6… ─► KUBE-SEP-GKGO… DNAT → 10.244.120.112:10080
        KUBE-SERVICES   127.0.0.1:80     ─┘   (one KUBE-SEP per endpoint)
 
-③ kernel, per packet
-     dst node:31845 → match → DNAT to the Pod IP that ② wrote
+3 kernel, per packet
+     dst node:31845 → match → DNAT to the Pod IP that 2 wrote
 ```
 
 From the lab:
@@ -2934,43 +2934,43 @@ Only the SYN and SYN-ACK are shown; every later packet is rewritten the same way
    CLIENT Pod                 NODE KERNEL                                SERVER Pod
    10.244.120.115             (kube-proxy rules + conntrack)             10.244.120.71
    ──────────────             ──────────────────────────────             ─────────────
- ① sends
+ 1 sends
    from 10.244.120.115:36720 ──► "10.107.59.191:80 is a Service. Pick .71.
    to   10.107.59.191:80          Rewrite the TO address, store the entry."
                                               │
-                               ② forwards     ▼
+                               2 forwards     ▼
                                   from 10.244.120.115:36720 ───────────►  gets it; has never
                                   to   10.244.120.71:8080                 heard of the ClusterIP
-                                                                       ③ replies to the sender
+                                                                       3 replies to the sender
                                ◄───────────────────────────────────────    from 10.244.120.71:8080
                                  "Matches the entry's REPLY side.          to   10.244.120.115:36720
                                   Rewrite the FROM address back."
- ④ receives                                   │
+ 4 receives                                   │
    from 10.107.59.191:80   ◄──────────────────┘
    to   10.244.120.115:36720
 ```
 
-The conntrack entry for that connection holds packets ① and ③, each before its
+The conntrack entry for that connection holds packets (1) and (3), each before its
 rewrite:
 
 ```
-src=10.244.120.115 dst=10.107.59.191 sport=36720 dport=80     ← ①  as the client sent it   (ORIGINAL)
-src=10.244.120.71  dst=10.244.120.115 sport=8080 dport=36720  ← ③  as the server sends it  (REPLY)
+src=10.244.120.115 dst=10.107.59.191 sport=36720 dport=80     ← 1  as the client sent it   (ORIGINAL)
+src=10.244.120.71  dst=10.244.120.115 sport=8080 dport=36720  ← 3  as the server sends it  (REPLY)
 ```
 
-conntrack doesn't print ④. It's the ORIGINAL line read backwards: from
+conntrack doesn't print (4). It's the ORIGINAL line read backwards: from
 `10.107.59.191:80` to `10.244.120.115:36720`. So "the REPLY side shows the Pod
 IP" and "the client gets answers from the ClusterIP" are both true. They
 describe the same reply before and after the node rewrites it.
 
 | Packet | Seen by | Source | Destination |
 |---|---|---|---|
-| ① | client | 10.244.120.115:36720 | **10.107.59.191:80** |
-| ② | server | 10.244.120.115:36720 | 10.244.120.71:8080 |
-| ③ | server | 10.244.120.71:8080 | 10.244.120.115:36720 |
-| ④ | client | **10.107.59.191:80** | 10.244.120.115:36720 |
+| (1) | client | 10.244.120.115:36720 | **10.107.59.191:80** |
+| (2) | server | 10.244.120.115:36720 | 10.244.120.71:8080 |
+| (3) | server | 10.244.120.71:8080 | 10.244.120.115:36720 |
+| (4) | client | **10.107.59.191:80** | 10.244.120.115:36720 |
 
-Only the client's side (① ④) ever shows the ClusterIP.
+Only the client's side ((1) (4)) ever shows the ClusterIP.
 
 #### Where tcpdump looks: one virtual cable per Pod
 
@@ -3123,19 +3123,19 @@ Two of the ten packets, step by step:
 
 ```
 PACKET 1, SYN (client → server): the first packet, so the rules run
-  ① client's eth0 sends it         .115:38770 → 10.107.59.191:80
-  ② node sees it arrive on cable 1 "calia6c… In"   .115:38770 → 10.107.59.191:80    BEFORE
-  ③ node kernel: no entry for this connection yet → walk KUBE-SERVICES (counter 5 → 6)
+  1 client's eth0 sends it         .115:38770 → 10.107.59.191:80
+  2 node sees it arrive on cable 1 "calia6c… In"   .115:38770 → 10.107.59.191:80    BEFORE
+  3 node kernel: no entry for this connection yet → walk KUBE-SERVICES (counter 5 → 6)
                  → random pick .71 → DNAT dst → create the conntrack entry
-  ④ node sends it down cable 2     "cali5e2… Out"  .115:38770 → .71:8080            AFTER
-  ⑤ server's eth0 receives it      .115:38770 → .71:8080
+  4 node sends it down cable 2     "cali5e2… Out"  .115:38770 → .71:8080            AFTER
+  5 server's eth0 receives it      .115:38770 → .71:8080
 
 PACKET 6, 200 OK (server → client): a reply, so the entry is used and the rules aren't
-  ① server's eth0 sends it         .71:8080 → .115:38770           (it answers whoever wrote to it)
-  ② node sees it arrive on cable 2 "cali5e2… In"   .71:8080 → .115:38770            BEFORE
-  ③ node kernel: matches the entry's REPLY side → rewrite src back (counter stays 6)
-  ④ node sends it down cable 1     "calia6c… Out"  10.107.59.191:80 → .115:38770    AFTER
-  ⑤ client's eth0 receives it      10.107.59.191:80 → .115:38770   (the address it called)
+  1 server's eth0 sends it         .71:8080 → .115:38770           (it answers whoever wrote to it)
+  2 node sees it arrive on cable 2 "cali5e2… In"   .71:8080 → .115:38770            BEFORE
+  3 node kernel: matches the entry's REPLY side → rewrite src back (counter stays 6)
+  4 node sends it down cable 1     "calia6c… Out"  10.107.59.191:80 → .115:38770    AFTER
+  5 client's eth0 receives it      10.107.59.191:80 → .115:38770   (the address it called)
 ```
 
 Here are all ten, laid out the same way, with the cable each packet came in on
@@ -3206,28 +3206,28 @@ priority order, lowest number first.
 
  PREROUTING
    -300  raw          (iptables raw table; unused here)
-   -200  CONNTRACK    ① look up .115:38770 → 10.107.59.191:80 → not found
+   -200  CONNTRACK    1 look up .115:38770 → 10.107.59.191:80 → not found
                          → CREATE a new entry, not yet in the table
                            ORIGINAL = .115:38770 → 10.107.59.191:80    (the packet as it arrived)
                            REPLY    = 10.107.59.191:80 → .115:38770    (just the swap, for now)
    -150  mangle
-   -100  DNAT (nat)   ② kube-proxy rules: KUBE-SERVICES → KUBE-SVC → pick → KUBE-SEP → DNAT .71:8080
+   -100  DNAT (nat)   2 kube-proxy rules: KUBE-SERVICES → KUBE-SVC → pick → KUBE-SEP → DNAT .71:8080
                          → rewrite the packet's dst
                          → UPDATE the entry's REPLY = .71:8080 → .115:38770
  routing decision: .71 → cable 2
  POSTROUTING
-   +100  SNAT (nat)   ③ KUBE-POSTROUTING: not marked → no MASQUERADE
+   +100  SNAT (nat)   3 KUBE-POSTROUTING: not marked → no MASQUERADE
                          (if it were marked: rewrite src, and change REPLY's dst too)
-   last  CONFIRM      ④ SAVE the entry into the conntrack table → the [NEW] event fires
+   last  CONFIRM      4 SAVE the entry into the conntrack table → the [NEW] event fires
  → out to cable 2
 ```
 
 | Step | What happens to the entry |
 |---|---|
-| ① conntrack, before DNAT | **Created.** ORIGINAL is recorded *as the packet arrived*, so it holds the ClusterIP. That's why ORIGINAL always shows what the client sent |
-| ② DNAT | **REPLY changed** to expect the answer from `.71:8080`. That change is the ORIGINAL dst ≠ REPLY src mismatch |
-| ③ SNAT, if marked | **REPLY changed again** (hairpin, node or outside caller): the answer is expected at `10.244.120.64:<port>` |
-| ④ confirm, at the very end | **Saved.** From now on, later packets of this connection find it |
+| (1) conntrack, before DNAT | **Created.** ORIGINAL is recorded *as the packet arrived*, so it holds the ClusterIP. That's why ORIGINAL always shows what the client sent |
+| (2) DNAT | **REPLY changed** to expect the answer from `.71:8080`. That change is the ORIGINAL dst ≠ REPLY src mismatch |
+| (3) SNAT, if marked | **REPLY changed again** (hairpin, node or outside caller): the answer is expected at `10.244.120.64:<port>` |
+| (4) confirm, at the very end | **Saved.** From now on, later packets of this connection find it |
 
 Why this order:
 
@@ -3242,7 +3242,7 @@ Why this order:
 What was seen on the lab, and what wasn't:
 
 - **Seen: the `[NEW]` event already has the NATed REPLY side**, `[NEW] … src=10.244.120.71
-  dst=10.244.120.115 …` in the `conntrack -E` run. The event fires at ④, after NAT.
+  dst=10.244.120.115 …` in the `conntrack -E` run. The event fires at (4), after NAT.
 - **Seen: the nat chain priorities.** `nft list table ip nat`, from a temporary
   hostNetwork netshoot Pod, gave `prerouting priority dstnat` (−100), `output
   priority dstnat`, `postrouting priority srcnat` (+100) and `input priority srcnat`.
@@ -3256,9 +3256,9 @@ When the client is the node itself (examples E and F above), the first packet
 starts at **OUTPUT** instead of PREROUTING. It's the same sequence: conntrack,
 then DNAT at `priority dstnat`, then routing, then POSTROUTING.
 
-**Later packets in the same direction** (ACK, `GET`, FIN): ① finds the saved
-entry, so ② doesn't walk `KUBE-SERVICES`. The nat hook applies the stored DNAT
-instead, and ③ applies the stored SNAT, if any. Nothing new is saved.
+**Later packets in the same direction** (ACK, `GET`, FIN): (1) finds the saved
+entry, so (2) doesn't walk `KUBE-SERVICES`. The nat hook applies the stored DNAT
+instead, and (3) applies the stored SNAT, if any. Nothing new is saved.
 
 #### The return path, through the same hooks
 
@@ -3274,16 +3274,16 @@ cable:
 
  PREROUTING
    -300  raw
-   -200  CONNTRACK    ① look up .71:8080 → .115:38770 → FOUND, as the REPLY side of the saved entry
+   -200  CONNTRACK    1 look up .71:8080 → .115:38770 → FOUND, as the REPLY side of the saved entry
                          → this packet is direction=REPLY; the entry is now SEEN_REPLY (later ASSURED)
    -150  mangle
-   -100  nat          ② no rules walked (not a new connection).
+   -100  nat          2 no rules walked (not a new connection).
                          Undo SNAT = put the original client back as dst. There was no SNAT → nothing to do
  routing decision: dst .115 → cable 1
  POSTROUTING
-   +100  nat          ③ no rules walked. Undo DNAT = put the ClusterIP back as src:
+   +100  nat          3 no rules walked. Undo DNAT = put the ClusterIP back as src:
                          src .71:8080 → 10.107.59.191:80
-   last  CONFIRM      ④ already saved → nothing
+   last  CONFIRM      4 already saved → nothing
  → out to cable 1:  10.107.59.191:80 → .115:38770   (what the client receives)
 ```
 
@@ -3294,11 +3294,11 @@ itself, SNATed to `10.244.120.64:36689`), arriving back on the **same** cable:
  reply (SYN-ACK) .115:8080 → 10.244.120.64:36689, arriving from cable 1 (the Pod is both ends)
 
  PREROUTING
-   -200  CONNTRACK    ① FOUND: matches REPLY  src=10.244.120.115 dst=10.244.120.64 sport=8080 dport=36689
-   -100  nat          ② undo SNAT: dst 10.244.120.64:36689 → .115:49382
- routing decision: dst .115 → cable 1                  ← must come AFTER ②
+   -200  CONNTRACK    1 FOUND: matches REPLY  src=10.244.120.115 dst=10.244.120.64 sport=8080 dport=36689
+   -100  nat          2 undo SNAT: dst 10.244.120.64:36689 → .115:49382
+ routing decision: dst .115 → cable 1                  ← must come AFTER 2
  POSTROUTING
-   +100  nat          ③ undo DNAT: src .115:8080 → 10.107.59.191:80
+   +100  nat          3 undo DNAT: src .115:8080 → 10.107.59.191:80
  → out to cable 1:  10.107.59.191:80 → .115:49382   (what the client socket expects)
 ```
 
@@ -3469,24 +3469,24 @@ kernel. For a packet that isn't the first, they shrink:
 ```
  packet 3 (ACK) arrives:  .115:38770 → 10.107.59.191:80
 
- ① conntrack (-200)   hash lookup on the 4 numbers → FOUND, direction ORIGINAL → attach the entry
- ② nat, dstnat (-100) not NEW → SKIP the iptables rules entirely
+ 1 conntrack (-200)   hash lookup on the 4 numbers → FOUND, direction ORIGINAL → attach the entry
+ 2 nat, dstnat (-100) not NEW → SKIP the iptables rules entirely
                       entry has DST_NAT → do the stored swap: dst → .71:8080
  routing              dst is now .71 → cable 2
- ③ nat, srcnat (+100) entry has no SRC_NAT → nothing
- ④ confirm            entry already saved → nothing
+ 3 nat, srcnat (+100) entry has no SRC_NAT → nothing
+ 4 confirm            entry already saved → nothing
  leaves:                 .115:38770 → .71:8080
 ```
 
 | Step | Packet 1 | Every later packet |
 |---|---|---|
-| ① conntrack | not found → create | found → attach (one hash lookup) |
-| ② `dstnat` hook | **walk the iptables rules**, pick, set up the NAT | no rules: if `DST_NAT`, rewrite dst from the entry |
+| (1) conntrack | not found → create | found → attach (one hash lookup) |
+| (2) `dstnat` hook | **walk the iptables rules**, pick, set up the NAT | no rules: if `DST_NAT`, rewrite dst from the entry |
 | routing | yes | yes |
-| ③ `srcnat` hook | SNAT check (`KUBE-POSTROUTING`) | no rules: if `SRC_NAT`, rewrite src from the entry |
-| ④ confirm | save the entry | nothing |
+| (3) `srcnat` hook | SNAT check (`KUBE-POSTROUTING`) | no rules: if `SRC_NAT`, rewrite src from the entry |
+| (4) confirm | save the entry | nothing |
 
-The swap still has to happen at ②, before routing: the kernel can only choose
+The swap still has to happen at (2), before routing: the kernel can only choose
 cable 2 once the destination is the Pod IP. That's why packet 1 took 91 µs on
 the node and packet 3 took 3 µs. The steps are the same; the work is much smaller.
 
@@ -3864,7 +3864,7 @@ never heard of the ClusterIP.
 
 The reply still goes through the node's kernel before reaching the client.
 There it matches the entry's REPLY side and its source is changed back to
-`10.107.59.191:80` (③ → ④ above). It can't skip that step: a Pod's veth leads
+`10.107.59.191:80` ((3) → (4) above). It can't skip that step: a Pod's veth leads
 into the host, so every packet a Pod sends is handled by the node first.
 
 This only works because the reply reaches **the node that did the DNAT**, the
@@ -7442,9 +7442,9 @@ return here. That's `externalTrafficPolicy: Cluster`, the default.
 through the nat rules, so each nat counter read **1**:
 
 ```
-① arrives on eth0           src 172.17.0.4:49634  dst 172.17.0.3:30080
+1 arrives on eth0           src 172.17.0.4:49634  dst 172.17.0.3:30080
 
-② PREROUTING hook (nat, via the NAT core: first packet only)
+2 PREROUTING hook (nat, via the NAT core: first packet only)
    PREROUTING → KUBE-SERVICES
      ClusterIP rule?  dst isn't 10.43.208.17      → no
      last rule: dst-type LOCAL? 172.17.0.3 is ours → KUBE-NODEPORTS            1 pkt
@@ -7455,17 +7455,17 @@ through the nat rules, so each nat counter read **1**:
    KUBE-SEP: DNAT                                                               1 pkt
                             src 172.17.0.4:49634  dst 10.42.0.6:80   (mark 0x4000)
 
-③ routing decision: 10.42.0.6 is not this node → 10.42.0.0/24 dev cni0 → FORWARD
+3 routing decision: 10.42.0.6 is not this node → 10.42.0.0/24 dev cni0 → FORWARD
 
-④ FORWARD hook (filter)
+4 FORWARD hook (filter)
    KUBE-FORWARD: mark 0x4000 → ACCEPT                                           1 pkt
 
-⑤ POSTROUTING hook (nat, SNAT side)
+5 POSTROUTING hook (nat, SNAT side)
    KUBE-POSTROUTING: marked → clear mark → MASQUERADE                           1 pkt
    source := the address of the outgoing interface cni0 = 10.42.0.1, random port
                             src 10.42.0.1:14718   dst 10.42.0.6:80
 
-⑥ out of cni0 → the Pod
+6 out of cni0 → the Pod
 ```
 
 What the Pod (`traefik/whoami`) saw:
@@ -7603,6 +7603,247 @@ names are per table ([One chain per table, not one chain across tables](#one-cha
   for a `LoadBalancer` Service with `externalTrafficPolicy: Local`. It was empty
   here, because no Service has one.
 
+*Is the jump always there, or only once a NodePort exists?* Always. kube-proxy writes it on every
+sync, whether or not any NodePort or LoadBalancer Service exists. Lab (the three-node k3s cluster
+from [network-policy.md](network-policy.md), after changing its only NodePort Service,
+`shop/backend`, to ClusterIP):
+
+```
+Services that use NodePorts: (none)
+
+KUBE-SERVICES last rule:
+-A KUBE-SERVICES "kubernetes service nodeports; NOTE: this must be the last rule in this chain" -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS
+
+KUBE-NODEPORTS contents:
+-N KUBE-NODEPORTS            ← the chain exists, but it's empty
+```
+
+So the jump and the `KUBE-NODEPORTS` chain are permanent. Creating a NodePort or LoadBalancer
+Service only adds rules inside `KUBE-NODEPORTS`. With none, a packet to a node address goes into
+the empty chain, comes back out, and continues as ordinary traffic to the node.
+
+If kube-proxy is started with `--nodeport-addresses` (or `nodePortAddresses` in its config) set to
+specific CIDRs, it writes one `-d <node address> -j KUBE-NODEPORTS` rule per matching node address
+instead of the single `--dst-type LOCAL` rule. That way NodePorts only answer on those addresses.
+The jump is still written whether or not any NodePort exists, and it's still last. **(kube-proxy
+docs; not tested, since k3s uses the default)**
+
+*Where `--dst-type LOCAL` comes from.* The node IPs are never written into a rule. `KUBE-SERVICES`
+reaches the NodePort rules through its last rule, in the **nat** table:
+
+```
+-A KUBE-SERVICES -m comment --comment "kubernetes service nodeports; NOTE: this must be the last rule in this chain" -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS
+```
+
+`--dst-type LOCAL` means "addressed to any IP this node owns", whatever that address is. Inside
+`KUBE-NODEPORTS` only the port is checked.
+
+`-m addrtype --dst-type LOCAL` isn't stored in any iptables chain or list. It's a question iptables
+asks the kernel for each packet: "does this node own the destination address?" For each packet,
+the `addrtype` match module asks the kernel's routing code what type of address the destination
+is, and the kernel answers from the **local routing table**. On np-server (three-node lab from
+[network-policy.md](network-policy.md)):
+
+```
+$ ip route show table local
+local 10.42.0.0 dev flannel.1 proto kernel scope host src 10.42.0.0        ← flannel.1's address
+local 10.42.0.1 dev cni0 proto kernel scope host src 10.42.0.1             ← cni0's address
+local 127.0.0.0/8 dev lo proto kernel scope host src 127.0.0.1             ← all of 127.x
+local 127.0.0.1 dev lo proto kernel scope host src 127.0.0.1
+local 172.19.0.2 dev eth0 proto kernel scope host src 172.19.0.2           ← the node IP
+broadcast 10.42.0.255 dev cni0 …  broadcast 172.19.255.255 dev eth0 …  broadcast 127.255.255.255 dev lo …
+
+$ ip rule
+0:      from all lookup local        ← the table checked first for every routing decision
+32766:  from all lookup main
+32767:  from all lookup default
+```
+
+The kernel adds an entry here automatically whenever an address is assigned to an interface
+(`proto kernel`). So LOCAL means one of the addresses this node owns right now.
+
+*Where those addresses come from.* Each `local` line is an address assigned to one of the node's
+own interfaces. Here "the node" is the `k3s-np-server` container's network namespace, so these are
+its interfaces, not the Mac's. `ip -4 addr` on np-server lists exactly the same four (lab):
+
+```
+lo         127.0.0.1/8
+eth0       172.19.0.2/16
+flannel.1  10.42.0.0/32
+cni0       10.42.0.1/24
+```
+
+| Address | Interface | What the interface is | Who assigned the address |
+|---|---|---|---|
+| `127.0.0.1/8` | `lo` | loopback | the kernel, when the namespace was created. The `/8` gives the `local 127.0.0.0/8` line: every `127.x` address is local, not only `.1` |
+| `172.19.0.2/16` | `eth0` | the node's network card (here a veth pair into Docker's `k3s-np` bridge) | **Docker**, from the `k3s-np` network `172.19.0.0/16` (gateway `172.19.0.1`). On a real machine: DHCP or static config |
+| `10.42.0.0/32` | `flannel.1` | flannel's VXLAN tunnel device (`vxlan id 1`) | **flannel**: the first address of this node's Pod subnet `10.42.0.0/24`, as a `/32`. Other nodes use it as the "via" address in their routes (`10.42.0.0/24 via 10.42.0.0 dev flannel.1`, [network-policy.md](network-policy.md) §0) |
+| `10.42.0.1/24` | `cni0` | the Linux bridge every local Pod's veth is attached to | **the CNI bridge plugin** (bundled in k3s), when the first Pod started: the gateway address of this node's `/24`, the Pods' default gateway |
+
+The `broadcast` lines are each subnet's broadcast address (`10.42.0.255`, `172.19.255.255`,
+`127.255.255.255`), added along with the address. `flannel.1` has none, because its address is a
+`/32`.
+
+Interfaces with no IPv4 address add nothing:
+
+- `veth*` are the node's ends of the Pods' veth pairs. The Pods' own addresses (`10.42.0.x`) live
+  inside the Pods' network namespaces, so they're in each Pod's local table, not the node's.
+- `tunl0`, `gre0`, `sit0` and similar are created automatically when the tunnel kernel modules
+  load, and are unused.
+
+That's why a NodePort answers on the node IP, the `cni0` gateway and the `flannel.1` address, but
+not on a Pod IP: a Pod IP isn't in the node's local table.
+
+*Kubernetes rules or normal routing?* Normal Linux routing. Kubernetes doesn't write the `local`
+table or the `ip rule` list. Kubernetes components only assign the addresses, and the kernel creates
+those routes by itself. Both come from kernel code (`linux-master`):
+
+The three `ip rule` lines are built into every network namespace when it's created:
+
+```c
+// net/ipv4/fib_rules.c
+static int fib_default_rules_init(struct fib_rules_ops *ops)
+{
+    err = fib_default_rule_add(ops, 0,      RT_TABLE_LOCAL);     // 0:     from all lookup local
+    err = fib_default_rule_add(ops, 0x7FFE, RT_TABLE_MAIN);      // 32766: from all lookup main
+    err = fib_default_rule_add(ops, 0x7FFF, RT_TABLE_DEFAULT);   // 32767: from all lookup default
+}
+```
+
+Any Linux machine, container or Pod has exactly these three until someone adds more (for example
+the policy-based routing examples in [networking.md](networking.md)).
+
+The `local` and `broadcast` entries are added automatically when an address is assigned:
+
+```c
+// net/ipv4/fib_frontend.c
+void fib_add_ifaddr(struct in_ifaddr *ifa)          // called whenever an IPv4 address is added to an interface
+{
+    ...
+    fib_magic(RTM_NEWROUTE, RTN_LOCAL, addr, 32, prim, 0);                  // "local 172.19.0.2 dev eth0"
+    ...
+    fib_magic(RTM_NEWROUTE, RTN_BROADCAST, ifa->ifa_broadcast, 32, ...);    // "broadcast 172.19.255.255"
+    ...
+    fib_magic(RTM_NEWROUTE,
+              dev->flags & IFF_LOOPBACK ? RTN_LOCAL : RTN_UNICAST, ...);     // on lo the whole prefix is local: "local 127.0.0.0/8"
+}
+```
+
+That's what `proto kernel` means in the output: the kernel added it, not a program. The
+`192.0.2.50` test above showed it: `ip addr add` alone produced
+`local 192.0.2.50 dev lo proto kernel`.
+
+| What | Done by | Kubernetes involved? |
+|---|---|---|
+| `ip rule` 0 / 32766 / 32767 | kernel, at namespace creation | no |
+| assigning `172.19.0.2` to `eth0` | Docker (on a real node: DHCP or OS config) | no |
+| assigning `10.42.0.0/32` to `flannel.1` | flannel (embedded in k3s) | yes, the CNI layer |
+| assigning `10.42.0.1/24` to `cni0` | CNI bridge plugin | yes, the CNI layer |
+| the `local` / `broadcast` entries for each address | kernel (`fib_add_ifaddr`) | no, automatic |
+| `--dst-type LOCAL` answering from that table | kernel (`xt_addrtype`) | no; kube-proxy only uses it |
+
+kube-proxy in iptables mode adds no routes and no `ip rule` entries (part 16). It writes only
+iptables rules and relies on the kernel's table to know which addresses are local.
+
+The exception is kube-proxy in **IPVS mode**. It creates a dummy interface `kube-ipvs0` and assigns
+every ClusterIP and LB IP to it. The kernel then adds a `local` entry for each one, so in IPVS mode
+the local table fills up with Service IPs. That's how IPVS receives Service traffic on INPUT
+(part 14). **(kube-proxy docs; IPVS not run in this lab)**
+
+*One `KUBE-NODEPORTS` chain, two rules per port.* There's one `KUBE-NODEPORTS` chain for the whole
+node, shared by every NodePort and LoadBalancer Service. There's no NodePort chain per Service.
+Each Service **port** adds two rules to that shared chain. Lab dump, with `shop/backend` (one port)
+and a test Service `lab3/c-np` (two ports):
+
+```
+nat KUBE-NODEPORTS                       ← the only NodePort chain in the nat table
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp "shop/backend"        --dport 30080 -j KUBE-EXT-E62D…   ┐ shop/backend :80
+-A KUBE-NODEPORTS                -p tcp "shop/backend"        --dport 30080 -j KUBE-EXT-E62D…   ┘
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp "lab3/c-np:80-8080"   --dport 31860 -j KUBE-EXT-KUSK…   ┐ lab3/c-np :80
+-A KUBE-NODEPORTS                -p tcp "lab3/c-np:80-8080"   --dport 31860 -j KUBE-EXT-KUSK…   ┘
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp "lab3/c-np:9090-8080" --dport 31220 -j KUBE-EXT-CPM5…   ┐ lab3/c-np :9090
+-A KUBE-NODEPORTS                -p tcp "lab3/c-np:9090-8080" --dport 31220 -j KUBE-EXT-CPM5…   ┘
+```
+
+The two rules per port:
+
+| Rule | Matches | Why it's separate |
+|---|---|---|
+| `-d 127.0.0.0/8 --dport N` | `localhost:N` / `127.x:N` | localhost NodePorts need `route_localnet` and are counted separately (the `nfacct` counter `localhost_nps_accepted_pkts`, removed from the output above). Part 8 |
+| `--dport N` (no `-d`) | `N` on any other address the node owns | the `--dst-type LOCAL` jump already made sure the address is the node's, so only the port is checked |
+
+Both rules jump to the same per-port `KUBE-EXT`. What's per what:
+
+| Chain | How many | Holds |
+|---|---|---|
+| nat `KUBE-NODEPORTS` | 1 per node | 2 rules per NodePort Service port: just the port numbers |
+| `KUBE-EXT-<hash>` | 1 per Service port that's reachable from outside | SNAT mark, then `KUBE-SVC` or `KUBE-SVL` |
+| `KUBE-SVC-<hash>` | 1 per Service port | the choice between endpoints |
+| `KUBE-SEP-<hash>` | 1 per endpoint per port | the DNAT |
+
+The hash is computed from namespace, Service name, port name and protocol, so `c-np`'s two ports
+got unrelated `KUBE-EXT` names (`KUSK…`, `CPM5…`), although both belong to one Service. The "per
+Service" chain for NodePort traffic is really per Service port, and it's `KUBE-EXT`, not anything
+named NODEPORT.
+
+There's also a **filter** `KUBE-NODEPORTS`, a different chain with the same name. It only gets an
+ACCEPT for the health-check NodePort of a `LoadBalancer` Service with
+`externalTrafficPolicy: Local`, and it was empty here.
+
+The kernel code (`linux-master`):
+
+```c
+// net/netfilter/xt_addrtype.c — the match iptables calls for "-m addrtype"
+static inline bool match_type(struct net *net, const struct net_device *dev,
+                              __be32 addr, u_int16_t mask)
+{
+    return !!(mask & (1 << inet_dev_addr_type(net, dev, addr)));   // is the address's type in the wanted set (LOCAL)?
+}
+...
+    if (ret && info->dest)
+        ret &= match_type(net, dev, iph->daddr, info->dest) ^ ...;  // --dst-type: check the packet's destination
+
+// net/ipv4/fib_frontend.c
+unsigned int inet_dev_addr_type(struct net *net, const struct net_device *dev, __be32 addr)
+{
+    u32 rt_table = l3mdev_fib_table(dev) ? : RT_TABLE_LOCAL;         // the "local" table (255), unless a VRF
+    return __inet_dev_addr_type(net, dev, addr, rt_table);
+}
+
+static inline unsigned int __inet_dev_addr_type(..., __be32 addr, u32 tb_id)
+{
+    ...
+    table = fib_get_table(net, tb_id);                                // the local table
+    if (table) {
+        ret = RTN_UNICAST;                                            // default: an ordinary remote address
+        if (!fib_table_lookup(table, &fl4, &res, FIB_LOOKUP_NOREF))   // look the address up
+            ...
+                ret = res.type;                                       // RTN_LOCAL for the "local …" entries above
+    }
+    return ret;
+}
+```
+
+The match is true when the lookup returns `RTN_LOCAL`, which is the `local` keyword at the start of
+each line of `ip route show table local`.
+
+- **A NodePort answers on every address in that table:** `172.19.0.2`, `10.42.0.1` (`cni0`),
+  `10.42.0.0` (`flannel.1`) and anything in `127.0.0.0/8` (for 127.x, through the separate
+  `-d 127.0.0.0/8` rule and `route_localnet`, part 8). Add a new address to the node and NodePorts
+  work on it straight away, without kube-proxy changing anything. Tested on np-agent2 with a
+  NodePort Service `lab3/c-np` (30099):
+
+  | Step | `local` table has 192.0.2.50? | iptables rules mentioning it | `wget 192.0.2.50:30099` on the node |
+  |---|---|---|---|
+  | before | no | 0 | timed out |
+  | `ip addr add 192.0.2.50/32 dev lo` | yes, `local 192.0.2.50 dev lo proto kernel` | 0 | **`Hostname: c`** |
+  | `ip addr del …` | no | 0 | timed out |
+
+  (The first try used `shop/backend:30080` and got "Connection refused". The NodePort matched, but
+  backend's NetworkPolicies rejected traffic from another node; see network-policy.md §4.)
+- **A cloud LB IP like `203.0.113.10` isn't in the table,** so it doesn't match LOCAL. That's why
+  it needs its own `-d 203.0.113.10` rule further up in `KUBE-SERVICES` (part 16).
+
 **8. The trace again, rule by rule: what each NodePort rule does.** Two
 requests, with the nat counters zeroed before each and read per rule:
 
@@ -7613,11 +7854,11 @@ The 4 rules, numbered as the kernel shows them:
 
 ```
 nat KUBE-NODEPORTS
- #1  -d 127.0.0.0/8  tcp dpt:30080  -j KUBE-EXT-6V2X…        ← rule ①: localhost:30080
- #2                  tcp dpt:30080  -j KUBE-EXT-6V2X…        ← rule ②: any other node IP:30080
+ #1  -d 127.0.0.0/8  tcp dpt:30080  -j KUBE-EXT-6V2X…        ← rule 1: localhost:30080
+ #2                  tcp dpt:30080  -j KUBE-EXT-6V2X…        ← rule 2: any other node IP:30080
 nat KUBE-EXT-6V2X…  (a chain created for this Service)
- #1  -j KUBE-MARK-MASQ                                        ← rule ③: mark "SNAT me"
- #2  -j KUBE-SVC-6V2X…                                        ← rule ④: hand over to the ClusterIP's chain
+ #1  -j KUBE-MARK-MASQ                                        ← rule 3: mark "SNAT me"
+ #2  -j KUBE-SVC-6V2X…                                        ← rule 4: hand over to the ClusterIP's chain
 ```
 
 Everything else the packet passes through is either shared (`KUBE-SERVICES`'
@@ -7629,11 +7870,11 @@ is reused (`KUBE-SVC`, `KUBE-SEP`).
 ```
 rule                               pkts
 KUBE-SERVICES #last                1     shared: dst is a node IP → KUBE-NODEPORTS
-KUBE-NODEPORTS #1                  0     rule ①: not 127.x → skipped
-KUBE-NODEPORTS #2                  1     rule ②: dpt 30080 → KUBE-EXT
-KUBE-EXT #1                        1     rule ③: → KUBE-MARK-MASQ
+KUBE-NODEPORTS #1                  0     rule 1: not 127.x → skipped
+KUBE-NODEPORTS #2                  1     rule 2: dpt 30080 → KUBE-EXT
+KUBE-EXT #1                        1     rule 3: → KUBE-MARK-MASQ
 KUBE-MARK-MASQ #1                  1     shared: mark 0x4000
-KUBE-EXT #2                        1     rule ④: → KUBE-SVC
+KUBE-EXT #2                        1     rule 4: → KUBE-SVC
 KUBE-SVC #1                        0     ClusterIP-only rule: needs dst 10.43.208.17 → skipped
 KUBE-SVC #2                        0     random 0.5 → lost the toss
 KUBE-SVC #3                        1     → KUBE-SEP-R7HK (10.42.0.6)
@@ -7649,24 +7890,24 @@ Step by step:
 2. **`KUBE-SERVICES` (shared).** No ClusterIP rule matches: the destination is
    172.17.0.3, not a ClusterIP. The last rule, `--dst-type LOCAL`, matches
    because 172.17.0.3 belongs to the node. Jump to `KUBE-NODEPORTS`.
-3. **`KUBE-NODEPORTS` #1, rule ①:** `-d 127.0.0.0/8`. The destination is
+3. **`KUBE-NODEPORTS` #1, rule (1):** `-d 127.0.0.0/8`. The destination is
    172.17.0.3, so no match (counter 0).
-4. **`KUBE-NODEPORTS` #2, rule ②:** `tcp dpt:30080`. It matches. This is the rule
+4. **`KUBE-NODEPORTS` #2, rule (2):** `tcp dpt:30080`. It matches. This is the rule
    that ties port 30080 to this Service, so without it the node wouldn't know
    30080 means `np-lab/web`. Jump to `KUBE-EXT-6V2X…`.
-5. **`KUBE-EXT` #1, rule ③:** `-j KUBE-MARK-MASQ`. The packet gets mark `0x4000`.
+5. **`KUBE-EXT` #1, rule (3):** `-j KUBE-MARK-MASQ`. The packet gets mark `0x4000`.
    Nothing about the packet changes yet. The mark is a note for POSTROUTING:
    "this came in through a NodePort, rewrite its source on the way out". Without
    this rule, the Pod would reply to 172.17.0.4 directly from 10.42.0.6. On a
    multi-node cluster that reply would skip this node, and the client would drop
    it.
-6. **`KUBE-EXT` #2, rule ④:** `-j KUBE-SVC-6V2X…`. This is where the NodePort
+6. **`KUBE-EXT` #2, rule (4):** `-j KUBE-SVC-6V2X…`. This is where the NodePort
    joins the ClusterIP. From here, the packet takes exactly the chains a
    ClusterIP packet takes.
 7. **`KUBE-SVC` (reused from the ClusterIP):**
    - #1 is the ClusterIP's own masquerade check (`-d 10.43.208.17`). Counter 0:
      the destination is still the node IP, because DNAT hasn't happened yet.
-     NodePort traffic is marked in rule ③ instead.
+     NodePort traffic is marked in rule (3) instead.
    - #2 is `random 0.5` to the 10.42.0.5 Pod. Counter 0: it lost the coin toss.
      The counter only counts packets that matched.
    - #3 is the remaining endpoint, the 10.42.0.6 Pod. Counter 1.
@@ -7679,7 +7920,7 @@ Step by step:
       of 2 is other, unmarked traffic leaving the node in that moment.
     - #2: clears the mark.
     - #3: `MASQUERADE` rewrites the source to `cni0`'s address. The packet is now
-      `10.42.0.1:20485 → 10.42.0.6:80`, the result of rule ③'s mark.
+      `10.42.0.1:20485 → 10.42.0.6:80`, the result of rule (3)'s mark.
 11. **The Pod's view:** `RemoteAddr: 10.42.0.1:20485`. Conntrack has recorded both
     changes:
 
@@ -7695,10 +7936,10 @@ reverses both changes, and the client sees `172.17.0.3:30080 → 172.17.0.4:5960
 ```
 rule                               pkts
 KUBE-SERVICES #last                1     shared: 127.0.0.1 is LOCAL too
-KUBE-NODEPORTS #1                  1     rule ①: -d 127.0.0.0/8 → KUBE-EXT     ← this time rule ① matched
+KUBE-NODEPORTS #1                  1     rule 1: -d 127.0.0.0/8 → KUBE-EXT     ← this time rule 1 matched
 KUBE-NODEPORTS #2                  0     never reached
-KUBE-EXT #1 / KUBE-MARK-MASQ       1     rule ③: mark
-KUBE-EXT #2                        1     rule ④: → KUBE-SVC
+KUBE-EXT #1 / KUBE-MARK-MASQ       1     rule 3: mark
+KUBE-EXT #2                        1     rule 4: → KUBE-SVC
 KUBE-SVC #3 → KUBE-SEP-R7HK #2     1     DNAT → 10.42.0.6:80
 KUBE-POSTROUTING #3                1     MASQUERADE
 ```
@@ -7707,12 +7948,12 @@ The differences from A:
 
 - **It enters through the OUTPUT hook**, because the node itself created the
   packet: `-A OUTPUT -j KUBE-SERVICES`. From there the chains are the same.
-- **Rule ① matches instead of rule ②.** The localhost rule exists because 127.x
+- **Rule (1) matches instead of rule (2).** The localhost rule exists because 127.x
   addresses are special: Linux normally refuses to route them anywhere other
   than `lo`. kube-proxy turns on `route_localnet=1` (it read `all=1` here) so a
   `127.0.0.1` packet can be DNATed to a Pod. In the real kube-proxy rule, it's
   also counted separately (`nfacct localhost_nps_accepted_pkts`).
-- **Rule ③'s mark is essential here, even on one node.** The packet's source is
+- **Rule (3)'s mark is essential here, even on one node.** The packet's source is
   `127.0.0.1`. Without MASQUERADE, the Pod would reply to `127.0.0.1`, which is the
   Pod itself. SNAT to `10.42.0.1` makes the reply come back to the node:
 
@@ -7725,10 +7966,10 @@ The differences from A:
 
 | Rule | Chain | Its job in the path | If it were missing |
 |---|---|---|---|
-| ① `-d 127.0.0.0/8 --dport 30080 -j KUBE-EXT` | `KUBE-NODEPORTS` | catches `localhost:30080` from the node itself | `curl 127.0.0.1:30080` on the node fails; other addresses still work |
-| ② `--dport 30080 -j KUBE-EXT` | `KUBE-NODEPORTS` | ties port 30080 on any node IP to this Service | no NodePort at all: the packet falls out of `KUBE-NODEPORTS` and finds nothing listening on 30080 |
-| ③ `-j KUBE-MARK-MASQ` | `KUBE-EXT` | marks the packet so POSTROUTING rewrites its source | replies would go straight from the Pod to the client and be dropped (multi-node), and localhost requests would break |
-| ④ `-j KUBE-SVC` | `KUBE-EXT` | hands the packet to the ClusterIP's load balancing and DNAT | the packet is marked but never DNATed |
+| (1) `-d 127.0.0.0/8 --dport 30080 -j KUBE-EXT` | `KUBE-NODEPORTS` | catches `localhost:30080` from the node itself | `curl 127.0.0.1:30080` on the node fails; other addresses still work |
+| (2) `--dport 30080 -j KUBE-EXT` | `KUBE-NODEPORTS` | ties port 30080 on any node IP to this Service | no NodePort at all: the packet falls out of `KUBE-NODEPORTS` and finds nothing listening on 30080 |
+| (3) `-j KUBE-MARK-MASQ` | `KUBE-EXT` | marks the packet so POSTROUTING rewrites its source | replies would go straight from the Pod to the client and be dropped (multi-node), and localhost requests would break |
+| (4) `-j KUBE-SVC` | `KUBE-EXT` | hands the packet to the ClusterIP's load balancing and DNAT | the packet is marked but never DNATed |
 
 **9. `KUBE-MARK-MASQ` isn't created by the NodePort.** `KUBE-MARK-MASQ` is a
 single shared chain that kube-proxy creates on every node, Services or not (it
@@ -7921,12 +8162,12 @@ container:<node>`), SYN and SYN-ACK only.
 
 ```
                      interface      packet as seen there
-SYN      ① 22:48:57.685778  eth0 In        172.17.0.4.52664 > 172.17.0.3.30080   [S]    ← as the client sent it
-         ② 22:48:57.685827  cni0 Out       10.42.0.1.46374  > 10.42.0.6.80       [S]    ← after DNAT and SNAT
-         ③ 22:48:57.685834  veth827… Out   10.42.0.1.46374  > 10.42.0.6.80       [S]    ← into the Pod
-SYN-ACK  ④ 22:48:57.686170  veth827… P     10.42.0.6.80     > 10.42.0.1.46374    [S.]   ← the Pod's reply, untouched
-         ⑤ 22:48:57.686174  cni0 In        10.42.0.6.80     > 172.17.0.4.52664   [S.]   ← half undone: destination fixed
-         ⑥ 22:48:57.686177  eth0 Out       172.17.0.3.30080 > 172.17.0.4.52664   [S.]   ← fully undone: as the client expects
+SYN      1 22:48:57.685778  eth0 In        172.17.0.4.52664 > 172.17.0.3.30080   [S]    ← as the client sent it
+         2 22:48:57.685827  cni0 Out       10.42.0.1.46374  > 10.42.0.6.80       [S]    ← after DNAT and SNAT
+         3 22:48:57.685834  veth827… Out   10.42.0.1.46374  > 10.42.0.6.80       [S]    ← into the Pod
+SYN-ACK  4 22:48:57.686170  veth827… P     10.42.0.6.80     > 10.42.0.1.46374    [S.]   ← the Pod's reply, untouched
+         5 22:48:57.686174  cni0 In        10.42.0.6.80     > 172.17.0.4.52664   [S.]   ← half undone: destination fixed
+         6 22:48:57.686177  eth0 Out       172.17.0.3.30080 > 172.17.0.4.52664   [S.]   ← fully undone: as the client expects
 ```
 
 The whole round trip took 0.4 ms, about 50 µs of it inside the node for the
@@ -7938,7 +8179,7 @@ capture; they follow from the rules and code above):
 
 ```
                           IP/TCP header                          skb->mark   conntrack entry
-① arrives on eth0         172.17.0.4:52664 → 172.17.0.3:30080    0x0         (none yet)
+1 arrives on eth0         172.17.0.4:52664 → 172.17.0.3:30080    0x0         (none yet)
 
   PREROUTING  -200 conntrack: new entry, not yet in the table
                                                                              ORIG  172.17.0.4:52664 → 172.17.0.3:30080
@@ -7955,7 +8196,7 @@ capture; they follow from the rules and code above):
   after SNAT:             10.42.0.1:46374  → 10.42.0.6:80        0x0         REPLY 10.42.0.6:80 → 10.42.0.1:46374    (+IPS_SRC_NAT)
               max  nf_confirm: the entry goes into the table, findable by both tuples
 
-② leaves on cni0 / ③ veth   10.42.0.1:46374 → 10.42.0.6:80
+2 leaves on cni0 / 3 veth   10.42.0.1:46374 → 10.42.0.6:80
 ```
 
 So at step 8 of the trace, just after the DNAT rule:
@@ -7970,22 +8211,22 @@ So at step 8 of the trace, just after the DNAT rule:
 The capture never shows that in-between state: it only exists inside the node,
 between PREROUTING and POSTROUTING.
 
-*The reply is translated in two steps, which is why ⑤ is half done.* The NAT
+*The reply is translated in two steps, which is why (5) is half done.* The NAT
 core changes **destinations at PREROUTING and OUTPUT**, and **sources at
 POSTROUTING and INPUT**, in both directions. For the reply, undoing the SNAT
 means changing the destination, and undoing the DNAT means changing the source:
 
 ```
-④ from the Pod (veth)     10.42.0.6:80 → 10.42.0.1:46374      matches the REPLY tuple
+4 from the Pod (veth)     10.42.0.6:80 → 10.42.0.1:46374      matches the REPLY tuple
 
   PREROUTING  (here run on the bridge, via br_netfilter: bridge-nf-call-iptables = 1)
               -100 NAT core, destination side: undo the SNAT
-⑤ seen on cni0            10.42.0.6:80 → 172.17.0.4:52664     ← destination already the client's
+5 seen on cni0            10.42.0.6:80 → 172.17.0.4:52664     ← destination already the client's
 
   routing: 172.17.0.4 → dev eth0 → FORWARD
 
   POSTROUTING +100 NAT core, source side: undo the DNAT
-⑥ leaves on eth0          172.17.0.3:30080 → 172.17.0.4:52664 ← source is the address the client called
+6 leaves on eth0          172.17.0.3:30080 → 172.17.0.4:52664 ← source is the address the client called
 ```
 
 No rules run for the reply: the NAT core compares the header with the
@@ -8531,6 +8772,358 @@ ingress: [ {ip: 203.0.113.10}, {ip: 203.0.113.11} ],  ports 80 and 443  →  4 r
 ```
 
 (An IPv6 ingress IP goes into the IPv6 tables, `ip6tables`, not these.)
+
+*Does the load balancer send traffic to the NodePort or to the LB IP?* A common description
+says:
+
+> The LoadBalancer service type uses this same mechanism to deploy and configure an external load
+> balancer (often through a cloud-managed API) which forwards traffic to an application using the
+> NodePort. When a request is routed to the configured port on a node, it forwards packets as
+> needed to direct traffic to the destination Pods using kube-proxy.
+
+That's true for some load balancers. The rule above, `-d <LB IP>`, is for others. kube-proxy
+installs rules for both paths on every node, and the destination address of the packet when it
+reaches the node decides which one is used.
+
+From the LoadBalancer lab, a LoadBalancer Service gets:
+
+```
+-A KUBE-SERVICES   -d <LB IP>/32   -p tcp --dport 80    -j KUBE-EXT-…   ← path 1: packet still addressed to the LB IP
+-A KUBE-NODEPORTS                  -p tcp --dport 3xxxx -j KUBE-EXT-…   ← path 2: packet addressed to node IP:NodePort
+```
+
+Both lead to the same `KUBE-EXT` → `KUBE-SVC` → `KUBE-SEP` → DNAT to a Pod. A LoadBalancer
+Service is a NodePort Service plus the LB IP rule.
+
+The two rules are in **different chains**. The LB IP rule is in `KUBE-SERVICES`, next to the same
+Service's ClusterIP rule. The NodePort rule is in `KUBE-NODEPORTS`, which is reached only through
+the last rule of `KUBE-SERVICES`. Lab (three-node k3s from [network-policy.md](network-policy.md),
+Service `lab3/c-lb`, LB IP `203.0.113.10` set by hand in its status):
+
+```
+nat KUBE-SERVICES, in order
+   5  -d 10.43.68.115/32 … "lab3/c-lb:80-8080 cluster IP"      --dport 80 -j KUBE-SVC-4RUJ…
+   6  -d 203.0.113.10/32 … "lab3/c-lb:80-8080 loadbalancer IP" --dport 80 -j KUBE-EXT-4RUJ…   ← path 1
+   7  -d 10.43.0.1/32    … "default/kubernetes:https cluster IP" …                             ← other Services follow
+   …
+  10  "kubernetes service nodeports; NOTE: this must be the last rule in this chain"
+      -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS                                           ← path 2 enters here
+nat KUBE-NODEPORTS
+      -d 127.0.0.0/8 -p tcp "lab3/c-lb:80-8080" --dport 32746 -j KUBE-EXT-4RUJ…                 (localhost)
+      -p tcp "lab3/c-lb:80-8080" --dport 32746 -j KUBE-EXT-4RUJ…
+```
+
+The LB IP rule isn't necessarily directly above the last rule. kube-proxy writes each Service's
+rules together, and Services come in no fixed order. Only the `KUBE-NODEPORTS` jump has a fixed
+position: last.
+
+Which path is used depends on how the load balancer delivers packets **(docs; only ServiceLB was
+tested here)**:
+
+| How the LB delivers | Packet arrives at the node as | Rule that catches it | Examples |
+|---|---|---|---|
+| The LB rewrites the destination to a node's NodePort (proxy or NAT style) | `dst = node IP : NodePort` | `KUBE-NODEPORTS`, as in the quote | AWS Classic ELB, NLB in instance mode, many on-prem LBs, `ipMode: Proxy` |
+| The LB passes the packet through unchanged (DSR, "floating IP") | `dst = LB IP : Service port` | `-d <LB IP>` in `KUBE-SERVICES` | Azure LB (AKS turns on floating IP), GCP passthrough Network LB, MetalLB |
+| The LB sends straight to Pod IPs | `dst = Pod IP` | neither: kube-proxy isn't involved | AWS NLB in IP mode, GKE container-native (NEG), Azure Application Gateway for Containers |
+
+Why the LB IP rule exists even for NodePort-style LBs:
+
+- **Pods inside the cluster calling the LB IP:** the rule catches the packet on the client's own
+  node and DNATs it straight to a Pod. It never goes out to the LB and back. Setting
+  `ipMode: Proxy` turns that shortcut off, so the traffic really goes through the LB.
+- **Passthrough LBs like Azure's need the rule,** because nothing on the way rewrites the
+  destination to a NodePort. On AKS the NodePort is still allocated (unless
+  `allocateLoadBalancerNodePorts: false`), but data traffic doesn't need it.
+
+The shortcut, tested (lab, `lab3/c-lb`, LB IP `203.0.113.10` written into the status by hand).
+**No load balancer exists at that address:**
+
+| `status.loadBalancer.ingress[0].ipMode` | LB IP rule in `KUBE-SERVICES` | Pod `a` → `203.0.113.10:80` |
+|---|---|---|
+| `VIP` (the default) | 1 | **OK**, `Hostname: c`: caught on a's node and DNATed to c, never left the cluster |
+| `Proxy` | 0 | **timed out**: no rule, so the packet really heads for `203.0.113.10` |
+
+So with `VIP`, in-cluster traffic to the LB IP skips the load balancer, and any feature that lives
+in the LB (TLS termination, PROXY protocol, WAF, logs) is skipped too. That is what `Proxy` is for.
+
+*What's in `KUBE-EXT`: no addresses.* The LB IP and the NodePort are in the rules that **jump
+into** `KUBE-EXT`. `KUBE-EXT` only decides two things: whether to SNAT, and which list of Pods to
+use. (lab, `lab3/c-lb`, c on np-agent2, NodePort varies per run)
+
+With `externalTrafficPolicy: Cluster`:
+
+```
+# the ways in: this is where the addresses and ports are
+-A KUBE-SERVICES  -d 203.0.113.10/32 -p tcp --dport 80 "c-lb loadbalancer IP" -j KUBE-EXT-4RUJ…   ← LB IP
+-A KUBE-NODEPORTS -p tcp --dport 32216 "c-lb"                                 -j KUBE-EXT-4RUJ…   ← NodePort
+-A KUBE-NODEPORTS -d 127.0.0.0/8 -p tcp --dport 32216 "c-lb"                  -j KUBE-EXT-4RUJ…   ← NodePort via localhost
+
+# KUBE-EXT itself: no -d, no --dport
+-A KUBE-EXT-4RUJ… "masquerade traffic for lab3/c-lb external destinations" -j KUBE-MARK-MASQ   ← mark for SNAT (0x4000)
+-A KUBE-EXT-4RUJ… -j KUBE-SVC-4RUJ…                                                            ← any endpoint, any node
+```
+
+With `externalTrafficPolicy: Local`, on np-server, which runs no `c` Pod:
+
+```
+-A KUBE-EXT-4RUJ… -s 10.42.0.0/16 "pod traffic for … external destinations" -j KUBE-SVC-4RUJ…    ← Pods calling the LB IP: all endpoints, no SNAT
+-A KUBE-EXT-4RUJ… --src-type LOCAL "masquerade LOCAL traffic …" -j KUBE-MARK-MASQ               ← the node itself: SNAT,
+-A KUBE-EXT-4RUJ… --src-type LOCAL "route LOCAL traffic …"      -j KUBE-SVC-4RUJ…               ←   all endpoints
+   (nothing for real outside clients: this node has no local endpoint)
+```
+
+On np-agent2, which runs `c`, the same chain has one more rule at the end, and `KUBE-SVL` lists
+only the local endpoint:
+
+```
+-A KUBE-EXT-4RUJ… -j KUBE-SVL-4RUJ…                                         ← outside clients: local Pods only, no SNAT
+-A KUBE-SVL-4RUJ… "lab3/c-lb:80-8080 -> 10.42.2.2:8080" -j KUBE-SEP-A5WK…
+```
+
+On np-server, outside traffic falls through `KUBE-EXT` without a DNAT, and the filter table drops
+it:
+
+```
+-A KUBE-EXTERNAL-SERVICES -d 203.0.113.10/32 -p tcp "lab3/c-lb:80-8080 has no local endpoints" --dport 80 -j DROP
+-A KUBE-EXTERNAL-SERVICES -p tcp "lab3/c-lb:80-8080 has no local endpoints" -m addrtype --dst-type LOCAL --dport 32601 -j DROP
+-A KUBE-NODEPORTS -p tcp "lab3/c-lb:80-8080 health check node port" --dport 31323 -j ACCEPT    ← the LB's probe, answered 503 here
+```
+
+An outside client (`172.19.0.5`, a container on the lab's Docker network) calling the NodePort:
+
+| Via | Result |
+|---|---|
+| np-server `172.19.0.2:32601` (no `c`) | timed out (DROP) |
+| np-agent2 `172.19.0.4:32601` (runs `c`) | OK, `RemoteAddr: 172.19.0.5`: the client's own IP, no SNAT |
+
+Layer by layer:
+
+| Layer | Holds |
+|---|---|
+| `KUBE-SERVICES` / `KUBE-NODEPORTS` | **the addresses and ports**: ClusterIP, LB IP, NodePort |
+| `KUBE-EXT-*` | **the policy for outside traffic**: SNAT or not, all Pods (`KUBE-SVC`) or local Pods only (`KUBE-SVL`) |
+| `KUBE-SVC-*` / `KUBE-SVL-*` | the random choice between endpoints |
+| `KUBE-SEP-*` | one endpoint each: the DNAT to `Pod IP:port` |
+
+That is why both ways in can share one `KUBE-EXT`: once a packet is in it, it doesn't matter
+whether it came through the LB IP or the NodePort.
+
+*How many entries a `type: LoadBalancer` Service gets.* It isn't three entries in
+`KUBE-SERVICES` (ClusterIP, NodePort, LB). For a Service of **type LoadBalancer**,
+`KUBE-SERVICES` gets two entries for each port: the ClusterIP rule and the LB IP rule. The NodePort
+entries are in a different chain, `KUBE-NODEPORTS`. For `lab3/c-lb` (one port, one LB IP) (lab):
+
+| Chain | Rule | For |
+|---|---|---|
+| `KUBE-SERVICES` | `-d 10.43.68.115 --dport 80 -j KUBE-SVC-…` | ClusterIP |
+| `KUBE-SERVICES` | `-d 203.0.113.10 --dport 80 -j KUBE-EXT-…` | LB IP |
+| `KUBE-NODEPORTS` | `--dport 32746 -j KUBE-EXT-…` | NodePort on any node address |
+| `KUBE-NODEPORTS` | `-d 127.0.0.0/8 --dport 32746 -j KUBE-EXT-…` | NodePort on `localhost` |
+
+The NodePort is reached through a rule in `KUBE-SERVICES` that the Service doesn't own:
+
+```
+-A KUBE-SERVICES … --dst-type LOCAL -j KUBE-NODEPORTS     ← one rule for all NodePort Services, always last
+```
+
+How the counts grow:
+
+- **Each port** gets one ClusterIP rule in `KUBE-SERVICES`.
+- **Each port and each LB IP** gets one more rule in `KUBE-SERVICES`. Two LB IPs and two ports
+  make 4 LB rules (above).
+- **Each port** gets the NodePort rules in `KUBE-NODEPORTS`. The `127.0.0.0/8` one appears because
+  NodePorts on localhost are allowed (`route_localnet`, part 8).
+- **`externalIPs`**, if set, add one more `KUBE-SERVICES` rule per IP and port, the same way as LB
+  IPs. **(from kube-proxy's code; not tested)**
+
+So a one-port LoadBalancer Service is 2 rules in `KUBE-SERVICES` plus 2 in `KUBE-NODEPORTS`, and
+they lead to 3 chains:
+
+- `KUBE-SVC-…`, used by the ClusterIP rule;
+- `KUBE-EXT-…`, which both the LB IP rule and the NodePort rules jump to (the chain itself holds no
+  addresses or ports, see "What's in `KUBE-EXT`" above);
+- `KUBE-SEP-…`, one per endpoint.
+
+For comparison, a ClusterIP Service gets only the first row, and a NodePort Service gets rows 1, 3
+and 4.
+
+*The three ways in, side by side.* The LB IP is matched in `KUBE-SERVICES` and jumps to `KUBE-EXT`.
+The last rule of `KUBE-SERVICES` jumps to `KUBE-NODEPORTS`, which jumps to the same `KUBE-EXT`. The
+ClusterIP goes straight to `KUBE-SVC`:
+
+```
+nat PREROUTING (or OUTPUT for traffic from the node itself)
+ └─ KUBE-SERVICES
+     ├─ -d 10.43.68.115 --dport 80  ──────────────────────────────► KUBE-SVC-…   ClusterIP: skips KUBE-EXT
+     ├─ -d 203.0.113.10 --dport 80  ─────────────► KUBE-EXT-… ────► KUBE-SVC-…   LB IP: address + Service port
+     │   … other Services …                         ▲
+     └─ (last) --dst-type LOCAL ─► KUBE-NODEPORTS   │
+                                    └─ --dport 32746 ┘                           NodePort: node address, then port only
+
+KUBE-SVC-… ─► KUBE-SEP-… ─► DNAT to Pod IP:8080      (all three paths end here)
+```
+
+- **LB IP:** the rule in `KUBE-SERVICES` matches the LB IP **and** the Service port
+  (`--dport 80`), then jumps to `KUBE-EXT`.
+- **NodePort:** the last rule of `KUBE-SERVICES` checks only that the address belongs to the node
+  (`--dst-type LOCAL`, answered from the local routing table, part 7). Inside `KUBE-NODEPORTS` only
+  the NodePort number is checked (`--dport 32746`), then it jumps to `KUBE-EXT`.
+- **ClusterIP:** its rule jumps straight to `KUBE-SVC`, skipping `KUBE-EXT`. Traffic to a ClusterIP
+  comes from inside the cluster, so there's no outside-traffic decision to make (no SNAT mark, no
+  `Local` policy).
+
+A packet takes only one of these paths, decided by its destination address. The first rule that
+leads to a DNAT ends the search.
+
+*What nat `KUBE-SERVICES` is: the list of Service addresses.* `KUBE-SERVICES` (nat table) is the
+list of every Service address and port the node should intercept, written out explicitly as
+`-d <IP> --dport <port>`. Three kinds of address go in it, plus the one fixed rule at the end:
+
+| Entry in nat `KUBE-SERVICES` | Comes from | Jumps to |
+|---|---|---|
+| `-d <ClusterIP> --dport <port>` | `spec.clusterIP` (every Service except headless) | `KUBE-SVC-…` |
+| `-d <LB IP> --dport <port>` | `status.loadBalancer.ingress[].ip` (type LoadBalancer, `ipMode: VIP`) | `KUBE-EXT-…` |
+| `-d <external IP> --dport <port>` | `spec.externalIPs` (any type, if set) **(from kube-proxy's code; not tested)** | `KUBE-EXT-…` |
+| last: `--dst-type LOCAL -j KUBE-NODEPORTS` | fixed, always present (part 7) | `KUBE-NODEPORTS` → `KUBE-EXT-…` |
+
+From the lab (one rule per address and port):
+
+```
+-A KUBE-SERVICES -d 10.43.0.10/32   … "kube-system/kube-dns:dns cluster IP"      --dport 53  -j KUBE-SVC-…
+-A KUBE-SERVICES -d 10.43.78.255/32 … "shop/backend cluster IP"                  --dport 80  -j KUBE-SVC-…
+-A KUBE-SERVICES -d 10.43.68.115/32 … "lab3/c-lb:80-8080 cluster IP"             --dport 80  -j KUBE-SVC-…
+-A KUBE-SERVICES -d 203.0.113.10/32 … "lab3/c-lb:80-8080 loadbalancer IP"        --dport 80  -j KUBE-EXT-…   ← the LB IP, alongside the ClusterIPs
+-A KUBE-SERVICES -d 10.43.0.1/32    … "default/kubernetes:https cluster IP"      --dport 443 -j KUBE-SVC-…
+-A KUBE-SERVICES … "kubernetes service nodeports; NOTE: this must be the last rule in this chain" --dst-type LOCAL -j KUBE-NODEPORTS
+```
+
+The comment on each rule says which kind it is: `cluster IP`, `loadbalancer IP` or `external IP`.
+
+The one Service address that isn't listed is the NodePort, because it has no IP of its own. It's
+"any node address + a port", so it's matched indirectly through the last rule.
+
+There's also a **filter-table** `KUBE-SERVICES`, a different chain with the same name. It only
+holds REJECT rules for Service addresses with **no endpoints**, so a client gets "connection
+refused" instead of a hang. The address list is the nat one.
+
+*When the LB IP rule appears.* kube-proxy writes the LB IP rule only once
+`status.loadBalancer.ingress[].ip` holds an address, and it removes the rule again when the address
+goes away. kube-proxy never assigns the address itself. Something else writes it into the
+Service's status (a cloud controller manager, ServiceLB, MetalLB, or by hand), and kube-proxy
+reacts to it on its next sync.
+
+Lab: one Service `lab3/c-lb` taken through each state, with the status written by hand (ServiceLB
+is off on this cluster, so nothing overwrites it):
+
+```
+kubectl patch svc c-lb -n lab3 --subresource=status --type=merge \
+  -p '{"status":{"loadBalancer":{"ingress":[{"ip":"203.0.113.10"}]}}}'
+```
+
+| Status | `EXTERNAL-IP` | Rules for c-lb in `KUBE-SERVICES` | `KUBE-NODEPORTS` rules |
+|---|---|---|---|
+| 1. just created, status empty | `<pending>` | ClusterIP only | 2 |
+| 2. `ingress: [{ip: 203.0.113.10}]` | 203.0.113.10 | ClusterIP + LB IP | 2 |
+| 3. `ingress: [{hostname: my-lb.example.com}]`, no `ip` | my-lb.example.com | ClusterIP only | 2 |
+| 4. `ip` with `ipMode: Proxy` | 203.0.113.10 | ClusterIP only | 2 |
+| 5. two `ip`s | — | ClusterIP + 2 LB IP rules | 2 |
+| 6. `ingress: null` | `<pending>` | ClusterIP only (rule removed) | 2 |
+
+- **The ClusterIP and NodePort rules exist from the moment the Service is created,** even while
+  it's `<pending>`. Only the LB IP rule waits for the status.
+- **Only `ip` counts.** A `hostname` entry (what AWS's ELB integration reports) gets no rule,
+  because iptables can't match a DNS name. Traffic to such an LB always arrives through the
+  NodePort path.
+- **`ipMode: Proxy` suppresses the rule** even though the IP is there.
+- **One rule per IP:** a second address in `ingress[]` adds a second rule.
+- **It's reversible:** clearing the status removes the rule on the next sync.
+
+(To clear it, the patch must set `"ingress": null`. A merge patch with `{"loadBalancer":{}}` leaves
+the existing list in place and changes nothing.)
+
+*The two `ipMode` values.* There are only two, `VIP` and `Proxy`. The API server rejects anything
+else, and the field can only be set together with `ip` (lab):
+
+```
+ipMode: Foo         → Unsupported value: "Foo": supported values: "Proxy", "VIP"
+ipMode without ip   → Forbidden: may not be specified when `ip` is not set
+```
+
+The field's own definition (`kubectl explain service.status.loadBalancer.ingress.ipMode`):
+
+> Setting this to "VIP" indicates that traffic is delivered to the node with the destination set
+> to the load-balancer's IP and port. Setting this to "Proxy" indicates that traffic is delivered
+> to the node or pod with the destination set to the node's IP and node port or the pod's IP and
+> port.
+
+So `ipMode` tells kube-proxy which kind of load balancer it's dealing with:
+
+| `ipMode` | Meaning | kube-proxy writes the LB IP rule? | Delivery style (table above) |
+|---|---|---|---|
+| `VIP` (also the default when unset) | the LB passes packets through with `dst = LB IP` | **yes**: needed to catch them, and in-cluster callers get the shortcut | passthrough / floating IP (Azure, GCP passthrough, MetalLB) |
+| `Proxy` | the LB rewrites `dst` to `node IP:NodePort` or `Pod IP:port` | **no**: the LB IP never reaches a node, and in-cluster callers really go through the LB | NodePort-style or straight-to-Pod |
+
+- **Unset behaves as `VIP`.** State 2 in the table above had no `ipMode`, and the rule was written.
+  That keeps the behaviour from before the field existed.
+- **Who sets it:** whatever writes the status, typically the cloud controller manager. A provider
+  whose LB proxies (for example one that terminates TLS or adds the PROXY protocol) should set
+  `Proxy`, so in-cluster traffic isn't short-circuited past those features.
+- **Versions:** `ipMode` was added in Kubernetes 1.29 (alpha), became beta and on by default in
+  1.30, and GA in 1.32. Before it existed, kube-proxy always behaved as `VIP`. **(Kubernetes
+  release notes; this lab is on 1.34)**
+
+*Which addresses can be an LB IP.* Kubernetes doesn't restrict it. Any syntactically valid IP is
+accepted, private or public, and kube-proxy programs it as given (lab, `lab3/c-lb`):
+
+| Address | Kind | Accepted? | kube-proxy rule |
+|---|---|---|---|
+| `203.0.113.10` | documentation range | yes | `-d 203.0.113.10/32` |
+| `8.8.8.8` | public | yes | `-d 8.8.8.8/32` |
+| `10.20.30.40`, `192.168.1.50` | private | yes | yes |
+| `172.19.0.4` | a node's own IP | yes | yes |
+| `10.43.0.1` | the `kubernetes` ClusterIP | yes | yes |
+| `10.42.2.2` | a Pod IP | yes | yes |
+| `127.0.0.1` | loopback | yes | yes (minikube's tunnel really uses this, §4.4) |
+| `169.254.169.254` | cloud metadata endpoint | yes | yes |
+| `0.0.0.0`, `255.255.255.255`, `224.0.0.1` | unspecified, broadcast, multicast | yes | yes |
+| `2001:db8::10` | IPv6 | yes | none here (IPv4-only cluster; it would go to `ip6tables`) |
+| `not-an-ip` | — | **rejected** | "must be a valid IP address" |
+
+The only check is "is it an IP?". Choosing a sensible address is up to whatever writes the status:
+
+- **Cloud controller managers** use the provider's public IPs, or private VNet/VPC IPs for
+  internal LBs (on AKS: `service.beta.kubernetes.io/azure-load-balancer-internal: "true"`).
+- **MetalLB** uses the pools you configure, usually private LAN ranges.
+- **ServiceLB** uses node IPs.
+
+**(the three controllers: from their docs)**
+
+*Why that matters: the LB IP is hijacked inside the cluster.* The LB IP rule catches every packet
+to that IP and Service port on every node, whoever it was meant for. Lab, `lab3/c-lb` with LB IP
+`1.1.1.1`, port 80:
+
+| Pod `a` → `1.1.1.1` | Result |
+|---|---|
+| `:80` before | `HTTP/1.1 301`, `Server: cloudflare`: the real 1.1.1.1 |
+| `:80` with the LB IP set | **`Hostname: c`**: answered by our Pod, never left the cluster |
+| `:443` (not a Service port) at the same time | the real 1.1.1.1: only the Service's port is caught |
+| `:80` after deleting the Service | `Server: cloudflare` again |
+
+The same works for `169.254.169.254:80` (every Pod's cloud metadata calls), a node IP or a
+ClusterIP port. This is **CVE-2020-8554**: anyone who can set `spec.externalIPs` or patch
+`status.loadBalancer` can intercept cluster traffic to any IP. It wasn't fixed in code. The
+mitigations are:
+
+- Restrict who can write `services/status` in RBAC. Normally only the cloud controller manager or
+  the LB controller should have that permission.
+- Block or limit `externalIPs` with the `DenyServiceExternalIPs` admission plugin, or a
+  ValidatingAdmissionPolicy, Gatekeeper or Kyverno rule.
+- Use `ipMode: Proxy` for LBs that proxy anyway, so no hijacking rule is written.
+
+**(the CVE and mitigations: Kubernetes security advisory)**
+
+k3s's ServiceLB is a third style. It has no external LB: the `svclb-*` Pod on each node holds a
+`hostPort` on the Service port, and the node IPs serve as the LB IPs (`172.17.0.3` above).
 
 **17. How to read a rule, and what `-m comment` is.** Read a rule left to right.
 Each `-m NAME` starts a match module, and the options after it (`--…`) belong to

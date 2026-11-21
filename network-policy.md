@@ -141,18 +141,18 @@ on np-server:
 
 ```text
 -A POSTROUTING -m comment --comment "flanneld masq" -j FLANNEL-POSTRTG
--A FLANNEL-POSTRTG -m mark --mark 0x4000/0x4000 -j RETURN                       ① kube-proxy already marked it for MASQUERADE
--A FLANNEL-POSTRTG -s 10.42.0.0/24 -d 10.42.0.0/16 -j RETURN                    ② my Pods → any Pod: no NAT
--A FLANNEL-POSTRTG -s 10.42.0.0/16 -d 10.42.0.0/24 -j RETURN                    ③ any Pod → my Pods: no NAT
--A FLANNEL-POSTRTG ! -s 10.42.0.0/16 -d 10.42.0.0/24 -j RETURN                  ④ outside → my Pods: no NAT
--A FLANNEL-POSTRTG -s 10.42.0.0/16 ! -d 224.0.0.0/4 -j MASQUERADE --random-fully    ⑤ Pod → outside the cluster: NAT
--A FLANNEL-POSTRTG ! -s 10.42.0.0/16 -d 10.42.0.0/16 -j MASQUERADE --random-fully   ⑥ outside → another node's Pods: NAT
+-A FLANNEL-POSTRTG -m mark --mark 0x4000/0x4000 -j RETURN                       1 kube-proxy already marked it for MASQUERADE
+-A FLANNEL-POSTRTG -s 10.42.0.0/24 -d 10.42.0.0/16 -j RETURN                    2 my Pods → any Pod: no NAT
+-A FLANNEL-POSTRTG -s 10.42.0.0/16 -d 10.42.0.0/24 -j RETURN                    3 any Pod → my Pods: no NAT
+-A FLANNEL-POSTRTG ! -s 10.42.0.0/16 -d 10.42.0.0/24 -j RETURN                  4 outside → my Pods: no NAT
+-A FLANNEL-POSTRTG -s 10.42.0.0/16 ! -d 224.0.0.0/4 -j MASQUERADE --random-fully    5 Pod → outside the cluster: NAT
+-A FLANNEL-POSTRTG ! -s 10.42.0.0/16 -d 10.42.0.0/16 -j MASQUERADE --random-fully   6 outside → another node's Pods: NAT
 ```
 
-(`-m comment --comment "flanneld masq"` removed from the chain rules.) ② and ③ are the "without
-NAT" rule. ① leaves kube-proxy's `0x4000` traffic to `KUBE-POSTROUTING`
-([kubernetes-services.md](kubernetes-services.md)), so it isn't NATed twice. ⑤ is why Pods can reach
-the internet. ⑥ catches traffic from a node address (e.g. a NodePort) heading for a Pod on another
+(`-m comment --comment "flanneld masq"` removed from the chain rules.) (2) and (3) are the "without
+NAT" rule. (1) leaves kube-proxy's `0x4000` traffic to `KUBE-POSTROUTING`
+([kubernetes-services.md](kubernetes-services.md)), so it isn't NATed twice. (5) is why Pods can reach
+the internet. (6) catches traffic from a node address (e.g. a NodePort) heading for a Pod on another
 node, so the reply comes back through the same node.
 
 #### Three nodes: the tables behind cross-node routing (lab)
@@ -182,16 +182,16 @@ np-agent2   10.42.2.0/24   {"VNI":1,"VtepMAC":"5a:f9:4e:d2:7c:55"}   172.19.0.4
 by flannel (embedded in k3s) from the other nodes' annotations above. np-server's:
 
 ```text
-$ ip route                                      ① which Pod subnet is where
+$ ip route                                      1 which Pod subnet is where
 10.42.0.0/24 dev cni0 proto kernel scope link src 10.42.0.1      ← my Pods: straight onto the bridge
 10.42.1.0/24 via 10.42.1.0 dev flannel.1 onlink                  ← np-agent's Pods: "gateway" = np-agent's VTEP IP
 10.42.2.0/24 via 10.42.2.0 dev flannel.1 onlink                  ← np-agent2's Pods
 
-$ ip neigh show dev flannel.1                   ② that gateway IP → the remote VTEP's MAC (no ARP needed)
+$ ip neigh show dev flannel.1                   2 that gateway IP → the remote VTEP's MAC (no ARP needed)
 10.42.1.0 lladdr aa:14:56:99:38:06 PERMANENT
 10.42.2.0 lladdr 5a:f9:4e:d2:7c:55 PERMANENT
 
-$ bridge fdb show dev flannel.1                 ③ that MAC → the node IP to send the UDP packet to
+$ bridge fdb show dev flannel.1                 3 that MAC → the node IP to send the UDP packet to
 aa:14:56:99:38:06 dst 172.19.0.3 self permanent
 5a:f9:4e:d2:7c:55 dst 172.19.0.4 self permanent
 ```
@@ -226,9 +226,9 @@ neighbour and one fdb entry on each existing node.
 ```text
 np-server
   a's eth0 ──► cni0                      src 10.42.0.8  dst 10.42.2.2
-  ① ip route: 10.42.2.0/24 via 10.42.2.0 dev flannel.1
-  ② ip neigh: 10.42.2.0 → 5a:f9:4e:d2:7c:55       (inner Ethernet dst MAC)
-  ③ fdb:      5a:f9:4e:d2:7c:55 → 172.19.0.4       (outer IP dst)
+  1 ip route: 10.42.2.0/24 via 10.42.2.0 dev flannel.1
+  2 ip neigh: 10.42.2.0 → 5a:f9:4e:d2:7c:55       (inner Ethernet dst MAC)
+  3 fdb:      5a:f9:4e:d2:7c:55 → 172.19.0.4       (outer IP dst)
   flannel.1 wraps it: outer 172.19.0.2:57865 → 172.19.0.4:8472  VXLAN vni 1
   ──► eth0 ──► Docker network ──►
 np-agent2
@@ -264,8 +264,8 @@ filter FORWARD (same on both nodes)                                    np-server
 -A FLANNEL-FWD -d 10.42.0.0/16 -j ACCEPT
 
 nat FLANNEL-POSTRTG (first packet of each connection only)
-np-server:  -s 10.42.0.0/24 -d 10.42.0.0/16 -j RETURN      ②  +6   ← my Pod → any Pod: no NAT (5 + one other local connection)
-np-agent2:  -s 10.42.0.0/16 -d 10.42.2.0/24 -j RETURN      ③  +5   ← any Pod → my Pod: no NAT
+np-server:  -s 10.42.0.0/24 -d 10.42.0.0/16 -j RETURN      2  +6   ← my Pod → any Pod: no NAT (5 + one other local connection)
+np-agent2:  -s 10.42.0.0/16 -d 10.42.2.0/24 -j RETURN      3  +5   ← any Pod → my Pod: no NAT
 MASQUERADE rules                                                0 on both
 ```
 
@@ -299,7 +299,7 @@ On the lab (conntrack on np-server, one entry per line, original tuple then repl
 udp  src=10.42.0.4 dst=10.43.0.10 sport=57113 dport=53   src=10.42.0.3 dst=10.42.0.4 sport=53 dport=57113
                                                          └ reply comes from the CoreDNS Pod, to frontend's own IP
 
-# frontend → example.com: source masqueraded to the node (FLANNEL-POSTRTG ⑤)
+# frontend → example.com: source masqueraded to the node (FLANNEL-POSTRTG 5)
 tcp  src=10.42.0.4 dst=104.20.23.154 sport=44594 dport=80   src=104.20.23.154 dst=172.19.0.2 sport=80 dport=48544
                                                             └ the server replies to np-server's IP, and to a new port (--random-fully)
 ```
@@ -341,6 +341,49 @@ And payments/api → `backend.shop.svc.cluster.local` (ClusterIP, other namespac
                 └───────────────────────┘                 └───────────────────────┘
   reply ←       conntrack: ESTABLISHED, no rule needed in either direction
 ```
+
+### What "traffic that matches no rule is denied by default" means
+
+It doesn't mean the cluster denies everything by default. It means: **once a Pod is selected by
+at least one policy for a direction, traffic in that direction that no rule allows is denied.**
+Three limits:
+
+- **Only selected Pods.** A Pod that no policy selects stays fully open, both ways.
+- **Only the directions listed in `policyTypes`.** A policy with `policyTypes: [Ingress]` makes the
+  Pod deny unmatched incoming connections. Its outgoing connections stay open until some policy
+  with `Egress` selects it.
+- **Only new connections.** Replies on an allowed connection always pass (conntrack).
+
+"Matches no rule" means no rule in **any** policy that selects the Pod for that direction. Policies
+add up (point 4), so one matching rule is enough. With no deny rules in the API, anything else is
+denied.
+
+From the lab (§3.1, namespace `lab3`, only policy `c-from-a`: c accepts a on 8080):
+
+| Connection | Result | Why |
+|---|---|---|
+| a → c:8080 | allowed (`RemoteAddr: 10.42.0.8`) | matches the rule |
+| b → c:8080 | **refused** | c is isolated for ingress; b matches no rule, so the default deny applies |
+| c → a | allowed (`hello-from-a`) | no policy selects a, so a has no default deny |
+| c → 1.1.1.1:80 | allowed (connected) | c is isolated for ingress only, not egress |
+
+**What turns it on for a whole namespace:** a policy that selects every Pod and has no rules:
+
+```yaml
+spec:
+  podSelector: {}                 # every Pod in the namespace
+  policyTypes: [Ingress, Egress]  # both directions isolated
+                                  # no ingress:/egress: rules → nothing matches → everything denied
+```
+
+That is the `default-deny` from §3. It allows nothing itself; it only makes every Pod "selected",
+so the default deny applies to all of them, and other policies then add allowances.
+
+In kube-router's iptables (§5), each Pod's chain runs traffic through every policy that selects it.
+A matching rule sets mark `0x10000`, and the chain ends with
+`-m mark ! --mark 0x10000/0x10000 -j REJECT`: "matched no rule" means denied. A Pod that no
+policy selects goes through `KUBE-NWPLCY-DEFAULT` instead, which sets the mark for everything, so
+it stays open. **(lab)**
 
 ## 2. What a rule can match (docs)
 
@@ -737,6 +780,44 @@ policy chains exist on every node; the per-Pod chains only where the Pods run. P
 selector are listed in the ipsets, so a new matching Pod should only change an ipset, not the
 rules. **(that last part: not tested)**
 
+### One chain per policy, one per Pod (lab)
+
+There isn't a single NetworkPolicy chain. With `default-deny-ingress` and
+`allow-from-ingress-controller` (§7.3, §7.5) applied in `prod`, the three nodes had:
+
+| Chain | How many | On which nodes | np-server / np-agent / np-agent2 |
+|---|---|---|---|
+| `KUBE-ROUTER-INPUT`, `-FORWARD`, `-OUTPUT` | 3, fixed | every node | 1 + 1 + 1 on each |
+| `KUBE-NWPLCY-<hash>` | **one per NetworkPolicy** | **every node**, even where none of its Pods run | 7 / 7 / 7 |
+| `KUBE-NWPLCY-DEFAULT` | 1, shared | every node | included in the 7 |
+| `KUBE-POD-FW-<hash>` | one per Pod | only the node the Pod runs on | 13 / 6 / 1 |
+
+The 7 are `KUBE-NWPLCY-DEFAULT` + shop's 4 policies (§3) + prod's 2. np-agent2 runs only
+`lab3/c`, yet it has both prod policy chains.
+
+How they connect for one packet to `web`:
+
+```text
+FORWARD
+ └─ KUBE-ROUTER-FORWARD                       (one per node, per hook)
+     └─ -d 10.42.1.6 → KUBE-POD-FW-<web>       (one per Pod, on web's node)
+          ├─ → KUBE-NWPLCY-<allow-from-ingress-controller>   (one per policy that selects web)
+          ├─ → KUBE-NWPLCY-<default-deny-ingress>
+          └─ mark not set? → REJECT
+```
+
+- **Each policy gets its own chain**, holding that policy's rules (MARK and RETURN pairs, plus
+  NFLOG).
+- **Each Pod gets its own chain**, which jumps to the chain of every policy that selects it. A Pod
+  selected by 3 policies has 3 jumps; a Pod selected by none jumps to `KUBE-NWPLCY-DEFAULT`.
+- **One policy chain is shared by all the Pods it selects.** `default-deny-ingress` is one chain,
+  jumped to from web's, api's and db's Pod chains.
+- **The chain is on every node even where it's unused,** because the ipsets inside it decide which
+  packets match. On np-agent2 it's installed but nothing jumps to it.
+
+So the number of chains grows with **policies + Pods**, not policies × Pods. The membership lists
+live in ipsets, which is what keeps it manageable.
+
 ## 6. The lab setup
 
 A throwaway k3s cluster (two nodes, later three) on its own Docker network, Traefik and ServiceLB off:
@@ -806,6 +887,466 @@ Clean up:
 ```bash
 docker rm -f k3s-np-server k3s-np-agent k3s-np-agent2 && docker network rm k3s-np
 ```
+
+## 7. Production policies and the rules they generate (lab)
+
+Twelve policies of the kind production clusters use, each applied on its own (or with the
+defaults it needs), tested, and then read back from np-agent's iptables and ipsets. All results
+below are from the three-node lab (k3s v1.34.1+k3s1, kube-router).
+
+### 7.0 Setup
+
+Namespace `prod` with three tiers on np-agent, and clients on np-server. Every Pod is busybox
+running `httpd` on 8080, 9090 and 5432, with named container ports:
+
+```yaml
+    ports:
+    - { name: http,    containerPort: 8080 }
+    - { name: metrics, containerPort: 9090 }
+    - { name: db,      containerPort: 5432 }
+```
+
+| Pod | Namespace | Labels | IP | Node |
+|---|---|---|---|---|
+| web | prod | `app: web, tier: frontend` | 10.42.1.6 | np-agent |
+| api | prod | `app: api, tier: backend` | 10.42.1.7 | np-agent |
+| db | prod | `app: db, tier: data` | 10.42.1.5 | np-agent |
+| client | prod | `app: client` | 10.42.0.10 | np-server |
+| controller | ingress-nginx | `app.kubernetes.io/name: ingress-nginx` | 10.42.0.11 | np-server |
+| grafana | monitoring | `app: grafana` | 10.42.0.12 | np-server |
+| prometheus | monitoring | `app: prometheus` | 10.42.0.13 | np-server |
+| random | other | `app: random` | 10.42.0.14 | np-server |
+| CoreDNS | kube-system | `k8s-app: kube-dns` | 10.42.0.3 | np-server |
+
+With no policy, everything reaches everything (web → api, client → web, web → 1.1.1.1:80,
+web → np-server:6443, DNS all OK). `169.254.169.254:80` fails even without a policy (there's no
+metadata service here), so it can't show anything below.
+
+Rules are shown with the `-A <chain>` prefix and most `-m comment` texts removed. Chain and ipset
+names are hashes: they change each time a policy is recreated, so match them by the comment
+(`"run through nw policy <name>"`, `"policy name <name>"`), not by name.
+
+### 7.1 How each YAML field becomes iptables
+
+| In the policy | What kube-router writes |
+|---|---|
+| `podSelector` (the Pods the policy applies to) | in each selected Pod's `KUBE-POD-FW-*` chain, a jump to the policy's chain: `-d <pod>` for an Ingress-only policy, `-s <pod>` for Egress-only, **no `-s`/`-d`** when the policy has both |
+| a direction the Pod is *not* isolated in | `-s <pod> -j KUBE-NWPLCY-DEFAULT` (egress) or `-d <pod> …` (ingress): mark everything as allowed |
+| a policy with no rules (`default-deny-*`) | a `KUBE-NWPLCY-*` chain containing only the NFLOG rule: it never sets the mark |
+| each allowed peer + port | **two** rules: `… -j MARK --set-xmark 0x10000/0x10000`, then the same match `-m mark --mark 0x10000 -j RETURN` |
+| `from`/`to` with `podSelector` and/or `namespaceSelector` | a `KUBE-SRC-*` (ingress) or `KUBE-DST-*` (egress) ipset of type **`hash:ip`**, filled with the matching Pods' IPs. Namespaces are resolved when the set is filled |
+| the Pods the policy protects | the other side's set: `KUBE-DST-*` for ingress, `KUBE-SRC-*` for egress |
+| `ipBlock.cidr` | an ipset of type **`hash:net`** |
+| `ipBlock.except` | entries in the same set flagged **`nomatch`** |
+| `0.0.0.0/0` | stored as `0.0.0.0/1` + `128.0.0.0/1` (`hash:net` can't hold a /0) |
+| `ports: [{port: 8080}]` | `-p tcp -m tcp --dport 8080` |
+| a **named** port (`port: http`) | resolved to the container's number (`--dport 8080`) |
+| `endPort` | `--dport 8000:8999` |
+| several ports or protocols | one MARK/RETURN pair per port and protocol |
+| rule with `ports` but no `from` | only the destination set is matched: any source |
+| `ingress: [{}]` | only the destination set, no port: everything |
+
+The sets are cluster-wide: `KUBE-SRC`/`KUBE-DST` hold Pod IPs from every node (e.g. client
+`10.42.0.10`, on np-server, appears in np-agent's sets).
+
+### 7.2 Default deny, both directions
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: prod }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+```
+
+| Test | Result |
+|---|---|
+| client → web:8080 | refused |
+| web → api:8080 (same node) | refused |
+| web → 1.1.1.1:80 | refused |
+| web DNS lookup | fails |
+
+```text
+# per-Pod chains (web, api and db each have the same line): no -s/-d, both directions
+-A KUBE-POD-FW-<web> "run through nw policy default-deny-all" -j KUBE-NWPLCY-3N4C…
+# the policy chain: nothing but logging, so the mark is never set → REJECT
+-A KUBE-NWPLCY-3N4C… -m limit --limit 10/min … -j NFLOG --nflog-prefix "DROP by policy prod/default-deny-all"
+```
+
+### 7.3 Default deny ingress only
+
+```yaml
+metadata: { name: default-deny-ingress, namespace: prod }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+```
+
+| Test | Result |
+|---|---|
+| client → web:8080 | refused |
+| random (other ns) → web:8080 | refused |
+| web → api:8080 | refused (api's ingress is denied) |
+| web → 1.1.1.1:80 | **OK** (egress not isolated) |
+| web DNS lookup | **OK** |
+
+```text
+-A KUBE-POD-FW-<web> -s 10.42.1.6/32 "run through default egress network policy chain" -j KUBE-NWPLCY-DEFAULT   ← egress: open
+-A KUBE-POD-FW-<web> -d 10.42.1.6/32 "run through nw policy default-deny-ingress" -j KUBE-NWPLCY-KBGW…          ← ingress: deny
+-A KUBE-NWPLCY-KBGW… … -j NFLOG --nflog-prefix "DROP by policy prod/default-deny-ingress"
+```
+
+### 7.4 Allow traffic from the same namespace
+
+```yaml
+metadata: { name: allow-same-namespace, namespace: prod }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+  - from: [{ podSelector: {} }]      # podSelector alone = this namespace only
+```
+
+With `default-deny-ingress`:
+
+| Test | Result |
+|---|---|
+| client → web:8080 (prod, other node) | **OK** |
+| web → api:8080 | **OK** |
+| random (other ns) → web | refused |
+| controller (ingress-nginx) → web | refused |
+
+```text
+-A KUBE-POD-FW-<web> -d 10.42.1.6/32 "run through nw policy allow-same-namespace" -j KUBE-NWPLCY-MUQ7…
+-A KUBE-POD-FW-<web> -d 10.42.1.6/32 "run through nw policy default-deny-ingress" -j KUBE-NWPLCY-XX44…
+-A KUBE-NWPLCY-MUQ7… -m set --match-set KUBE-SRC-TMJ3… src -m set --match-set KUBE-DST-JZ3M… dst -j MARK --set-xmark 0x10000/0x10000
+-A KUBE-NWPLCY-MUQ7… -m set --match-set KUBE-SRC-TMJ3… src -m set --match-set KUBE-DST-JZ3M… dst -m mark --mark 0x10000/0x10000 -j RETURN
+
+KUBE-SRC-TMJ3… (hash:ip)  10.42.1.6 10.42.1.5 10.42.0.10 10.42.1.7     ← every prod Pod (web, db, client, api)
+KUBE-DST-JZ3M… (hash:ip)  10.42.1.7 10.42.1.5 10.42.1.6 10.42.0.10     ← the same Pods, as targets
+```
+
+No `-p`/`--dport`: the rule has no `ports`, so every port. The per-Pod chain jumps to **both**
+policies. allow-same-namespace sets the mark for prod sources, default-deny-ingress adds nothing,
+and the REJECT only fires if neither set it.
+
+### 7.5 Allow only the ingress controller, on a named port
+
+```yaml
+metadata: { name: allow-from-ingress-controller, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: web } }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+      podSelector: { matchLabels: { app.kubernetes.io/name: ingress-nginx } }
+    ports: [{ protocol: TCP, port: http }]        # named port
+```
+
+With `default-deny-ingress`:
+
+| Test | Result |
+|---|---|
+| controller → web:8080 | **OK** |
+| controller → web:9090 | refused (not the `http` port) |
+| controller → api:8080 | refused (policy selects web only) |
+| client (prod) → web:8080 | refused |
+| random → web:8080 | refused |
+
+```text
+-A KUBE-POD-FW-<web> -d 10.42.1.6/32 "run through nw policy allow-from-ingress-controller" -j KUBE-NWPLCY-JASY…
+   (api's and db's chains only jump to default-deny-ingress)
+-A KUBE-NWPLCY-JASY… -p tcp -m set --match-set KUBE-SRC-STH3… src -m set --match-set KUBE-DST-2D5W… dst -m tcp --dport 8080 -j MARK --set-xmark 0x10000/0x10000
+-A KUBE-NWPLCY-JASY… -p tcp -m set --match-set KUBE-SRC-STH3… src -m set --match-set KUBE-DST-2D5W… dst -m tcp --dport 8080 -m mark --mark 0x10000/0x10000 -j RETURN
+
+KUBE-SRC-STH3… (hash:ip)  10.42.0.11      ← the controller: namespace AND label, resolved to one IP
+KUBE-DST-2D5W… (hash:ip)  10.42.1.6       ← web
+```
+
+`port: http` became `--dport 8080`. kube-router looked up the target Pod's container port named
+`http`.
+
+### 7.6 Allow Prometheus to scrape every Pod's metrics port
+
+```yaml
+metadata: { name: allow-prometheus-scrape, namespace: prod }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+      podSelector: { matchLabels: { app: prometheus } }
+    ports: [{ protocol: TCP, port: metrics }]     # 9090
+```
+
+With `default-deny-ingress`:
+
+| Test | Result |
+|---|---|
+| prometheus → web:9090 | **OK** |
+| prometheus → db:9090 | **OK** (all prod Pods) |
+| prometheus → web:8080 | refused (only the metrics port) |
+| grafana (same namespace, other label) → web:9090 | refused |
+
+```text
+-A KUBE-NWPLCY-F6W3… -p tcp -m set --match-set KUBE-SRC-LCRE… src -m set --match-set KUBE-DST-Y4YW… dst -m tcp --dport 9090 -j MARK …
+-A KUBE-NWPLCY-F6W3… -p tcp -m set --match-set KUBE-SRC-LCRE… src -m set --match-set KUBE-DST-Y4YW… dst -m tcp --dport 9090 -m mark … -j RETURN
+
+KUBE-SRC-LCRE… (hash:ip)  10.42.0.13                                  ← prometheus only (grafana isn't in it)
+KUBE-DST-Y4YW… (hash:ip)  10.42.0.10 10.42.1.7 10.42.1.6 10.42.1.5    ← every prod Pod
+```
+
+### 7.7 Three-tier app: web → api → db, everything else denied
+
+```yaml
+# plus default-deny-all and allow-dns (§3)
+metadata: { name: web-to-api, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: web } }
+  policyTypes: [Egress]
+  egress:
+  - to: [{ podSelector: { matchLabels: { app: api } } }]
+    ports: [{ protocol: TCP, port: 8080 }]
+---
+metadata: { name: api-from-web, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: api } }
+  policyTypes: [Ingress, Egress]                  # one policy, both directions
+  ingress:
+  - from: [{ podSelector: { matchLabels: { app: web } } }]
+    ports: [{ protocol: TCP, port: 8080 }]
+  egress:
+  - to: [{ podSelector: { matchLabels: { app: db } } }]
+    ports: [{ protocol: TCP, port: 5432 }]
+---
+metadata: { name: db-from-api, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: db } }
+  policyTypes: [Ingress]
+  ingress:
+  - from: [{ podSelector: { matchLabels: { app: api } } }]
+    ports: [{ protocol: TCP, port: 5432 }]
+```
+
+| Test | Result |
+|---|---|
+| web → api:8080 | **OK** |
+| web → db:5432 | refused (skipping a tier) |
+| api → db:5432 | **OK** |
+| db → api:8080 | refused (wrong direction) |
+| client → web:8080 | refused (nothing allows ingress to web) |
+| web DNS lookup | **OK** (allow-dns) |
+| api → 1.1.1.1:80 | refused |
+
+Per-Pod chains:
+
+```text
+# web: egress policies only → -s
+-A KUBE-POD-FW-<web> -s 10.42.1.6/32 "run through nw policy web-to-api"   -j KUBE-NWPLCY-ESXQ…
+-A KUBE-POD-FW-<web> -s 10.42.1.6/32 "run through nw policy allow-dns"    -j KUBE-NWPLCY-B55O…
+-A KUBE-POD-FW-<web>                 "run through nw policy default-deny-all" -j KUBE-NWPLCY-JKGU…
+# api: api-from-web has Ingress AND Egress → no -s/-d
+-A KUBE-POD-FW-<api>                 "run through nw policy api-from-web" -j KUBE-NWPLCY-OOJW…
+-A KUBE-POD-FW-<api> -s 10.42.1.7/32 "run through nw policy allow-dns"    -j KUBE-NWPLCY-B55O…
+-A KUBE-POD-FW-<api>                 "run through nw policy default-deny-all" -j KUBE-NWPLCY-JKGU…
+# db: ingress policy → -d
+-A KUBE-POD-FW-<db>  -d 10.42.1.5/32 "run through nw policy db-from-api"  -j KUBE-NWPLCY-WQAE…
+-A KUBE-POD-FW-<db>  -s 10.42.1.5/32 "run through nw policy allow-dns"    -j KUBE-NWPLCY-B55O…
+-A KUBE-POD-FW-<db>                  "run through nw policy default-deny-all" -j KUBE-NWPLCY-JKGU…
+```
+
+`api-from-web`'s chain holds both directions; the sets tell them apart:
+
+```text
+-A KUBE-NWPLCY-OOJW… -p tcp --match-set KUBE-SRC-OGKV… src --match-set KUBE-DST-2BJH… dst --dport 8080 -j MARK …   ← ingress: web → api
+-A KUBE-NWPLCY-OOJW… -p tcp --match-set KUBE-SRC-2BJH… src --match-set KUBE-DST-OR7H… dst --dport 5432 -j MARK …   ← egress:  api → db
+   (each followed by its -m mark … -j RETURN twin)
+
+KUBE-SRC-OGKV…  10.42.1.6   web
+KUBE-DST-2BJH…  10.42.1.7   api      ← the same hash, used as DST for ingress…
+KUBE-SRC-2BJH…  10.42.1.7   api      ← …and as SRC for egress
+KUBE-DST-OR7H…  10.42.1.5   db
+```
+
+allow-dns becomes four rules: UDP 53 and TCP 53, each a MARK/RETURN pair, from
+`KUBE-SRC-SPSW…` (all prod Pods) to `KUBE-DST-LOSG…` (`10.42.0.3`, CoreDNS).
+
+### 7.8 Egress allow-list: one external API
+
+```yaml
+# plus default-deny-all and allow-dns
+metadata: { name: api-egress-allowlist, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: api } }
+  policyTypes: [Egress]
+  egress:
+  - to: [{ ipBlock: { cidr: 1.1.1.1/32 } }]
+    ports: [{ protocol: TCP, port: 80 }, { protocol: TCP, port: 443 }]
+```
+
+| Test | Result |
+|---|---|
+| api → 1.1.1.1:80 | **OK** |
+| api → 1.0.0.1:80 | refused |
+| api DNS lookup | **OK** |
+| api → db:5432 | refused |
+
+```text
+-A KUBE-NWPLCY-VCYS… -p tcp --match-set KUBE-SRC-5KJG… src --match-set KUBE-DST-2LUK… dst --dport 80  -j MARK …   (+ RETURN)
+-A KUBE-NWPLCY-VCYS… -p tcp --match-set KUBE-SRC-5KJG… src --match-set KUBE-DST-2LUK… dst --dport 443 -j MARK …   (+ RETURN)
+
+KUBE-SRC-5KJG…  hash:ip   10.42.1.7        api
+KUBE-DST-2LUK…  hash:net  1.1.1.1          the ipBlock
+```
+
+### 7.9 Internet only: no private ranges, no metadata endpoint
+
+```yaml
+metadata: { name: web-egress-internet-only, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: web } }
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.169.254/32]
+```
+
+| Test | No policy | With it |
+|---|---|---|
+| web → 1.1.1.1:80 | OK | **OK** |
+| web → api:8080 (10.42.1.7) | OK | refused |
+| web → np-server:6443 (172.19.0.2) | OK | refused |
+| web DNS lookup | OK | **fails** (CoreDNS's Pod IP is in 10.0.0.0/8) |
+
+```text
+-A KUBE-NWPLCY-VOTE… -m set --match-set KUBE-SRC-ECQI… src -m set --match-set KUBE-DST-X6GJ… dst -j MARK --set-xmark 0x10000/0x10000
+-A KUBE-NWPLCY-VOTE… … -m mark --mark 0x10000/0x10000 -j RETURN
+
+$ ipset list KUBE-DST-X6GJ…
+Type: hash:net
+Members:
+0.0.0.0/1 timeout 0                    ← 0.0.0.0/0, split in two
+128.0.0.0/1 timeout 0
+10.0.0.0/8 timeout 0 nomatch           ← except
+172.16.0.0/12 timeout 0 nomatch
+192.168.0.0/16 timeout 0 nomatch
+169.254.169.254 timeout 0 nomatch
+```
+
+`hash:net` matches the **most specific** entry, so `10.42.1.7` hits `10.0.0.0/8 nomatch` before
+`0.0.0.0/1`, and the set reports "not a member". **(ipset docs for the matching order; the
+results are lab)** The metadata row is missing from the table
+because `169.254.169.254:80` also fails without a policy here. On a cloud VM this is the rule that
+keeps Pods away from the node's credentials. In production, add allow-dns next to it.
+
+### 7.10 A port range from anywhere
+
+```yaml
+metadata: { name: web-port-range, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: web } }
+  policyTypes: [Ingress]
+  ingress:
+  - ports: [{ protocol: TCP, port: 8000, endPort: 8999 }]   # no from: = any source
+```
+
+With `default-deny-ingress`:
+
+| Test | Result |
+|---|---|
+| client → web:8080 | **OK** |
+| client → web:9090 | refused (outside the range) |
+| random (other ns) → web:8080 | **OK** (no `from`, any source) |
+
+```text
+-A KUBE-NWPLCY-62TY… -p tcp -m set --match-set KUBE-DST-7JRH… dst -m tcp --dport 8000:8999 -j MARK --set-xmark 0x10000/0x10000
+-A KUBE-NWPLCY-62TY… … -j RETURN
+KUBE-DST-7JRH…  10.42.1.6   web           ← only a destination set: no source match at all
+```
+
+### 7.11 Allow all ingress to one Pod, on top of default deny
+
+```yaml
+metadata: { name: allow-all-ingress, namespace: prod }
+spec:
+  podSelector: { matchLabels: { app: web } }
+  policyTypes: [Ingress]
+  ingress:
+  - {}                          # one empty rule = everything
+```
+
+With `default-deny-all`:
+
+| Test | Result |
+|---|---|
+| random → web:8080 | **OK** |
+| random → api:8080 | refused (api isn't selected) |
+| web → 1.1.1.1:80 | refused (web's egress is still denied) |
+
+```text
+-A KUBE-POD-FW-<web> -d 10.42.1.6/32 "run through nw policy allow-all-ingress" -j KUBE-NWPLCY-P3PB…
+-A KUBE-POD-FW-<web>                 "run through nw policy default-deny-all"  -j KUBE-NWPLCY-ILFW…
+-A KUBE-NWPLCY-P3PB… -m set --match-set KUBE-DST-Z3SF… dst -j MARK --set-xmark 0x10000/0x10000    ← no source, no port
+KUBE-DST-Z3SF…  10.42.1.6   web
+```
+
+The two policies add up: default-deny-all can't take away what allow-all-ingress allows.
+
+`ingress: [{}]` (one empty rule) allows everything. `ingress: []` or leaving out `ingress`
+allows nothing. One pair of braces is the difference. **(`[{}]`: lab; `[]`: docs, and §7.2's
+policy with no rules)**
+
+### 7.12 Egress to the Kubernetes API server
+
+Pods reach the API through the `kubernetes` Service, `10.43.0.1:443`. kube-proxy DNATs that to
+the control-plane node, `172.19.0.2:6443`, before the policy check (§4).
+
+```yaml
+# wrong: names the Service IP and port
+  egress:
+  - to: [{ ipBlock: { cidr: 10.43.0.1/32 } }]
+    ports: [{ protocol: TCP, port: 443 }]
+---
+# right: names what the packet is DNATed to
+  egress:
+  - to: [{ ipBlock: { cidr: 172.19.0.2/32 } }]   # each control-plane node's IP
+    ports: [{ protocol: TCP, port: 6443 }]
+```
+
+| Policy | api → 10.43.0.1:443 | api → 1.1.1.1:80 |
+|---|---|---|
+| wrong (`10.43.0.1/32`, 443) | **refused** | refused |
+| right (`172.19.0.2/32`, 6443) | **OK** | refused |
+
+```text
+wrong:  -p tcp --match-set KUBE-SRC-6345… src --match-set KUBE-DST-4UT3… dst --dport 443  -j MARK …    KUBE-DST-4UT3… = 10.43.0.1
+right:  -p tcp --match-set KUBE-SRC-ZO46… src --match-set KUBE-DST-FSO6… dst --dport 6443 -j MARK …    KUBE-DST-FSO6… = 172.19.0.2
+```
+
+The wrong rule is valid and installed, but no packet ever has destination `10.43.0.1:443` by the
+time it reaches FORWARD. On a cluster with several control-plane nodes, list each one, or find them
+with `kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes`.
+
+### 7.13 Summary
+
+| # | Pattern | Selects | Key rule | Generated |
+|---|---|---|---|---|
+| 7.2 | default-deny-all | all Pods | none | NFLOG-only chain, jumped to with no `-s`/`-d` |
+| 7.3 | default-deny-ingress | all Pods | none | NFLOG-only chain via `-d pod`; egress → `KUBE-NWPLCY-DEFAULT` |
+| 7.4 | allow-same-namespace | all Pods | `from: podSelector: {}` | SRC set = every Pod in the namespace, no port |
+| 7.5 | ingress controller | web | namespace AND pod, named port | SRC set with one IP, `--dport 8080` |
+| 7.6 | Prometheus scrape | all Pods | namespace AND pod, `metrics` | SRC = prometheus, `--dport 9090` |
+| 7.7 | three-tier | web, api, db | pod → pod per tier | one chain per policy; both directions in one chain when `policyTypes` has both |
+| 7.8 | egress allow-list | api | `ipBlock /32`, 2 ports | `hash:net` DST set, one rule pair per port |
+| 7.9 | internet only | web | `0.0.0.0/0` except private + IMDS | `hash:net` with `/1` halves and `nomatch` entries |
+| 7.10 | port range | web | `port` + `endPort`, no `from` | `--dport 8000:8999`, DST set only |
+| 7.11 | allow-all-ingress | web | `ingress: [{}]` | DST set only, no port |
+| 7.12 | API server egress | api | `ipBlock` of the node, 6443 | must name the post-DNAT address |
 
 ## Related notes
 
