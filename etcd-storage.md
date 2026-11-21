@@ -53,14 +53,14 @@ Three facts explain most behaviour:
  │         lessor = lease → keys, expiry heap                               │
  └───────────────┬──────────────────────────────────────────────────────────┘
                  │ get/put by REVISION, not by key
- ┌───────────────▼──────────────────────────────────────────────────────────┐
+ ┌───────────────▼───────────────────────────────────────────────────────────┐
  │ BACKEND  (bbolt, a B+tree in one file: member/snap/db)                    │
- │   buckets: key, meta, lease, alarm, cluster, members, auth, …            │
- │   "key" bucket: 17-byte revision → mvccpb.KeyValue                       │
- │   RAM : txReadBuffer (writes not yet committed to bbolt)                 │
+ │   buckets: key, meta, lease, alarm, cluster, members, auth, …             │
+ │   "key" bucket: 17-byte revision → mvccpb.KeyValue                        │
+ │   RAM : txReadBuffer (writes not yet committed to bbolt)                  │
  │         + the mmap'd file pages the OS keeps in the page cache            │
- │   commit to bbolt every 100 ms or every 10,000 writes                    │
- └──────────────────────────────────────────────────────────────────────────┘
+ │   commit to bbolt every 100 ms or every 10,000 writes                     │
+ └───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 1.1 Raft and the WAL: durability first

@@ -46,7 +46,7 @@ Who owns what:
                     ├──► DNS → 203.0.113.10:443
  login.example.com ─┘               │
                                     ▼
-             envoy-gateway-system: Service ① envoy-infra-public-… (LoadBalancer) → Envoy Pods
+             envoy-gateway-system: Service 1 envoy-infra-public-… (LoadBalancer) → Envoy Pods
                                     │   TLS ends here (*.example.com)
                                     │   reads Host header:
                  ┌──────────────────┴───────────────────┐

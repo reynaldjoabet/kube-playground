@@ -161,11 +161,11 @@ almost everywhere. CoreDNS has to be able to answer:
 ## 2. How the pieces connect
 
 ```
- ┌──── kube-apiserver (listens :8443) ────┐  ① CoreDNS DIALS IN (10.96.0.1:443)
+ ┌──── kube-apiserver (listens :8443) ────┐  1 CoreDNS DIALS IN (10.96.0.1:443)
  │ Services, EndpointSlices, Pods, NS     │◄──── GET ?watch=true ─────────────── CoreDNS (2 pods, kube-system)
- │                                        │───── ② events stream BACK ─────────►   │  in-memory index of names
+ │                                        │───── 2 events stream BACK ─────────►   │  in-memory index of names
  └────────────────────────────────────────┘      on that same connection          │  forward . /etc/resolv.conf
-                                                                                   ▼  (node's resolver, for the rest)
+                                                                                  ▼   (node's resolver, for the rest)
  kubelet ── writes /etc/resolv.conf into every pod ──┐
    clusterDNS: 10.96.0.10                            │
    clusterDomain: cluster.local                      ▼
@@ -180,8 +180,8 @@ almost everywhere. CoreDNS has to be able to answer:
 
 The top arrows show two directions:
 
-- **① Who connects.** The API server listens. CoreDNS is the client: it dials the API server, lists the objects once, then sends a watch request that never ends.
-- **② Which way data flows.** The API server writes each change (ADDED, MODIFIED, DELETED) back down that open connection.
+- **(1) Who connects.** The API server listens. CoreDNS is the client: it dials the API server, lists the objects once, then sends a watch request that never ends.
+- **(2) Which way data flows.** The API server writes each change (ADDED, MODIFIED, DELETED) back down that open connection.
 
 The API server never opens a connection to CoreDNS, and doesn't know it exists beyond that connection ([watching-the-api-server.md](watching-the-api-server.md) §2.1, §8.1). On the lab, CoreDNS's two Pods hold one connection each to `:8443`.
 

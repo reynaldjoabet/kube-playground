@@ -306,17 +306,18 @@ A three-VNet setup
 
 ```sh
 [ SPOKE: AKS ]             [ HUB: NETWORKING ]           [ HUB: SECURITY ]
-+---------------+         +---------------------+       +---------------------+
-| Subnet: 10.20 |         | Subnet: 10.40.7     |       | Subnet: 10.16.0     |
-|               |         |                     |       |                     |
-|  [ POD ]      | Peering |  [ INT. LOAD      ] |Peering|  [ PALO ALTO ]      |
-|     |         |========>|  [ BALANCER       ] |======>|  [ 10.16.0.5 ]      |
-|     V         | (Jump 1)|  [ 10.40.7.10 ]     | (Jump 2)                    |
-| +-----------+ |         |          |          |       |          |          |
-| | UDR:      | |         |   (Backend Pool)    |       | (Inspect & Egress)  |
-| | .10       | |         |          +---------------------------->|          |
-| +-----------+ |         |                     |       |          V          |
-+---------------+         +---------------------+       +----[ INTERNET ]-----+
++---------------+          +---------------------+       +---------------------+
+| Subnet: 10.20 |          | Subnet: 10.40.7     |       | Subnet: 10.16.0     |
+|               |          |                     |       |                     |
+|  [ POD ]      | Peering  | [ INTERNAL LOAD ]   |Peering| [ PALO ALTO ]       |
+|     |         |=========>| [ BALANCER      ]   |======>| [ 10.16.0.5 ]       |
+|     |         | (Jump 1) | [ 10.40.7.10    ]   | Jump 2|                     |
+|     v         |          |          |          |       |          |          |
+| +-----------+ |          |   (Backend Pool)    |       | (Inspect & Egress)  |
+| | UDR:      | |          |          |          |       |          |          |
+| | .10       | |          |          +----------+-------+--------->+          |
+| +-----------+ |          |                     |       |          v          |
++---------------+          +---------------------+       +----[ INTERNET ]-----+
 ```
 
 ### Azure Firewall with Azure Load Balancer
@@ -528,11 +529,11 @@ An App Service Plan defines:
 
 ```sh
 [ App Service Plan: 2 vCPUs, 7 GB RAM ]
-┌──────────────────┬──────────────────┬──────────────────┐
-│ Web App A (Portal)│ Web App B (API) │ Function App (Jobs) │
-│  Consuming 1 CPU │   Consuming ½ CPU│   Consuming ½ CPU│
-│  Using 4 GB RAM  │   Using 2 GB RAM │   Using 1 GB RAM │
-└──────────────────┴──────────────────┴──────────────────┘
+┌────────────────────┬───────────────────┬─────────────────────┐
+│ Web App A (Portal) │ Web App B (API)   │ Function App (Jobs) │
+│ Consuming 1 CPU    │ Consuming ½ CPU   │ Consuming ½ CPU     │
+│ Using 4 GB RAM     │ Using 2 GB RAM    │ Using 1 GB RAM      │
+└────────────────────┴───────────────────┴─────────────────────┘
   Shared: No fixed allocation per app
 ```
 

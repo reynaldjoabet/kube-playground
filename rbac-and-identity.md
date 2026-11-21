@@ -1040,16 +1040,16 @@ The answer is OIDC Federation :
 #### How AWS IRSA (IAM Roles for ServiceAccounts) Works
 ```sh
 +------------------+     +------------------+     +------------------+     +------------------+
-|   Pod in EKS     |     |   AWS SDK        |     |   AWS STS        |     | EKS OIDC Endpoint|
-|   (has K8s JWT)  |     |   (inside Pod)   |     |  (Token Exchange)|     |  (Public Internet)|
+|    Pod in EKS    |     |     AWS SDK      |     |     AWS STS      |     |EKS OIDC Endpoint |
+|  (has K8s JWT)   |     |   (inside Pod)   |     | (Token Exchange) |     |(Public Internet) |
 +--------+---------+     +--------+---------+     +--------+---------+     +--------+---------+
          |                        |                        |                        |
          | Pod starts. Kubelet mounts JWT at:              |                        |
          | /var/run/secrets/eks.amazonaws.com/.../token    |                        |
          |                        |                        |                        |
          | EKS webhook injected env vars:                  |                        |
-         | AWS_ROLE_ARN=arn:aws:iam::123..:role/MyAppRole   |                        |
-         | AWS_WEB_IDENTITY_TOKEN_FILE=/var/run/.../token   |                        |
+         | AWS_ROLE_ARN=arn:aws:iam::123..:role/MyAppRole  |                        |
+         | AWS_WEB_IDENTITY_TOKEN_FILE=/var/run/.../token  |                        |
          |                        |                        |                        |
          |  1. app calls          |                        |                        |
          |     s3.ListBuckets()   |                        |                        |
@@ -1143,13 +1143,13 @@ The answer is OIDC Federation :
          |                        |                        |                        |
          |                        |                        |                        |
          | +--------------------------------------------------------------------+   |
-         | | 55 MINUTES LATER...                                                 |  |
-         | | Kubelet has already rotated the JWT file on disk.                    |  |
-         | | AWS SDK detects credentials are about to expire.                    |  |
-         | | SDK re-reads the new JWT and calls STS again (step 2).              |  |
-         | | Zero downtime. Zero human intervention.                             |  |
+         | | 55 MINUTES LATER...                                                |   |
+         | | Kubelet has already rotated the JWT file on disk.                  |   |
+         | | AWS SDK detects credentials are about to expire.                   |   |
+         | | SDK re-reads the new JWT and calls STS again (step 2).             |   |
+         | | Zero downtime. Zero human intervention.                            |   |
          | +--------------------------------------------------------------------+   |
-           
+
 ```json
 {
   "Version": "2012-10-17",

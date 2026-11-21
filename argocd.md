@@ -159,16 +159,16 @@ Developer pushes YAML to Git → Argo CD sees the change → applies to cluster
 └──────────────────┬───────────────────────────────────┘
                    │ kubectl apply (under the hood)
                    ▼
-┌──────────────────────────────────────────────────────┐
-│              Kubernetes API Server                   │
-│                                                      │
+┌───────────────────────────────────────────────────────┐
+│              Kubernetes API Server                    │
+│                                                       │
 │  → Admission webhooks fire                            │
-│  → Objects stored in etcd                            │
-│  → Controllers reconcile                             │
-│  → kube-proxy writes iptables rules                  │
-│  → kubelet starts pods                               │
-│  → CNI assigns IPs                                   │
-└──────────────────────────────────────────────────────┘
+│  → Objects stored in etcd                             │
+│  → Controllers reconcile                              │
+│  → kube-proxy writes iptables rules                   │
+│  → kubelet starts pods                                │
+│  → CNI assigns IPs                                    │
+└───────────────────────────────────────────────────────┘
 ```
 Argo CD runs as pods in `argocd` namespace with a ServiceAccount. That SA needs RBAC permissions to create/update resources:
 ```yaml

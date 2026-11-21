@@ -39,28 +39,28 @@ Legend: WAF layers inspect content · path layers restrict the route · L3/L4 la
  │ User │
  └──┬───┘
     ▼
- ┌─ EDGE (CloudFront / Global Accelerator) ────────────────────────────────────────────┐
- │  A. Absorb L3/L4                          B. WAF (Global)  ★ the main battleground   │
+ ┌─ EDGE (CloudFront / Global Accelerator) ──────────────────────────────────────────────┐
+ │  A. Absorb L3/L4                          B. WAF (Global)  ★ the main battleground    │
  │     Stops: floods, SYN floods,     ───►      Stops: attack patterns, HTTP floods,     │
  │            bad TCP/TLS                              bots, bad IPs                     │
  │     Uses:  Shield Standard (auto),           Uses:  AWS WAF (CloudFront scope,        │
  │            CloudFront, GA                           created in us-east-1)             │
- └──────────────────────────────────────────────────┬──────────────────────────────────┘
+ └──────────────────────────────────────────────────┬────────────────────────────────────┘
                                                     ▼
- ┌─ C. Restrict the path ───────────────────────────────────────────────────────────────┐
+ ┌─ C. Restrict the path ────────────────────────────────────────────────────────────────┐
  │  Stops: direct access to the origin that goes around WAF                              │◄┄┄┄┄┐
  │  Uses:  VPC origin / OAC / secret header                                              │ ✕   ┊
- └──────────────────────────────────────────────────┬──────────────────────────────────┘     ┊
+ └──────────────────────────────────────────────────┬────────────────────────────────────┘     ┊
                                                     ▼                                         ┊
- ┌─ REGION (inside the VPC) ────────────────────────────────────────────────────────────┐     ┊
- │  D. SG / NACL                  [? E. WAF (Regional) ?]           F. Application       │     ┊
+ ┌─ REGION (inside the VPC) ──────────────────────────────────────────────────────────────┐     ┊
+ │  D. SG / NACL                  [? E. WAF (Regional) ?]           F. Application        │     ┊
  │     Stops: anything but   ───► [? Stops: app-specific ?]  ───►     Stops: authn/authz, │     ┊
  │     allowed sources/ports      [? rules; insurance for ?]           input validation,  │     ┊
  │     Uses: security groups,     [? paths that skip the  ?]           logic flaws        │     ┊
  │     NACLs                      [? edge                 ?]           Uses: the app,     │     ┊
  │                                [? Uses: AWS WAF (ALB,  ?]           Cognito, API keys  │     ┊
  │                                [? API Gateway REST, …) ?]                              │     ┊
- └──────────────────────────────────────────────────────────────────────────────────────┘     ┊
+ └────────────────────────────────────────────────────────────────────────────────────────┘     ┊
                                                                                                ┊
  ┌─ Attacker ─────────────────────┐                                                            ┊
  │ (finds the origin from         │┄┄┄┄ ✕ goes around B, straight at the origin ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┘
@@ -75,7 +75,7 @@ How to read it:
 - **Layers that restrict the path (C, D):** they don't look at content. They decide who can reach the origin at all.
 - **B only (WAF only):** anyone who goes straight to the origin passes untouched. This is what "bypassing WAF through someone else's CloudFront" refers to.
 - **C and D only (path only):** SQL injection or HTTP floods coming through your real CloudFront aren't stopped.
-- **The baseline is A + B + C + D.** A (Shield Standard) applies automatically when you use CloudFront or Global Accelerator. Add **E** when there's a path that skips the edge, when you want app-specific rules kept separate, or when there's no CloudFront at all (patterns ⑦ and ⑧ below).
+- **The baseline is A + B + C + D.** A (Shield Standard) applies automatically when you use CloudFront or Global Accelerator. Add **E** when there's a path that skips the edge, when you want app-specific rules kept separate, or when there's no CloudFront at all (patterns (7) and (8) below).
 
 ## Where WAF can and can't be attached
 
@@ -90,16 +90,16 @@ WAF **can't** be attached directly to NLB, Global Accelerator, S3, Lambda functi
 **Diagram 2: where AWS WAF can and can't be attached**
 
 ```
-┌─ Global scope (us-east-1) ─────┐ ┌─ Regional scope (same region as the resource) ─────────────────┐ ┌─ Can't attach directly ─────────────────────────┐
+┌─ Global scope (us-east-1) ─────┐ ┌─ Regional scope (same region as the resource) ───────────────────┐ ┌─ Can't attach directly ──────────────────────────┐
 │                                │ │                                                                  │ │                                                  │
 │   CloudFront   AWS WAF (Global)│ │   ALB            API Gateway REST API   AppSync   Cognito user   │ │   NLB          Global Accelerator   S3           │
 │                                │ │                                                   pools          │ │                                                  │
 │                                │ │   App Runner     Verified Access        Amplify   AgentCore      │ │   Lambda       API Gateway          Lambda Web   │
 │  A web ACL associated with     │ │                                                   Gateway        │ │   function URL HTTP API             Functions    │
 │  CloudFront can't be used for  │ │                                                                  │ │                                                  │
-│  any other kind of resource    │ │  Body inspection limit: ALB / AppSync fixed at 8 KB;             │ │ → put CloudFront in front                       │
-│                                │ │  everything else 16 KB by default (max 64 KB)                    │ │   (S3, function URLs, Web Functions, HTTP API)  │
-│                                │ │                                                                  │ │ → attach to an ALB behind it (NLB, GA)          │
+│  any other kind of resource    │ │  Body inspection limit: ALB / AppSync fixed at 8 KB;             │ │ → put CloudFront in front                        │
+│                                │ │  everything else 16 KB by default (max 64 KB)                    │ │   (S3, function URLs, Web Functions, HTTP API)   │
+│                                │ │                                                                  │ │ → attach to an ALB behind it (NLB, GA)           │
 └────────────────────────────────┘ └──────────────────────────────────────────────────────────────────┘ └──────────────────────────────────────────────────┘
 ```
 
@@ -122,13 +122,13 @@ Legend: thick arrow = high volume · ✕ = rejected · `[? … ?]` = optional.
         ┃
         ┃  (thick = high volume)
         ▼
- ┌─ EDGE ──────────────────────────────────────────────────┐
+ ┌─ EDGE ────────────────────────────────────────────────────┐
  │  CloudFront  ━━━━━━━━━━━━━━━━━━━━━━━━━►  AWS WAF (Global) │
- │      malformed HTTP and L3/L4 attacks         │          │
- │      are dropped by CloudFront first          │          │
- │  Shield Standard                              │          │
- └───────────────────────────────────────────────┼──────────┘
-                                                 │ ✕ ──► ┌─ Rejected (403) ─────────────────────────┐
+ │      malformed HTTP and L3/L4 attacks         │           │
+ │      are dropped by CloudFront first          │           │
+ │  Shield Standard                              │           │
+ └───────────────────────────────────────────────┼───────────┘
+                                                 │ ✕ ──► ┌─ Rejected (403) ──────────────────────────┐
                                                  │       │ no CloudFront request or data-transfer    │
                  only requests that passed       │       │ charges for it                            │
                  inspection                      ▼       └───────────────────────────────────────────┘
@@ -146,24 +146,24 @@ Benefits of the edge (AWS WAF implementation guidelines, DDoS resiliency whitepa
 Add a **regional WAF (E)** when:
 
 - One domain fronts several apps, and you want shared IP and country blocks at the edge with app-specific rules on each ALB (the guidelines have an example of this).
-- A path that skips the edge still exists in theory, as with pattern ② (a public ALB), so the regional WAF acts as insurance.
-- There's no CloudFront at all, as with ⑦ (Global Accelerator) or ⑧ (a public ALB taking traffic directly). Then the ALB's WAF is the only WAF.
+- A path that skips the edge still exists in theory, as with pattern (2) (a public ALB), so the regional WAF acts as insurance.
+- There's no CloudFront at all, as with (7) (Global Accelerator) or (8) (a public ALB taking traffic directly). Then the ALB's WAF is the only WAF.
 
 ## Where WAF goes in each architecture pattern
 
-The patterns ①–⑨ are explained in the author's companion article (see Sources).
+The patterns (1)–(9) are explained in the author's companion article (see Sources).
 
 | Pattern | Where WAF goes | Notes |
 |---|---|---|
-| ① VPC origin | CloudFront (Global) | The path is closed, so the ALB usually doesn't need one. Add one on the ALB only to keep app-specific rules separate |
-| ② Public ALB + secret header | CloudFront (Global), plus ALB (Regional) if needed | Consider the ALB WAF as insurance in case the secret header leaks |
-| ③ S3 (OAC) | CloudFront (Global) | Can't attach to S3 |
-| ④ Lambda function URL (OAC) | CloudFront (Global) | Can't attach to function URLs |
-| ⑤ Regional API Gateway | CloudFront (Global), plus the REST API stage (Regional) if needed | Can't attach to HTTP APIs |
-| ⑥ Private API | CloudFront (Global) | Same path as ① |
-| ⑦ Global Accelerator | ALB (Regional) | Can't attach to GA. The client IP is preserved, so IP-based rules work as they are |
-| ⑧ Public ALB taking traffic directly | ALB (Regional), **required** | The only L7 defence. Consider Shield Advanced too |
-| ⑨ Lambda Web Functions (OAC) | CloudFront (Global) | Can't attach to the endpoint |
+| (1) VPC origin | CloudFront (Global) | The path is closed, so the ALB usually doesn't need one. Add one on the ALB only to keep app-specific rules separate |
+| (2) Public ALB + secret header | CloudFront (Global), plus ALB (Regional) if needed | Consider the ALB WAF as insurance in case the secret header leaks |
+| (3) S3 (OAC) | CloudFront (Global) | Can't attach to S3 |
+| (4) Lambda function URL (OAC) | CloudFront (Global) | Can't attach to function URLs |
+| (5) Regional API Gateway | CloudFront (Global), plus the REST API stage (Regional) if needed | Can't attach to HTTP APIs |
+| (6) Private API | CloudFront (Global) | Same path as (1) |
+| (7) Global Accelerator | ALB (Regional) | Can't attach to GA. The client IP is preserved, so IP-based rules work as they are |
+| (8) Public ALB taking traffic directly | ALB (Regional), **required** | The only L7 defence. Consider Shield Advanced too |
+| (9) Lambda Web Functions (OAC) | CloudFront (Global) | Can't attach to the endpoint |
 
 ## Things to watch when combining edge and regional WAF
 
@@ -273,7 +273,7 @@ Never switch straight to Block. Watch the effect in Count mode first, and go rou
 
 ```
  ┌─────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────┐   ┌──────────────┐
- │ ① Count mode in │──►│ ② Count mode on  │──►│ ③ Check logs and │──►│ ④ Add exceptions │──►│ ⑤ Switch to  │──►│ ⑥ Monitor    │
+ │ 1 Count mode in │──►│ 2 Count mode on  │──►│ 3 Check logs and │──►│ 4 Add exceptions │──►│ 5 Switch to  │──►│ 6 Monitor    │
  │   staging       │   │   production     │   │   metrics for    │   │   (scope-down,   │   │   Block      │   │   with logs  │
  │                 │   │   traffic        │   │   false positives│   │   labels)        │   │              │   │              │
  └────────▲────────┘   └──────────────────┘   └────────▲─────────┘   └────────┬─────────┘   └──────────────┘   └──────┬───────┘
@@ -369,7 +369,7 @@ fields @timestamp, httpRequest.clientIp, httpRequest.uri, terminatingRuleId, act
 ## Sources
 
 - Original article (Japanese): anfangd, "AWS WAF、どこに置いてどう組んでいますか？ エッジとリージョンの使い分けと注意点", https://zenn.dev/anfangd/articles/aws-waf-placement
-- Companion article on patterns ①–⑨: https://zenn.dev/anfangd/articles/aws-web-ingress-origin-protection
+- Companion article on patterns (1)–(9): https://zenn.dev/anfangd/articles/aws-web-ingress-origin-protection
 - AWS docs and whitepapers cited by the article:
   - Associating or disassociating protection with an AWS resource (AWS WAF Developer Guide)
   - AWS WAF integration design, Guidelines for Implementing AWS WAF (whitepaper)

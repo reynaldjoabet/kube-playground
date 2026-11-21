@@ -259,16 +259,16 @@ All three share **one network namespace**, but each has **its own filesystem**:
 
 ```
  Pod envoy-infra-public-…-555jv      one Pod IP: 10.244.120.112, one node: minikube
- ┌──────────────────────────────────────────────────────────────────────────────────────┐
- │  network namespace net:[4026533347]  ← SHARED: same IP, same ports, localhost        │
- │                                                                                      │
- │  ┌─ container POD (pause) ─┐ ┌─ container envoy ───────┐ ┌─ container shutdown-manager ─┐
- │  │ image pause:3.10.1      │ │ process: envoy          │ │ process: envoy-gateway …     │
- │  │ holds the netns open    │ │                         │ │                              │
- │  │ mnt:[…3342]             │ │ mnt:[…4871]             │ │ mnt:[…4884]                  │
- │  └─────────────────────────┘ └─────────────────────────┘ └──────────────────────────────┘
- │         own filesystem             own filesystem              own filesystem        │
- └──────────────────────────────────────────────────────────────────────────────────────┘
+ ┌────────────────────────────────────────────────────────────────────────────────────────────┐
+ │  network namespace net:[4026533347]  ← SHARED: same IP, same ports, localhost              │
+ │                                                                                            │
+ │  ┌─ container POD (pause) ─┐ ┌─ container envoy ───────┐ ┌─ container shutdown-manager ─┐  │
+ │  │ image pause:3.10.1      │ │ process: envoy          │ │ process: envoy-gateway …     │  │
+ │  │ holds the netns open    │ │                         │ │                              │  │
+ │  │ mnt:[…3342]             │ │ mnt:[…4871]             │ │ mnt:[…4884]                  │  │
+ │  └─────────────────────────┘ └─────────────────────────┘ └──────────────────────────────┘  │
+ │         own filesystem             own filesystem              own filesystem              │
+ └────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 | Level | What it is | What it gets | Example |

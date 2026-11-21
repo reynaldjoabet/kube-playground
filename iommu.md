@@ -159,11 +159,11 @@ Before the IOMMU the device side looked like this, with no check in the path:
                 |  raw physical address, no translation, no checks
                 v
    +-------------------------------------------------------------------------+
-   |                            PHYSICAL RAM                                  |
-   |   [ process A ]  [ KERNEL ]  [ secrets ]  [ other VMs ]                  |
-   |        ^              ^           ^             ^                        |
-   |        +--------------+-----------+-------------+                        |
-   |               device can reach ALL of it                                 |
+   |                            PHYSICAL RAM                                 | 
+   |   [ process A ]  [ KERNEL ]  [ secrets ]  [ other VMs ]                 | 
+   |        ^              ^           ^             ^                       | 
+   |        +--------------+-----------+-------------+                       | 
+   |               device can reach ALL of it                                | 
    +-------------------------------------------------------------------------+
 ```
 

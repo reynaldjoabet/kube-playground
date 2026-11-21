@@ -175,7 +175,7 @@ Two devices are "on different networks" because and only because their addresses
 ```
 ```sh
 ┌────────── network part (26 bits, covered by mask) ──────────┐┌─ host ─┐
-│  zone 1: parent prefix (24 bits)       │ zone 2: borrowed (2)││ zone 3 │
+│  zone 1: parent prefix (24 bits)      │ zone 2: borrowed (2)││ zone 3 │
 │         192.168.1                     │       00/01/10/11   ││ 6 bits │
 └───────────────────────────────────────┴─────────────────────┘└────────┘
 ```

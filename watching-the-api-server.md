@@ -31,24 +31,24 @@ Controllers don't poll. A cloud controller manager (CCM), Argo CD, kube-proxy, C
      v
  +---------------------------------------------- kube-apiserver --------------+
  |                                                                            |
- |   validation, admission ----> etcd3 store ---- write ----> +--------+      |
- |                                                           |  etcd  |      |
- |                                                           +--------+      |
- |                                                               |           |
- |              ONE etcd watch per resource type (prefix watch)   |           |
- |              e.g. /registry/configmaps/   <-------------------+           |
- |                         |                                                  |
- |                         v                                                  |
- |   +------------------ Cacher (per resource type) -----------------+       |
- |   |  watchCache: current objects + ring buffer of recent events   |       |
- |   |  dispatchEvents(): for each event, for each matching watcher  |       |
- |   +----+---------------------+---------------------+--------------+       |
- |        |                     |                     |                      |
- |   cacheWatcher          cacheWatcher          cacheWatcher   (one per     |
- |   (CCM, services)       (Argo CD, cm)         (kubectl -w)    open watch) |
- +--------|---------------------|---------------------|----------------------+
-          |  HTTP/1.1 or HTTP/2, chunked, one JSON event per line
-          v                     v                     v
+ |  validation, admission ----> etcd3 store ---- write ----> +--------+       |
+ |                                                           |  etcd  |       |
+ |                                                           +--------+       |
+ |                                                               |            |
+ |             ONE etcd watch per resource type (prefix watch)   |            |
+ |             e.g. /registry/configmaps/   <--------------------+            |
+ |                        |                                                   |
+ |                        v                                                   |
+ |  +------------------ Cacher (per resource type) -------------------+       |
+ |  |  watchCache: current objects + ring buffer of recent events     |       |
+ |  |  dispatchEvents(): for each event, for each matching watcher    |       |
+ |  +----+---------------------+---------------------+----------------+       |
+ |       |                     |                     |                        |
+ |  cacheWatcher          cacheWatcher          cacheWatcher   (one per       |
+ |  (CCM, services)       (Argo CD, cm)         (kubectl -w)    open watch)   |
+ +-------|---------------------|---------------------|------------------------+
+         |  HTTP/1.1 or HTTP/2, chunked, one JSON event per line
+         v                     v                     v
  +---- cloud-controller-manager ----+   +---- argocd-application-controller ----+
  |  informer(Service)               |   |  informer(Application, AppProject)    |
  |  informer(Node)                  |   |  cluster cache: one watch per         |
@@ -236,7 +236,7 @@ It lists (500 per page), then watches from the list's RV.
  |                                                                               |
  |  watchCache                                                                   |
  |  +--------------------------+   +-------------------------------------------+ |
- |  | store: every configmap,   |   | history ring buffer: recent events        | |
+ |  | store: every configmap,  |    | history ring buffer: recent events        || 
  |  | current version          |   | [ ...57961 ADDED, 57962 MOD, 57963 DEL ]  | |
  |  +--------------------------+   | size 100 .. 102400 (grows/shrinks)        | |
  |                                 +-------------------------------------------+ |
@@ -294,7 +294,7 @@ Almost every Go controller uses `client-go/tools/cache`. The CCM does directly. 
        LIST (once)|        | WATCH stream (events)
                   |        v
  +------------------------------------------------------------- one informer --+
- |  Reflector                                                                   |
+ |  Reflector                                                                  | 
  |    ListAndWatch(): list or watch-list, then watch, remember last RV         |
  |        |                                                                    |
  |        | Add / Update / Delete / Replace / Sync deltas                      |
@@ -743,12 +743,12 @@ kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations
  └───────────────────────────────────────────────────────────────────────────────────────────────────┘
           │ kubelet reads /etc/kubernetes/manifests/*.yaml  →  STATIC Pods (control plane)
           ▼
- ┌─ control plane (static Pods, hostNetwork) ────────────────────────────────────────────────────────┐
- │  etcd                      storage; only the API server talks to it                               │
- │  kube-apiserver            the hub; everything below dials it                                     │
- │  kube-controller-manager   ~30 control loops (Deployment, ReplicaSet, EndpointSlice, Node, …)     │
+ ┌─ control plane (static Pods, hostNetwork) ─────────────────────────────────────────────────────────┐
+ │  etcd                      storage; only the API server talks to it                                │
+ │  kube-apiserver            the hub; everything below dials it                                      │
+ │  kube-controller-manager   ~30 control loops (Deployment, ReplicaSet, EndpointSlice, Node, …)      │
  │  kube-scheduler            picks a node for each new Pod (writes pods/binding)                     │
- └───────────────────────────────────────────────────────────────────────────────────────────────────┘
+ └────────────────────────────────────────────────────────────────────────────────────────────────────┘
           │ kube-controller-manager / scheduler create the rest as ordinary Pods (DaemonSets, Deployments)
           ▼
  ┌─ node add-ons (DaemonSets, hostNetwork) ──────┐   ┌─ cluster add-ons (Deployments, Pod network) ─────┐
@@ -757,10 +757,10 @@ kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations
  │    + bird, bird6 BGP daemons (no API access)  │   │  envoy-gateway            Gateway API controller │
  └───────────────────────────────────────────────┘   │  envoy (+ shutdown-manager) the Gateway's proxy  │
                                                      └──────────────────────────────────────────────────┘
- ┌─ workloads ─────────────────────────────────────────────────────────────────────────────────────────┐
+ ┌─ workloads ──────────────────────────────────────────────────────────────────────────────────────────┐
  │  agnhost ×16 (the lab's apps: moneystack, lattice, shop, svc-demo, dns-demo, search)                 │
- │  pause ×27   one per Pod: holds the Pod's network namespace while app containers come and go       │
- └─────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ │  pause ×27   one per Pod: holds the Pod's network namespace while app containers come and go         │
+ └──────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Who each one talks to:

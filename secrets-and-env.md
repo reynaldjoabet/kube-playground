@@ -3222,7 +3222,7 @@ Line by line:
 |---|---|
 | `volumes[].name: db-creds` | The volume's name *inside this Pod*, used only to match the `volumeMounts` entry below. It's unrelated to the AWS secret, even though both are called `db-creds` here |
 | `csi:` | An inline (ephemeral) CSI volume: it exists only for this Pod, with no PersistentVolume or PVC. The kubelet calls the driver's `NodePublishVolume` when the Pod starts on a node, and unpublishes it when the Pod goes away |
-| `driver: secrets-store.csi.k8s.io` | Which CSI driver the kubelet calls. It must match the `CSIDriver` object the Helm chart created, and the name the driver registered on the node (① in "The secrets chain end to end") |
+| `driver: secrets-store.csi.k8s.io` | Which CSI driver the kubelet calls. It must match the `CSIDriver` object the Helm chart created, and the name the driver registered on the node ((1) in "The secrets chain end to end") |
 | `readOnly: true` | Required, not just recommended: the driver rejects the mount with `InvalidArgument: Readonly is not true in request` otherwise (`nodeserver.go`) **(code)**. The container can read the files but not change them |
 | `volumeAttributes.secretProviderClass: db-secrets` | The link to the SecretProviderClass by **name**, looked up in the **Pod's namespace**. It's passed to the driver as part of the volume context, together with the Pod's name, namespace, UID and ServiceAccount token |
 | `volumeMounts[].name: db-creds` | Mounts the volume with that name into this container. Only containers that list it see the files; other containers in the same Pod don't |
@@ -3901,28 +3901,26 @@ Three gRPC conversations happen on the node, each over its own Unix socket. In e
 
 ```
                         node N (all of this is on one machine)
- ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
- │                                                                                                │
- │  kubelet ─────① registration────► /var/lib/kubelet/plugins_registry/secrets-store.csi.k8s.io-reg.sock
- │    │           (kubelet dials)        ▲ listens: node-driver-registrar (sidecar in the driver Pod)
- │    │                                                                                           │
- │    └──────────② CSI────────────────► /var/lib/kubelet/plugins/csi-secrets-store/csi.sock        │
- │                (kubelet dials)        ▲ listens: secrets-store container (the driver)          │
- │                                       │   the container sees it as /csi/csi.sock               │
- │                                       │                                                        │
- │  driver ──────③ provider─────────► /var/run/secrets-store-csi-providers/aws.sock              │
- │                (driver dials)         ▲ listens: AWS provider Pod                              │
- │                                                                                                │
- └──────────────────────────────────────────────────────────────────────────────────────────────┘
-        driver ──HTTPS──► API server  (read the SecretProviderClass, write SecretProviderClassPodStatus)
-      provider ──HTTPS──► AWS STS + Secrets Manager
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │                                                                                                        │
+ │  kubelet ──── 1 registration────► /var/lib/kubelet/plugins_registry/secrets-store.csi.k8s.io-reg.sock  │
+ │    │           (kubelet dials)        ▲ listens: node-driver-registrar (sidecar in the driver Pod)     │
+ │    │                                                                                                   │
+ │    └───────── 2 CSI────────────────► /var/lib/kubelet/plugins/csi-secrets-store/csi.sock               │
+ │                (kubelet dials)        ▲ listens: secrets-store container (the driver)                  │
+ │                                       │   the container sees it as /csi/csi.sock                       │
+ │                                       │                                                                │
+ │  driver ───── 3 provider─────────► /var/run/secrets-store-csi-providers/aws.sock                       │
+ │                (driver dials)         ▲ listens: AWS provider Pod                                      │
+ │                                                                                                        │
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 | # | Socket on the node | Server (listens) | Client (dials) | gRPC service | Calls |
 |---|---|---|---|---|---|
-| ① | `/var/lib/kubelet/plugins_registry/<driver>-reg.sock` | node-driver-registrar | kubelet | `pluginregistration.Registration` | `GetInfo`, `NotifyRegistrationStatus` |
-| ② | `/var/lib/kubelet/plugins/csi-secrets-store/csi.sock` | the driver | kubelet (also the liveness-probe sidecar) | CSI `Identity` + `Node` | `GetPluginInfo`, `Probe`, `NodeGetInfo`, `NodePublishVolume`, `NodeUnpublishVolume` |
-| ③ | `/var/run/secrets-store-csi-providers/<provider>.sock` | the provider | the driver | `v1alpha1.CSIDriverProvider` | `Version`, `Mount` |
+| (1) | `/var/lib/kubelet/plugins_registry/<driver>-reg.sock` | node-driver-registrar | kubelet | `pluginregistration.Registration` | `GetInfo`, `NotifyRegistrationStatus` |
+| (2) | `/var/lib/kubelet/plugins/csi-secrets-store/csi.sock` | the driver | kubelet (also the liveness-probe sidecar) | CSI `Identity` + `Node` | `GetPluginInfo`, `Probe`, `NodeGetInfo`, `NodePublishVolume`, `NodeUnpublishVolume` |
+| (3) | `/var/run/secrets-store-csi-providers/<provider>.sock` | the provider | the driver | `v1alpha1.CSIDriverProvider` | `Version`, `Mount` |
 
 **(code)** The listeners and dialers:
 
@@ -3933,7 +3931,7 @@ Three gRPC conversations happen on the node, each over its own Unix socket. In e
 
 The `-reg.sock` file name is the registrar's convention **(docs; not traced)**.
 
-**Step ①: the driver introduces itself (once, when the driver Pod starts).** **(code: kubelet `operation_generator.go`, `csi_plugin.go`; registration proto `pluginregistration/v1/api.proto`)**
+**Step (1): the driver introduces itself (once, when the driver Pod starts).** **(code: kubelet `operation_generator.go`, `csi_plugin.go`; registration proto `pluginregistration/v1/api.proto`)**
 
 ```
  kubelet's plugin watcher sees a new file in /var/lib/kubelet/plugins_registry/
@@ -3943,15 +3941,15 @@ The `-reg.sock` file name is the registrar's convention **(docs; not traced)**.
                     name: "secrets-store.csi.k8s.io",
                     endpoint: "/var/lib/kubelet/plugins/csi-secrets-store/csi.sock",   ← from --kubelet-registration-path
                     supported_versions: [...] }
- kubelet ──dial──► /var/lib/kubelet/plugins/csi-secrets-store/csi.sock               ← now socket ②
+ kubelet ──dial──► /var/lib/kubelet/plugins/csi-secrets-store/csi.sock               ← now socket 2
    NodeGetInfo()  ◄── { node_id: "<node name>" }                                      (driver: --nodeid)
    → kubelet adds the driver to the CSINode object for this node
  kubelet ──► registrar: NotifyRegistrationStatus{ plugin_registered: true }
 ```
 
-The registrar sidecar exists only to answer step ①. Its real job is to tell the kubelet where socket ② is. The driver's own socket path is `/csi/csi.sock` inside the container, and `/var/lib/kubelet/plugins/csi-secrets-store/csi.sock` on the node, through a `hostPath` volume.
+The registrar sidecar exists only to answer step (1). Its real job is to tell the kubelet where socket (2) is. The driver's own socket path is `/csi/csi.sock` inside the container, and `/var/lib/kubelet/plugins/csi-secrets-store/csi.sock` on the node, through a `hostPath` volume.
 
-**Step ②: the kubelet asks the driver to mount (each Pod start).** **(code: kubelet `csi_mounter.go`, `csi_util.go`, `csi_plugin.go`; driver `nodeserver.go`)**
+**Step (2): the kubelet asks the driver to mount (each Pod start).** **(code: kubelet `csi_mounter.go`, `csi_util.go`, `csi_plugin.go`; driver `nodeserver.go`)**
 
 ```
  kubelet ──► csi.sock
@@ -3970,9 +3968,9 @@ The registrar sidecar exists only to answer step ①. Its real job is to tell th
 
 There's no `NodeStageVolume` before this, even though the driver advertises `STAGE_UNSTAGE_VOLUME`. The kubelet's `CanDeviceMount` returns `false` for `Ephemeral` volumes, so inline volumes skip staging. There's no controller call either (`attachRequired: false`).
 
-The driver then works inside that one call. It creates the target directory, mounts a **tmpfs** there, reads the SecretProviderClass from the API server, and merges `spec.parameters` with the whole `volume_context` (`maps.Copy(parameters, attrib)`). Then it opens socket ③.
+The driver then works inside that one call. It creates the target directory, mounts a **tmpfs** there, reads the SecretProviderClass from the API server, and merges `spec.parameters` with the whole `volume_context` (`maps.Copy(parameters, attrib)`). Then it opens socket (3).
 
-**Step ③: the driver asks the provider for the files.** **(code: `provider_client.go`)**
+**Step (3): the driver asks the provider for the files.** **(code: `provider_client.go`)**
 
 ```go
 // 1. find the socket: try each directory, first one that exists wins
@@ -4000,7 +3998,7 @@ The driver can create a mount the kubelet sees because the driver container moun
 
 **Later calls on the same sockets:**
 
-- **Rotation:** with `requiresRepublish: true` on the CSIDriver, the kubelet calls `NodePublishVolume` again periodically. `deploy/csidriver.yaml` always sets it; the Helm chart sets it to the value of `enableSecretRotation`. With `--enable-secret-rotation`, the driver skips the call until `--rotation-poll-interval` has passed since the last write. Otherwise it repeats ③ with `current_object_version` set to the last versions. With rotation off, an already-populated mount is skipped (`"target path is already mounted and populated"`).
+- **Rotation:** with `requiresRepublish: true` on the CSIDriver, the kubelet calls `NodePublishVolume` again periodically. `deploy/csidriver.yaml` always sets it; the Helm chart sets it to the value of `enableSecretRotation`. With `--enable-secret-rotation`, the driver skips the call until `--rotation-poll-interval` has passed since the last write. Otherwise it repeats (3) with `current_object_version` set to the last versions. With rotation off, an already-populated mount is skipped (`"target path is already mounted and populated"`).
 - **Pod deleted:** the kubelet calls `NodeUnpublishVolume`. The driver deletes the files and unmounts the tmpfs. **The provider isn't called**: there's no `Unmount` RPC in `service.proto`.
 
 **What actually crosses the socket.** **(lab)** This is a local demo, not the real driver. A Python fake provider implements the real `service.proto`. A client follows `provider_client.go`: it looks for `<dir>/demo.sock`, dials `unix:`, then calls `Version` and `Mount` twice, the second time with `current_object_version` set. A tap between them decodes each HTTP/2 frame. It ran in a throwaway `python:3.12-slim` container with grpcio 1.66.1, with the sockets in the same directory the real driver uses:
@@ -4054,7 +4052,7 @@ The demo scripts are a provider, a driver-side client and the frame tap, about 1
 
 The one-line summary of the driver is: *it gets secrets from external APIs and mounts them into containers as volumes.* Each part of that sentence needs unpacking.
 
-**"External API" means the secret store's own network API,** reached over the internet or a private endpoint: AWS Secrets Manager or Parameter Store, Azure Key Vault, GCP Secret Manager, or a Vault server. It is not a Kubernetes API, and **the driver never calls it.** The driver only talks gRPC to the provider over the Unix socket (③ above). The provider, inside its `Mount` handler, is the one that makes the network calls, using the cloud's normal SDK.
+**"External API" means the secret store's own network API,** reached over the internet or a private endpoint: AWS Secrets Manager or Parameter Store, Azure Key Vault, GCP Secret Manager, or a Vault server. It is not a Kubernetes API, and **the driver never calls it.** The driver only talks gRPC to the provider over the Unix socket ((3) above). The provider, inside its `Mount` handler, is the one that makes the network calls, using the cloud's normal SDK.
 
 **Is it a GET request?** Sometimes. It's always two steps, an identity exchange then a read, and only some stores use a plain HTTP GET for the read:
 
@@ -4072,7 +4070,7 @@ provider.Mount(attributes, …)
 |---|---|---|---|
 | AWS | IRSA: STS `AssumeRoleWithWebIdentity` with the Pod's token (`stscreds.NewWebIdentityRoleProvider`). Pod Identity: plain HTTP to the node agent at `http://169.254.170.23/v1/credentials` **(code)** | Secrets Manager `DescribeSecret` then `GetSecretValue`; Parameter Store `GetParameters` **(code)** | HTTPS **POST** to `secretsmanager.<region>.amazonaws.com` with a JSON body and an `X-Amz-Target: secretsmanager.GetSecretValue` header, signed with SigV4. AWS's JSON APIs name the action in a header, not the URL **(docs)** |
 | Azure | Workload Identity: the Pod's token (audience `api://AzureADTokenExchange`) as a client assertion to Entra ID (`azidentity.ClientAssertionCredential`) **(code)**, an HTTPS POST to the tenant's token endpoint **(docs)** | `azsecrets` `GetSecret(name, version)`, or `GetKey` / `GetCertificate` **(code)** | HTTPS **GET** `https://<vault>.vault.azure.net/secrets/<name>/<version>?api-version=…` with `Authorization: Bearer <token>` **(docs)** |
-| GCP | Pod's token → `securetoken.googleapis.com/v1/identitybindingtoken`, then IAM Credentials `GenerateAccessToken` for a Google service account **(code)** | Secret Manager `AccessSecretVersion` **(code)** | **gRPC** over TLS to `secretmanager.googleapis.com:443`, not REST. It's the same kind of HTTP/2 + protobuf call as ③, but across the network **(code)** |
+| GCP | Pod's token → `securetoken.googleapis.com/v1/identitybindingtoken`, then IAM Credentials `GenerateAccessToken` for a Google service account **(code)** | Secret Manager `AccessSecretVersion` **(code)** | **gRPC** over TLS to `secretmanager.googleapis.com:443`, not REST. It's the same kind of HTTP/2 + protobuf call as (3), but across the network **(code)** |
 | Vault | HTTPS **POST** `/v1/auth/<mount>/login` with `{jwt, role}`; Vault checks the JWT with Kubernetes and returns a Vault token. If the mount request has no token, the provider creates one for the Pod's ServiceAccount itself (TokenRequest, 15 minutes) **(code)** | `RequestSecret` on the configured `secretPath` **(code)** | HTTPS **GET** `/v1/<secretPath>` with the Vault token by default. The SPC can set another `method` and a body (`secretArgs`), for example to POST to a dynamic-secrets endpoint **(code)** |
 
 So the read is a GET for Azure and Vault, a signed POST for AWS, and a gRPC call for GCP. Every one is authenticated **as the Pod**, not as the driver or the node. That's why the cloud's IAM policy, not Kubernetes RBAC, decides whether a Pod can read a secret.

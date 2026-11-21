@@ -8,22 +8,22 @@
  Internet
     │
     ▼
- ┌─ Shield (L3/L4) ── at every AWS point of ingress ──────────────────────────────────┐
+ ┌─ Shield (L3/L4) ── at every AWS point of ingress ───────────────────────────────────┐
  │  packet validation · ACLs + shapers · suspicion scoring · stateless SYN proxy       │  §1
  │  edge (CloudFront, Route 53): inline, every packet, always on                       │
  │  regional (ALB, EIP, NLB): per-minute detection against the resource's capacity     │
  └──────────────────────────────────────┬──────────────────────────────────────────────┘
                                         ▼
- ┌─ CloudFront POP ───────────────────────────────────────────────────────────────────┐
- │  TCP/QUIC + TLS terminated here; only well-formed HTTP passes                       │  §2
- │  ┌─ AWS WAF (web ACL, CLOUDFRONT scope) ─────────────────────────────────────────┐  │
- │  │  1. take the parts it may inspect (body ≤16–64 KB, headers ≤8 KB/200, …)      │  │  §4
- │  │  2. per rule: transform → match → action (terminating or not) → labels       │  │  §4–5
- │  │  3. rate counters, tokens (Challenge/CAPTCHA), managed intel (IP rep, DDoS)   │  │  §6–9
- │  │  4. no terminating match → default action                                     │  │
- │  └───────────────────────────────────────────────────────────────────────────────┘  │
- │  cache: POP → regional edge cache → Origin Shield; request collapsing               │  §2
- └──────────────────────────────────────┬──────────────────────────────────────────────┘
+ ┌─ CloudFront POP ─────────────────────────────────────────────────────────────────────┐
+ │  TCP/QUIC + TLS terminated here; only well-formed HTTP passes                        │  §2
+ │  ┌─ AWS WAF (web ACL, CLOUDFRONT scope) ─────────────────────────────────────────┐   │
+ │  │  1. take the parts it may inspect (body ≤16–64 KB, headers ≤8 KB/200, …)      │   │  §4
+ │  │  2. per rule: transform → match → action (terminating or not) → labels        │   │  §4–5
+ │  │  3. rate counters, tokens (Challenge/CAPTCHA), managed intel (IP rep, DDoS)   │   │  §6–9
+ │  │  4. no terminating match → default action                                     │   │
+ │  └───────────────────────────────────────────────────────────────────────────────┘   │
+ │  cache: POP → regional edge cache → Origin Shield; request collapsing                │  §2
+ └──────────────────────────────────────┬───────────────────────────────────────────────┘
                                         ▼ persistent connections, X-Forwarded-For appended
  ┌─ Region: ALB (+ optional regional WAF) ─► targets ─────────────────────────────────┐
  └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -367,7 +367,7 @@ The whitepaper recommends this for public ALBs and CLBs, so they keep scaling du
 
 ## Related notes
 
-- [aws-waf-placement.md](aws-waf-placement.md): where to put WAF (edge vs regional), with the patterns ①–⑨
+- [aws-waf-placement.md](aws-waf-placement.md): where to put WAF (edge vs regional), with the patterns (1)–(9)
 - [conntrack.md](conntrack.md): connection tracking and why its table runs out
 - [ingress-and-gateway-api.md](ingress-and-gateway-api.md): what happens after the ALB, inside the cluster
 

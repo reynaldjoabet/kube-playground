@@ -14,10 +14,10 @@ The CCM is the bridge between Kubernetes and your cloud provider's API (AWS, GCE
 └──────────────────────▲───────────────────────────────┘
                        │  REST calls (create LB, get instance info, etc.)
                        │
-              ┌────────┴────────┐
+              ┌────────┴─────────┐
               │  Cloud Controller│  ← implements cloudprovider.Interface
-              │  Manager (CCM)  │
-              └────────┬────────┘
+              │  Manager (CCM)   │
+              └────────┬─────────┘
                        │  watches Nodes, Services via SharedInformers
                        │  authenticates via kubeconfig / ServiceAccount
                        │

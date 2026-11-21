@@ -647,19 +647,19 @@ It watches Pods with no `spec.nodeName`, picks a node, and writes the choice bac
                       your kubectl, kubelets, CoreDNS, kube-proxy, controllers in Pods …
                                             │  HTTPS :8443, client cert or token
                                             ▼
- ┌──────────────────────────── control-plane node (hostNetwork: all on 192.168.49.2) ───────────────────────┐
- │                                                                                                           │
- │  kube-scheduler ──scheduler.conf──────────►┌──────────────────────┐                                       │
+ ┌──────────────────────────── control-plane node (hostNetwork: all on 192.168.49.2) ─────────────────────────┐
+ │                                                                                                            │
+ │  kube-scheduler ──scheduler.conf──────────►┌──────────────────────┐                                        │
  │   :10259 (127.0.0.1)                        │    kube-apiserver    │──client cert────► etcd                │
  │                                             │    :8443             │  apiserver-etcd-   :2379 clients      │
  │  kube-controller-manager ─controller-──────►│                      │  client.crt        :2380 peers        │
  │   :10257 (127.0.0.1)       manager.conf     │  signs SA tokens     │                    :2381 metrics      │
  │                                             │  with sa.key         │                    data: /var/lib/    │
  │                                             └──────────────────────┘                    minikube/etcd      │
- │                                                    │ apiserver-kubelet-client.crt                         │
- │                                                    ▼                                                      │
- │                                              kubelet :10250 (logs, exec, port-forward)                   │
- └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ │                                                    │ apiserver-kubelet-client.crt                          │
+ │                                                    ▼                                                       │
+ │                                              kubelet :10250 (logs, exec, port-forward)                     │
+ └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Only the API server talks to etcd.** The scheduler and controller-manager have no etcd flags at all. They reach the API server through their kubeconfig files and bind their own ports to `127.0.0.1`.
@@ -718,7 +718,7 @@ A static Pod has no `replicas` field. Each control-plane node has its own copy o
                  LOAD BALANCER  (the "controlPlaneEndpoint", e.g. k8s-api.example.com:6443)
                  ┌──────────────────┼──────────────────┐
                  ▼                  ▼                  ▼
- ┌─ cp-1 ───────────────┐ ┌─ cp-2 ───────────────┐ ┌─ cp-3 ───────────────┐
+ ┌─ cp-1 ────────────────┐ ┌─ cp-2 ────────────────┐ ┌─ cp-3 ────────────────┐
  │ /etc/kubernetes/      │ │ /etc/kubernetes/      │ │ /etc/kubernetes/      │
  │   manifests/          │ │   manifests/          │ │   manifests/          │
  │ kube-apiserver  ACTIVE│ │ kube-apiserver  ACTIVE│ │ kube-apiserver  ACTIVE│  ← all three serve requests

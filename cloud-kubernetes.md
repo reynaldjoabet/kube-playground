@@ -786,23 +786,24 @@ AKS is Microsoft's managed Kubernetes offering. The critical thing to understand
                                 |  https://mycluster-dns-abc123.hcp.eastus.azmk8s.io:443)
                                 |
                                 v
-+------------------------------------------------------------------+
-|  YOU MANAGE                                                      |
-|                                                                  |
-|  +-----------------------------+ +-----------------------------+ |
-|  | Node Pool 1 ("system")     | | Node Pool 2 ("gpu")         |  |
-|  | VM Size: Standard_D4s_v5   | | VM Size: Standard_NC6s_v3   |  |
-|  | Nodes: 3                   | | Nodes: 2                    |  |
-|  | OS: Ubuntu / Azure Linux   | | OS: Ubuntu                  |  |
-|  |                            | |                             |  |
-|  | +------+ +------+ +------+ | | +------+ +------+           |  |
-|  | |Node 1 | |Node 2 | |Node 3 | | Node 1| |Node 2 |          |  |
-|  | |kubelet| |kubelet| |kubelet| |kubelet| |kubelet|          |  |
-|  | +------+ +------+ +------+  | | +------+ +------+          |  |
-|  +-----------------------------+ +-----------------------------+ |
-|                                                                  |
-|  Your Pods, Services, Ingresses, RBAC, Secrets, etc.             |
-+------------------------------------------------------------------+
++---------------------------------------------------------------------+
+|  YOU MANAGE                                                         |
+|                                                                     |
+| +-------------------------------+ +-------------------------------+ |
+| | Node Pool 1 ("system")        | | Node Pool 2 ("gpu")           | |
+| | VM Size: Standard_D4s_v5      | | VM Size: Standard_NC6s_v3     | |
+| | Nodes: 3                      | | Nodes: 2                      | |
+| | OS: Ubuntu / Azure Linux      | | OS: Ubuntu                    | |
+| |                               | |                               | |
+| | +-------+ +-------+ +-------+ | | +-------+ +-------+           | |
+| | |Node 1 | |Node 2 | |Node 3 | | | |Node 1 | |Node 2 |           | |
+| | |kubelet| |kubelet| |kubelet| | | |kubelet| |kubelet|           | |
+| | +-------+ +-------+ +-------+ | | +-------+ +-------+           | |
+| |                               | |                               | |
+| +-------------------------------+ +-------------------------------+ |
+|                                                                     |
+|  Your Pods, Services, Ingresses, RBAC, Secrets, etc.                |
++---------------------------------------------------------------------+
 ```
 
 ### Creating an AKS Cluster
@@ -2502,10 +2503,10 @@ With prefix delegation, instead of getting 29 individual IPs per ENI, you get 29
 
 ```sh
 Layer 1: AWS EC2 Level (what's allocated to the ENI)
-┌──────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────┐
 │  /28 Prefix: 10.0.1.0/28  (16 IPs: 10.0.1.0-15)       │
-│  Allocated as a single unit from the EC2 API         │
-└──────────────────────────────────────────────────────┘
+│  Allocated as a single unit from the EC2 API          │
+└───────────────────────────────────────────────────────┘
 
 Layer 2: Datastore Level (what's given to pods)
 ┌──────────────────────────────────────────────────────┐
@@ -2740,11 +2741,11 @@ Ingress controller / Gateway solves this — one load balancer, many services:
                    ONE LB ($)
                        │
                        ▼
-              ┌─────────────────┐
+              ┌───────────────────┐
               │ Ingress Controller│
-              │   or Gateway    │
-              │   (nginx, envoy)│
-              └────┬────┬────┬──┘
+              │   or Gateway      │
+              │   (nginx, envoy)  │
+              └────┬────┬────┬────┘
                    │    │    │
    api.example.com/     │    pay.example.com/
         │               │              │
@@ -3015,14 +3016,14 @@ The same setup, but each team owns their piece:
 │ Created per entry point                         │
 └──────────┬──────────────────┬───────────────────┘
            │                  │
-┌──────────▼─────────┐ ┌─────▼──────────────┐
-│ Dev team A creates:│ │ Dev team B creates:│
-│ HTTPRoute          │ │ HTTPRoute          │
-│                    │ │                    │
-│ api.example.com    │ │ app.example.com    │
-│ /users → user-svc  │ │ / → frontend-svc   │
-│ /orders → order-svc│ │ /api → backend-svc │
-└─────────────────────┘└────────────────────┘
+┌──────────▼──────────┐ ┌─────▼───────────────┐
+│ Dev team A creates: │ │ Dev team B creates: │
+│ HTTPRoute           │ │ HTTPRoute           │
+│                     │ │                     │
+│ api.example.com     │ │ app.example.com     │
+│ /users → user-svc   │ │ / → frontend-svc    │
+│ /orders → order-svc │ │ /api → backend-svc  │
+└─────────────────────┘ └─────────────────────┘
 ```
 
 The actual YAML:
@@ -3164,18 +3165,18 @@ everything in Kubernetes that isn't kubelet or the container runtime runs as pod
 ### Control Plane Controllers — Static Pods
 ```sh
 Control plane node:
-┌──────────────────────────────────────────────┐
-│ kubelet (systemd process, NOT a pod)         │
-│   │                                          │
-│   ├── watches /etc/kubernetes/manifests/     │
-│   │                                          │
-│   ├── starts static pod: kube-apiserver      │
-│   ├── starts static pod: kube-scheduler      │
+┌──────────────────────────────────────────────────┐
+│ kubelet (systemd process, NOT a pod)             │
+│   │                                              │
+│   ├── watches /etc/kubernetes/manifests/         │
+│   │                                              │
+│   ├── starts static pod: kube-apiserver          │
+│   ├── starts static pod: kube-scheduler          │
 │   ├── starts static pod: kube-controller-manager │
-│   └── starts static pod: etcd                │
-│                                              │
-│ containerd (systemd process, NOT a pod)      │
-└──────────────────────────────────────────────┘
+│   └── starts static pod: etcd                    │
+│                                                  │
+│ containerd (systemd process, NOT a pod)          │
+└──────────────────────────────────────────────────┘
 ```
 Even the core control plane components are pods — static pods managed directly by kubelet, not by the API server.
 ```sh
@@ -3227,7 +3228,7 @@ Internet
 │                                  │
 │  api.example.com    → svc-api    │
 │  app.example.com    → svc-web    │
-│  app.example.com/v2 → svc-web-v2│
+│  app.example.com/v2 → svc-web-v2 │
 └──────────────────────────────────┘
          │           │          │
      svc-api     svc-web   svc-web-v2

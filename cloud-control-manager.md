@@ -13,27 +13,28 @@ LoadBalancer Service stays `<pending>` because minikube has no CCM.
 ## 1. Where it sits
 
 ```
-+------------------------- Kubernetes control plane -------------------------+
-|                                                                            |
-|  kube-apiserver  <-------- watch / update --------+                        |
-|     |                                             |                        |
-|     |                          +------------------+---------------------+  |
-|     |                          | hcloud-cloud-controller-manager (pod)  |  |
-|     |                          |                                        |  |
-|     |                          |  node controller           --+         |  |
-|     |                          |  node lifecycle controller   |  generic|  |
-|     |                          |  service controller          |  loops  |  |
-|     |                          |  route controller          --+  from   |  |
-|     |                          |        |            k8s.io/cloud-provider |
-|     |                          |        v                               |  |
-|     |                          |  Hetzner plug-in (hcloud/, internal/)  |  |
-|     |                          +--------+-------------------+-----------+  |
-+-----|-----------------------------------|-------------------|--------------+
-      |                                   |                   |
-      v                                   v                   v
-  kubelets on nodes             Hetzner Cloud API      Hetzner Robot API
-                                (servers, LBs,         (dedicated servers,
-                                 networks)              optional)
++--------------------------- Kubernetes control plane ---------------------------+
+|                                                                                |
+|  kube-apiserver  <-------- watch / update --------+                            |
+|    |                                              |                            |
+|    |                         +--------------------+-------------------------+  |
+|    |                         | hcloud-cloud-controller-manager (pod)        |  |
+|    |                         |                                              |  |
+|    |                         | node controller           --+  generic loops |  |
+|    |                         | node lifecycle controller   |  from          |  |
+|    |                         | service controller          |  k8s.io/       |  |
+|    |                         | route controller          --+  cloud-provider|  |
+|    |                         |       |                                      |  |
+|    |                         |       v                                      |  |
+|    |                         | Hetzner plug-in (hcloud/, internal/)         |  |
+|    |                         +--------+---------------------+---------------+  |
++----+----------------------------------+---------------------+------------------+
+     |                                  |                     |
+     |                                  |                     |
+     v                                  v                     v
+ kubelets on nodes                Hetzner Cloud API     Hetzner Robot API
+                                  (servers, LBs,        (dedicated servers,
+                                   networks)             optional)
 ```
 
 The control loops are not written by Hetzner. They come from the upstream
@@ -348,26 +349,29 @@ that repo; the provider code is in `do/`.
 ### 9.1 The pieces
 
 ```
-+--------------------------- Kubernetes control plane ----------------------------+
-|                                                                                 |
-|  kube-apiserver <----------- watch / update ------------+                       |
-|     ^                                                   |                       |
-|     | validate Service                +-----------------+-------------------+   |
-|     | create/update                   | digitalocean-cloud-controller-      |   |
-|     |                                 | manager (pod)                       |   |
-|  +--+--------------------------+      |                                     |   |
-|  | admission server (optional) |      |  node controller         --+ from   |   |
-|  |  /lb-service webhook        |      |  node lifecycle controller | k8s.io/|   |
-|  |  checks annotations, asks   |      |  service controller      --+ cloud- |   |
-|  |  DO API "would this work?"  |      |                              provider|   |
-|  +-------------+---------------+      |  ...........................         |   |
-|                |                      |  tags controller        --+ DO's own |   |
-|                |                      |  firewall controller    --+ (in      |   |
-|                |                      |                             Initialize)  |
-|                |                      +-----------------+-------------------+   |
-+----------------|----------------------------------------|-----------------------+
++------------------------------ Kubernetes control plane ----------------------------------+
+|                                                                                          |
+|  kube-apiserver <----------- watch / update ------------+                                |
+|     ^                                                   |                                |
+|     | validate Service                +-----------------+------------------------------+ |
+|     | create/update                   | digitalocean-cloud-controller-manager (pod)    | |
+|     |                                 |                                                | |
+|  +--+--------------------------+      | node controller          --+  from             | |
+|  | admission server (optional) |      | node lifecycle controller  |  k8s.io/          | |
+|  |  /lb-service webhook        |      | service controller       --+  cloud-provider   | |
+|  |  checks annotations, asks   |      |                                                | |
+|  |  DO API "would this work?"  |      | ...........................                    | |
+|  +-------------+---------------+      |                                                | |
+|                |                      | tags controller          --+  DO's own         | |
+|                |                      | firewall controller      --+  (in Initialize)  | |
+|                |                      |                                                | |
+|                |                      |                                                | |
+|                |                      |                                                | |
+|                |                      +-----------------+------------------------------+ |
+|                |                                        |                                |
++----------------+----------------------------------------+--------------------------------+
                  |                                        |
-                 v                                        v
+                 v                                        |
            DigitalOcean API  <----------------------------+
            (droplets, load balancers, firewalls, tags, regions)
 ```
@@ -734,17 +738,17 @@ Linode uses the upstream loops like the others, but it also runs more of its
 own controllers than any of them, all started from `Initialize()`:
 
 ```
-+------------------------- generic loops (k8s.io/cloud-provider) --------------+
-|  node controller, node lifecycle controller,                                  |
-|  service controller, route controller (if enabled)                            |
-+-------------------------------------------------------------------------------+
-|  Linode's own controllers, started in Initialize():                           |
-|                                                                               |
-|  node IPAM controller        assigns pod CIDRs to nodes   (--allocate-node-cidrs)
-|  node controller (extra)     labels/annotations from the Linode API          |
-|  service controller (extra)  deletes NodeBalancers on Service delete/type change
-|  token health checker        checks the API token keeps working              |
-+-------------------------------------------------------------------------------+
++------------------------- generic loops (k8s.io/cloud-provider) --------------------+
+|  node controller, node lifecycle controller,                                       |
+|  service controller, route controller (if enabled)                                 |
++------------------------------------------------------------------------------------+
+|  Linode's own controllers, started in Initialize():                                |
+|                                                                                    |
+|  node IPAM controller        assigns pod CIDRs to nodes   (--allocate-node-cidrs)  |
+|  node controller (extra)     labels/annotations from the Linode API                |
+|  service controller (extra)  deletes NodeBalancers on Service delete/type change   |
+|  token health checker        checks the API token keeps working                    |
++------------------------------------------------------------------------------------+
                                      |
                                      v
              Linode API: instances, NodeBalancers, VPCs, Cloud Firewalls
@@ -956,16 +960,16 @@ Scaleway has two kinds of server: **Instances** (VMs) and **Elastic Metal**
 
 ```
 +------------------------- generic loops (k8s.io/cloud-provider) -------------+
-|  node controller, node lifecycle controller, service controller            |
-|  (no route controller)                                                     |
-+----------------------------------------------------------------------------+
-|  Scaleway plug-in                                                          |
-|    servers  --+-- instances  (Instance API)                                |
-|               +-- baremetal  (Elastic Metal API)                           |
-|    zones, loadbalancers                                                    |
-|  sync controller (Initialize, unless DISABLE_TAGS_SYNC)                    |
-|    server tags -> node labels/taints,  LB tags -> Service labels           |
-+----------------------------------------------------------------------------+
+|  node controller, node lifecycle controller, service controller             |
+|  (no route controller)                                                      |
++-----------------------------------------------------------------------------+
+|  Scaleway plug-in                                                           |
+|    servers  --+-- instances  (Instance API)                                 |
+|               +-- baremetal  (Elastic Metal API)                            |
+|    zones, loadbalancers                                                     |
+|  sync controller (Initialize, unless DISABLE_TAGS_SYNC)                     |
+|    server tags -> node labels/taints,  LB tags -> Service labels            |
++-----------------------------------------------------------------------------+
                                      |
                                      v
      Scaleway APIs: Instance, Elastic Metal, Load Balancer, IPAM, Private Networks
@@ -1196,13 +1200,13 @@ What they all share is the part that comes from upstream:
 
 ```
           the same k8s.io/cloud-provider loops in every CCM
- +------------------------------------------------------------------+
- | node controller          -> InstanceMetadata  -> providerID, type,|
- |                                                  region, IPs, untaint
- | node lifecycle controller-> InstanceExists / InstanceShutdown    |
- | service controller       -> EnsureLoadBalancer / ...Deleted      |
- | route controller         -> CreateRoute / DeleteRoute (optional) |
- +------------------------------------------------------------------+
+ +------------------------------------------------------------------------+
+ | node controller          -> InstanceMetadata  -> providerID, type,     |
+ |                                                  region, IPs, untaint  |
+ | node lifecycle controller-> InstanceExists / InstanceShutdown          |
+ | service controller       -> EnsureLoadBalancer / ...Deleted            |
+ | route controller         -> CreateRoute / DeleteRoute (optional)       |
+ +------------------------------------------------------------------------+
                  |  each provider only answers these calls
                  v
      Hetzner API | DigitalOcean API | Linode API | Scaleway APIs
