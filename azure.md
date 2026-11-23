@@ -422,6 +422,8 @@ A Private Endpoint is specifically a network interface that connects privately t
 
 This is a fantastic feature, many organizations have been waiting for this for a long time. Now that say your Azure Storage account is accessible via a private IP address, what if you want to restrict traffic to it, so that not everybody in your organization has IP connectivity to it?
 
+[private-endpoints.md](private-endpoints.md) runs a private endpoint, its private DNS zone and approval on floci-az, side by side with AWS interface and gateway endpoints, with every request and response.
+
 ### Global load balancing
 
 Azure has a rich set of global load balancers that help you distribute your application across many regions: `Azure Front Door` for web apps, `Azure Traffic Manager` as a DNS-based global load balancer for any IP-based application, and the cross-region (Global tier) Standard Load Balancer, which doesn’t rely on DNS
@@ -544,6 +546,11 @@ When you scale out, Azure does not change the resources (CPU/RAM) per instance. 
 ---
 
 ## 4. Identity
+
+The flows between these objects (a user signing in through an app, an admin granting a role to a
+service principal, an app signing in as itself, managed identity, on-behalf-of, `DefaultAzureCredential`),
+run with the Java SDK against floci-az with every request shown, are in
+[azure-identity-flows.md](azure-identity-flows.md).
 
 ### Users, service principals and managed identities, in plain terms
 
@@ -1542,6 +1549,7 @@ All of these are part of Azure Monitor.
 
 ## Related notes
 
+- [azure-identity-flows.md](azure-identity-flows.md): who signs in, who grants what, and what Azure checks, with the Java SDK and the wire traffic
 - [workload-identity.md](workload-identity.md): the token files behind Azure Workload Identity, compared with AWS IRSA and EKS Pod Identity
 - [kubernetes-services.md](kubernetes-services.md): current kube-proxy chains (`KUBE-EXT`) and LoadBalancer Services, from the lab
 - [iptables.md](iptables.md) and [nftables.md](nftables.md): the Linux side of the NSG/UDR comparison
@@ -1563,6 +1571,7 @@ All of these are part of Azure Monitor.
 - cloudtrooper.net, A day in the life of a packet in AKS with Azure CNI: https://blog.cloudtrooper.net/2019/01/21/a-day-in-the-life-of-a-packet-in-azure-kubernetes-service-with-the-azure-cni/
 - [Private global load balancing in Azure with anycast, no BGP](https://blog.cloudtrooper.net/2026/04/20/private-global-load-balancing-in-azure-with-anycast-no-bgp/)
 - [Private Link reality bites: service endpoints vs Private Link](https://blog.cloudtrooper.net/2025/02/17/private-link-reality-bites-service-endpoints-vs-private-link/)
+- [private-endpoints.md](private-endpoints.md): private endpoints on AWS and Azure, run on local emulators
 - [Azure hub and spoke 2.0](https://blog.cloudtrooper.net/2022/11/29/azure-hub-and-spoke-2-0/)
 - [What language does the Azure Gateway Load Balancer speak?](https://blog.cloudtrooper.net/2021/11/11/what-language-does-the-azure-gateway-load-balancer-speak/)
 - [Computer Networks: A Systems Approach, Foundation](https://book.systemsapproach.org/foundation.html)
