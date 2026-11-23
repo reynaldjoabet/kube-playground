@@ -11,7 +11,7 @@ object Dependencies {
     val zioLogging = "2.5.3"
     val zioConfig  = "4.1.0"
     val zioSchema  = "1.9.0"
-    val zioKafka   = "4.0.0"
+    val zioKafka   = "4.2.0"
 
     // --- HTTP ---
     val http4s  = "0.23.38"
@@ -25,9 +25,9 @@ object Dependencies {
 
     // --- FP ---
     val catsEffect      = "3.7.1"
-    val fs2             = "3.14.0"
+    val fs2             = "3.16.0"
     val fs2Kafka        = "4.2.0"
-    val chimney         = "2.1.0"
+    val chimney         = "2.1.1"
     val iron            = "3.4.1"
     val uuidGenerator   = "5.2.0"
     val hedgehog        = "0.15.1"
@@ -40,7 +40,7 @@ object Dependencies {
     val magnum   = "2.0.0"
     val skunk    = "2.0.0-RC3"
     val hikaricp = "7.1.0"
-    val flyway   = "13.12.2"
+    val flyway   = "13.13.0"
     val postgres = "42.7.14"
 
     // --- Security ---
@@ -55,7 +55,7 @@ object Dependencies {
     // --- Logging ---
     val scribe  = "3.19.0"
     val slf4j   = "2.0.20"
-    val logback = "1.6.6"
+    val logback = "1.6.8"
 
     // --- Cache ---
     val caffeine = "3.3.1"
