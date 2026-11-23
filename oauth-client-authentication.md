@@ -397,6 +397,7 @@ Agent ── EKS Auth AssumeRoleForPodIdentity(clusterName, token)   ← SigV4-s
 
 ## Related notes
 
+- [oauth-grants-and-client-auth.md](oauth-grants-and-client-auth.md): every grant type with every one of these methods, tested against Keycloak, with the requests
 - [workload-identity.md](workload-identity.md): Azure Workload Identity, AWS IRSA and EKS Pod Identity, all built on signed ServiceAccount tokens
 - [keycloak-on-kubernetes.md](keycloak-on-kubernetes.md): Keycloak clients (§13) and ServiceAccount tokens as client assertions (§17)
 - [rbac-and-identity.md](rbac-and-identity.md): OIDC federation and ServiceAccounts
