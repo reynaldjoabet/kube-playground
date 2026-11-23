@@ -4,6 +4,7 @@ ServiceAccounts, RBAC, OIDC federation, IRSA, TLS certificates, secrets manageme
 
 See also: [`kubernetes.md`](kubernetes.md) (architecture overview) · [`kube-networking.md`](kube-networking.md) · [`cloud-kubernetes.md`](cloud-kubernetes.md)
 
+
 ## ServiceAccounts and RBAC
 - `ServiceAccounts`: Every Pod gets a default ServiceAccount, which provides an identity for processes running in the Pod. The `kubelet` automatically mounts a token for this ServiceAccount into the Pod, allowing it to authenticate to the API server.
 - `RBAC (Role-Based Access Control)`: Kubernetes uses RBAC to control who can do what within the cluster. You define `Roles` (namespaced) or `ClusterRoles` (cluster-wide) that specify permissions, and then bind those roles to users or ServiceAccounts with `RoleBindings` or `ClusterRoleBindings`. This way, you can ensure that a Pod only has the permissions it needs to function, following the principle of least privilege.
@@ -17,6 +18,198 @@ When you create a Pod, Kubernetes automatically mounts a token for the `default`
 
 When a Pod is created, it is usually assigned a ServiceAccount. If you don't specify one, it defaults to the `default` account in that namespace.
 On its own, a ServiceAccount has almost no permissions. You must use `Role-Based Access Control `(RBAC) to link a ServiceAccount to a `Role` or `ClusterRole` via a `RoleBinding` or `ClusterRoleBinding`.
+
+### A ServiceAccount is a Pod's identity: token, then RBAC (lab)
+
+A ServiceAccount gives a cryptographic identity to processes running inside a Pod. Human users are
+authenticated externally (OIDC, client certificates, …); Pods use ServiceAccounts to prove who they
+are to the Kubernetes API server and, through workload identity, to external systems
+([workload-identity.md](workload-identity.md)).
+
+- **Authenticating to the API server.** When a Pod starts, the kubelet uses the **TokenRequest
+  API** to get a JWT bound to that Pod's ServiceAccount, and mounts it at
+  `/var/run/secrets/kubernetes.io/serviceaccount/token` (with `ca.crt` and `namespace` next to it).
+  Operators, controllers and sidecars send it as `Authorization: Bearer <token>`.
+- **Authorization with RBAC (least privilege).** A ServiceAccount has no permissions on any
+  resource until you bind it to a `Role` or `ClusterRole` with a `RoleBinding` or
+  `ClusterRoleBinding`, so a workload can do exactly the API actions it needs (for example get and
+  watch ConfigMaps in its own namespace).
+
+Tested on the Calico lab cluster ([calico-layer3.md](calico-layer3.md)), k3s v1.34: ServiceAccount
+`app` in namespace `sa-demo`, Pod `tool` (curl) using it, ConfigMap `settings`.
+
+**The token, decoded** (payload of `/var/run/secrets/kubernetes.io/serviceaccount/token`):
+
+```text
+sub  system:serviceaccount:sa-demo:app                  ← the identity: system:serviceaccount:<ns>:<name>
+aud  https://kubernetes.default.svc.cluster.local, k3s  ← only meant for this API server
+kubernetes.io:
+  namespace: sa-demo
+  serviceaccount: app (uid 091d23c8-…)
+  pod:  tool       (uid 6f0672ca-…)                     ← bound to this Pod…
+  node: cal-server (uid ed112203-…)                     ← …and this node
+  warnafter: iat + 3607 s                               ← the lifetime the kubelet asked for
+iat 1795299255   exp 1826835255                         ← exp − iat = 31,536,000 s = 365 days
+```
+
+"Short-lived" needs a qualification. The Pod's volume asks for `expirationSeconds: 3607` (about an
+hour), and the kubelet rewrites the file before then. But by default the API server
+**extends the token's `exp` to one year** (`--service-account-extend-token-expiration`, on by
+default), so old clients that read the token once and never again keep working. Using it after
+`warnafter` (the real hour) makes the API server log a warning and count it in a metric, but the
+request is still accepted. **(the extension flag and warning: docs; the values: lab)**
+
+Because the token is bound to the Pod (`pod.uid`), the API server stops accepting it once that Pod
+is deleted, even within the year. **(docs)**
+
+**Who the API server thinks the token is** (`POST /apis/authentication.k8s.io/v1/selfsubjectreviews`
+from inside the Pod):
+
+```text
+username: system:serviceaccount:sa-demo:app
+groups:   system:serviceaccounts, system:serviceaccounts:sa-demo, system:authenticated
+extra:    credential-id JTI=28248962-…, pod-name tool, pod-uid 6f0672ca-…, node-name cal-server
+```
+
+**With no bindings at all:**
+
+```text
+GET /api/v1/namespaces/sa-demo/configmaps   →  403 configmaps is forbidden: User "system:serviceaccount:sa-demo:app" …
+
+$ kubectl auth can-i --list -n sa-demo --as=system:serviceaccount:sa-demo:app \
+    --as-group=system:serviceaccounts --as-group=system:serviceaccounts:sa-demo --as-group=system:authenticated
+selfsubjectreviews.authentication.k8s.io        [create]     ← "who am I"
+selfsubjectaccessreviews.authorization.k8s.io   [create]     ← "can I …?"
+selfsubjectrulesreviews.authorization.k8s.io    [create]     ← "what can I do?"
+/api, /api/*, /apis, /apis/*, /healthz, /livez, /readyz, /version, /.well-known/openid-configuration  [get]
+```
+
+So "zero permissions" is true for **resources**. The few things it can do come from built-in
+ClusterRoleBindings for the group every authenticated identity is in:
+
+```text
+NAME                        ROLE                        SUBJECTS
+system:basic-user           system:basic-user           system:authenticated
+system:discovery            system:discovery            system:authenticated
+system:public-info-viewer   system:public-info-viewer   system:authenticated, system:unauthenticated
+```
+
+**Least privilege: get and watch ConfigMaps in its own namespace:**
+
+```bash
+kubectl create role configmap-reader -n sa-demo --verb=get,watch --resource=configmaps
+kubectl create rolebinding app-reads-configmaps -n sa-demo --role=configmap-reader --serviceaccount=sa-demo:app
+```
+
+| Call from the Pod (Bearer token) | Result |
+|---|---|
+| `GET …/namespaces/sa-demo/configmaps/settings` | **200** |
+| `GET …/namespaces/sa-demo/configmaps?watch=true` | **200**, `{"type":"ADDED",…}` events |
+| `GET …/namespaces/sa-demo/configmaps` (list) | **403**: `list` wasn't granted |
+| `DELETE …/namespaces/sa-demo/configmaps/settings` | **403** |
+| `GET …/namespaces/kube-system/configmaps/coredns` | **403**: a RoleBinding only covers its own namespace |
+| `GET …/namespaces/sa-demo/secrets` | **403** |
+
+The `list` row matters in practice: anything built on client-go informers (operators, controllers)
+does a **list** first and then a **watch**, so it needs `get`, `list` and `watch` together.
+
+**A ClusterRole bound with a RoleBinding stays namespace-scoped.** Binding the built-in `view`
+ClusterRole with a RoleBinding in `sa-demo`:
+
+| Call | Result |
+|---|---|
+| `GET …/namespaces/sa-demo/pods` | **200** |
+| `GET …/namespaces/kube-system/pods` | **403** |
+
+A ClusterRole is only a reusable set of rules. Where the rules apply depends on the binding: a
+RoleBinding applies them to one namespace, a ClusterRoleBinding to the whole cluster.
+
+### Beyond the API server: cloud identity and private images (lab)
+
+- **Cloud workload identity (OIDC federation).** Kubernetes acts as an OIDC issuer for
+  ServiceAccount tokens, so cloud providers (AWS IRSA, Azure Workload Identity, GCP Workload
+  Identity Federation) can validate a Pod's projected JWT and exchange it for temporary cloud IAM
+  credentials. No static API keys or connection strings are stored in the cluster.
+- **Pulling private images.** `imagePullSecrets` attached to a ServiceAccount are added to every
+  Pod that uses it, so the registry secret isn't repeated in every Deployment.
+
+Both need qualifying; details below. Tested on the Calico lab cluster, namespace `fed-demo`,
+ServiceAccount `app`.
+
+**1. The cluster is an OIDC issuer.** It publishes the two documents any OIDC verifier needs:
+
+```text
+$ kubectl get --raw /.well-known/openid-configuration
+{"issuer":"https://kubernetes.default.svc.cluster.local",
+ "jwks_uri":"https://172.21.0.2:6443/openid/v1/jwks",
+ "id_token_signing_alg_values_supported":["RS256"], …}
+
+$ kubectl get --raw /openid/v1/jwks
+{"keys":[{"use":"sig","kty":"RSA","kid":"5q7RSqr-V4vvoweOD0_qATLMWQ8upW61QL-ZiXDdwRc","alg":"RS256","n":"pPhOl6lY…"}]}
+```
+
+A cloud verifies a token by reading `iss` from it, fetching `<iss>/.well-known/openid-configuration`,
+then the JWKS, and checking the signature with the key whose `kid` matches the token header.
+
+**2. The cloud doesn't accept the default token. It needs one with its own audience.** The token
+in `/var/run/secrets/kubernetes.io/serviceaccount/token` has the API server as its audience. A
+cloud's token service only accepts tokens addressed to it, so the Pod gets a second projected
+token. Minted here by hand with the same TokenRequest API the kubelet uses:
+
+```text
+$ kubectl create token app -n fed-demo --audience=sts.amazonaws.com --duration=1h
+header   {"alg":"RS256","kid":"5q7RSqr-V4vvoweOD0_qATLMWQ8upW61QL-ZiXDdwRc"}   ← same kid as the JWKS key
+payload  {"aud":["sts.amazonaws.com"],                                        ← the cloud's audience
+          "iss":"https://kubernetes.default.svc.cluster.local",
+          "sub":"system:serviceaccount:fed-demo:app",                         ← what the cloud's trust policy matches
+          "iat":1795299426, "exp":1795303026, …}                              ← exactly 1 hour: no 1-year extension here
+```
+
+In a real cluster a webhook or the platform adds that second token to the Pod (the audiences are
+`sts.amazonaws.com` for IRSA and `api://AzureADTokenExchange` for Azure), with its own path and
+environment variables for the cloud SDK. See [workload-identity.md](workload-identity.md) §2 (Azure),
+§3 (IRSA) and §6 (audiences).
+
+**3. The issuer must be reachable by the cloud.** This lab's issuer,
+`https://kubernetes.default.svc.cluster.local`, with its keys on a private IP, can't be fetched from
+outside. The API server serves these documents only to `system:serviceaccounts`
+(`ClusterRoleBinding system:service-account-issuer-discovery`), not anonymously. For federation,
+the issuer has to be a **public HTTPS URL** **(docs)**:
+
+- **EKS:** each cluster has a public issuer, `https://oidc.eks.<region>.amazonaws.com/id/<id>`,
+  registered in IAM as an OIDC identity provider.
+- **AKS:** `--enable-oidc-issuer` gives a public issuer URL.
+- **Self-managed clusters:** start the API server with `--service-account-issuer=<public URL>`
+  and publish the discovery document and JWKS there yourself (for example a bucket or static site).
+
+GCP has two variants **(docs)**. **GKE Workload Identity Federation** uses a metadata server on
+each node, which the Pod's SDK calls instead of the VM's own. **Workload Identity Federation for
+other clusters** works like the above: GCP's STS exchanges the cluster's OIDC token. AWS also has
+**EKS Pod Identity**, which doesn't use OIDC federation at all
+([workload-identity.md](workload-identity.md) §4).
+
+**4. `imagePullSecrets` on the ServiceAccount, tested.**
+
+```bash
+kubectl create secret docker-registry regcred -n fed-demo --docker-server=registry.example.com \
+  --docker-username=bot --docker-password=…
+kubectl patch sa app -n fed-demo -p '{"imagePullSecrets":[{"name":"regcred"}]}'
+```
+
+What ended up in each Pod's spec after the ServiceAccount admission plugin ran:
+
+| Pod | `serviceAccountName` | Pod's own `imagePullSecrets` | After admission |
+|---|---|---|---|
+| uses-sa | app | none | `[{"name":"regcred"}]`: copied from the ServiceAccount |
+| own-secret | app | `[{"name":"other"}]` | `[{"name":"other"}]`: **kept as is, not merged** |
+| default-sa | default | none | none |
+
+- The secret is copied **into the Pod spec when the Pod is created**. Changing the ServiceAccount
+  later doesn't affect existing Pods.
+- **A Pod that lists any `imagePullSecrets` of its own gets none from the ServiceAccount.**
+- A Pod with an image from `registry.example.com` and ServiceAccount `app` got
+  `imagePullSecrets: regcred` and the kubelet tried to pull with it (`ImagePullBackOff` here only
+  because the registry doesn't exist).
 
 ## Defining a ServiceAccount
 ```yaml
