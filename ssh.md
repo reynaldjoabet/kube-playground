@@ -263,7 +263,7 @@ Client                              Server
   │──── ACK (ack=301) ───────────────► │  "I acknowledge your 300.
   │                                    │   Connection established."
   │                                    │
-  │════ DATA flows both ways ═════════  │
+  │════ DATA flows both ways ══════════│
   ```
   TCP delivers bytes in order and reliably. Sequence numbers track which bytes have been sent and received:
 ```sh

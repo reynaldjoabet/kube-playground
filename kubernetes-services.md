@@ -5888,7 +5888,7 @@ net->nf.hooks_ipv4[0]   (NF_INET_PRE_ROUTING)
   │ orig_ops[3] ─► &mangle->ops[0]         copy made by ipt_register_table                          │
   │ orig_ops[4] ─► &nat_hook_ops[0]        the NAT core's copy (nf_nat_proto.c)                     │
   │ rcu_head                                                                                        │
-  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+  └┬────────────────────────────────────────────────────────────────────────────────────────────────┘
    │ hooks[4].priv = lpriv
    ▼
   ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ───────────────────────────────────────┐
@@ -5912,7 +5912,7 @@ net->nf.hooks_ipv4[4]   (NF_INET_POST_ROUTING)
   │ orig_ops[1] ─► &nat_hook_ops[1]        the NAT core's POSTROUTING op                            │
   │ orig_ops[2] ─► &ipv4_conntrack_ops[2]  static, nf_conntrack_proto.c                             │
   │ rcu_head                                                                                        │
-  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+  └┬────────────────────────────────────────────────────────────────────────────────────────────────┘
    │ hooks[1].priv = lpriv
    ▼
   ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ───────────────────────────────────────┐
