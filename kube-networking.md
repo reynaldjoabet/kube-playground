@@ -7,6 +7,119 @@ See also: [`kubernetes.md`](kubernetes.md) (architecture overview) · [`rbac-and
 ### Pod-to-Pod Networking (The CNI's Job)
 When you create a Pod, it needs a real IP address and network routes so it can talk to other Pods.
 
+#### The bridge model: flannel and the CNI bridge plugin (lab)
+
+In the traditional bridge model, used by flannel and the standard CNI `bridge` plugin, every Pod
+gets its own network namespace (Pod netns) with an `eth0` interface. That interface is one half of
+a virtual Ethernet (veth) pair. The other half sits in the node's root network namespace and plugs
+into a shared virtual Layer 2 bridge, usually named `cni0` (or `cbr0`).
+
+The node-side halves aren't numbered `veth0`, `veth1`, …: the bridge plugin names each one `veth`
+plus 8 random hex characters (`veth04fe3346`), so the names say nothing about which Pod they belong
+to. §"Matching a Pod to its veth" below shows how to pair them.
+
+Seen on the k3s lab node `np-server` (the three-node cluster from
+[network-policy.md](network-policy.md) §6), with two Pods from namespace `lab3`:
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│ node np-server: root network namespace                               │
+│                                                                      │
+│   ┌──────────────────────────┐      ┌──────────────────────────┐     │
+│   │ Pod lab3/a: own netns    │      │ Pod lab3/d: own netns    │     │
+│   │ eth0  10.42.0.46/24      │      │ eth0  10.42.0.47/24      │     │
+│   └────────────┬─────────────┘      └────────────┬─────────────┘     │
+│                │                                 │                   │
+│                │ veth pair                       │ veth pair         │
+│                │                                 │                   │
+│                │ veth04fe3346                    │ veth105cb0fa      │
+│                │                                 │                   │
+│   ┌────────────┴─────────────────────────────────┴─────────────┐     │
+│   │ cni0: Linux bridge (Layer 2), 10.42.0.1/24                 │     │
+│   │ also the Pods' default gateway                             │     │
+│   └─────┬──────────────────────────────────────────────────────┘     │
+│         │ the node routes the rest (Layer 3)                         │
+│         │                                                            │
+│   eth0 172.19.0.2 (node NIC)    flannel.1 (VXLAN to other nodes)     │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**The bridge and what's plugged into it** (on the node):
+
+```text
+$ ip -4 addr show cni0
+    inet 10.42.0.1/24 brd 10.42.0.255 scope global cni0      ← the bridge has the gateway address
+
+$ ip -o link show master cni0                                 ← every interface attached to the bridge
+14: veth97a918df@if11: … master cni0 …
+15: veth2c655466@if11: … master cni0 …
+…                                                             16 veths: one per Pod on this node
+27: veth04fe3346@if11: … master cni0 state UP … link-netns cni-1c282a25-…
+    bridge_slave state forwarding                             ← a port of the bridge, forwarding
+```
+
+**Inside Pod `lab3/a`** (`kubectl exec … ip …`):
+
+```text
+11: eth0@if27: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1450     ← "@if27": my peer is ifindex 27 in another namespace
+    inet 10.42.0.46/24 brd 10.42.0.255 scope global eth0
+
+default via 10.42.0.1 dev eth0                                ← cni0 is the default gateway
+10.42.0.0/24 dev eth0 scope link  src 10.42.0.46              ← same-node Pods: reached directly on the bridge
+10.42.0.0/16 via 10.42.0.1 dev eth0                           ← Pods on other nodes: via the gateway
+```
+
+**Matching a Pod to its veth.** The Pod's `eth0@if27` names the peer's interface index. On the
+node, interface 27 is `veth04fe3346`, and its `@if11` points back at the Pod's `eth0` (index 11 in
+the Pod's namespace, `link-netns cni-1c282a25-…`). Every Pod's `eth0` here is index 11 in its own
+namespace, which is why all the veths on the node show `@if11`. To find a Pod's veth:
+
+```bash
+IDX=$(kubectl exec -n lab3 a -- cat /sys/class/net/eth0/iflink)   # 27
+ip -o link | grep "^$IDX:"                                          # on the node: veth04fe3346
+```
+
+**Where the names `cni0` and `cbr0` come from.** k3s's CNI config
+(`/var/lib/rancher/k3s/agent/etc/cni/net.d/10-flannel.conflist`) names the *network* `cbr0`, while
+the bridge *device* is `cni0`, the `bridge` plugin's default name:
+
+```text
+{
+  "name": "cbr0",                     ← the CNI network name (IP leases live in /var/lib/cni/networks/cbr0/)
+  "plugins": [
+    { "type": "flannel",
+      "delegate": { "hairpinMode": true, "forceAddress": true, "isDefaultGateway": true } },
+    { "type": "portmap", … }, { "type": "bandwidth", … }
+  ]
+}
+```
+
+The `flannel` CNI plugin doesn't create interfaces itself. It reads this node's subnet from
+`/run/flannel/subnet.env` (`FLANNEL_SUBNET=10.42.0.1/24`, `FLANNEL_MTU=1450`) and **delegates** to
+the `bridge` plugin. That plugin creates `cni0`, makes the veth pair, moves one end into the Pod as
+`eth0`, attaches the other end to `cni0`, and (`isDefaultGateway`) gives the bridge `.1` and the Pod
+its default route. The MTU is 1450, not 1500, because VXLAN adds 50 bytes of headers.
+A bridge device actually named `cbr0` was kubenet's, the older built-in network plugin. **(docs)**
+
+**How traffic moves in this model:**
+
+- **Pod → Pod on the same node:** `eth0` → veth → `cni0` switches the frame (Layer 2) to the other
+  Pod's veth. No routing. With `br_netfilter` loaded, those bridged frames still pass iptables'
+  FORWARD hook, which is why NetworkPolicy rules match them (`-m physdev --physdev-is-bridged`,
+  [network-policy.md](network-policy.md) §5).
+- **Pod → Pod on another node:** the Pod sends to its gateway `10.42.0.1`. The node routes it
+  (`10.42.1.0/24 via 10.42.1.0 dev flannel.1`), and flannel's VXLAN device wraps it for the other
+  node ([network-policy.md](network-policy.md) §0).
+- **Node → its own Pods:** one route covers all of them, `10.42.0.0/24 dev cni0`, not one route per
+  Pod.
+
+**The other common design: routed, no bridge.** CNIs such as Calico (and Cilium in some modes)
+skip the bridge. Each Pod's veth stays a separate interface on the node (`cali…`), and the node
+has one `/32` route per Pod pointing at its veth, like the `10.0.0.5 dev vethXXX scope link`
+example further down this note. Same-node Pod traffic is then routed (Layer 3), not switched.
+**(docs; this lab runs only flannel)**
+
 ### Service Load Balancing (kube-proxy's Job)
 Pods are ephemeral. If a Pod dies and comes back, its IP address changes. To solve this, you create a `Service`, which provides a stable, virtual IP (ClusterIP).
 

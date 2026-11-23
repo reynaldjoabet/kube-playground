@@ -718,3 +718,78 @@ page; the lab's BusyBox `ping` only showed the loss, not the ICMP message):
 - `prohibit`: an ICMP "administratively prohibited" error is sent back;
 - `unreachable`: an ICMP "network unreachable" error is sent back;
 - `blackhole`: the packet is dropped silently.
+
+## Link-local addresses (169.254.0.0/16) in clouds and clusters
+
+RFC 3927 §7: "A router MUST NOT forward a packet with an IPv4 Link-Local source or destination
+address." Its intended use is hosts giving themselves an address when DHCP fails (Windows APIPA).
+The first and last 256 addresses (`169.254.0.x`, `169.254.255.x`) are reserved and "MUST NOT be
+selected by a host" (§2.1).
+
+Clouds and network tools use the range because it never leaves the local link, binding metadata,
+DNS, time and credential services to fixed addresses inside it. Who answers differs, though:
+
+- **A process on the node itself** (Pod Identity agent, NodeLocal DNSCache): the address is
+  configured on the node, so the node's kernel delivers the packet locally.
+- **The cloud platform, outside the VM** (EC2 IMDS, Route 53 Resolver, Time Sync): the VM sends the
+  packet out of its network interface, and the hypervisor or virtual network answers it.
+- **Nobody** (`169.254.1.1` as a Pod gateway): the address is only a next hop to satisfy the
+  routing rules ("The next hop must be directly reachable" above), answered by proxy ARP.
+
+Seen on a node of the Calico lab ([calico-layer3.md](calico-layer3.md)): with `169.254.170.23`
+configured on it, `ip route get 169.254.170.23` gives `local … dev lo`, while
+`ip route get 169.254.169.254` gives `via 172.21.0.1 dev eth0`. A Pod's request to the first stayed
+on the node; a SYN to the second left through `eth0`
+([workload-identity.md](workload-identity.md) §4, "Does the request leave the node?").
+
+| Address | Service | Who answers | Source |
+|---|---|---|---|
+| `169.254.169.254` | Instance metadata service: AWS EC2 IMDS, Azure IMDS, GCP metadata server, Oracle OCI, DigitalOcean | the platform | docs (Azure, GCP, OCI, DigitalOcean pages; AWS: see `fd00:ec2::254` row) |
+| `169.254.169.254` | the same, on OpenStack and Hetzner Cloud | the platform | not verified |
+| `169.254.169.253` | Amazon Route 53 Resolver (VPC DNS) | the platform | docs |
+| `169.254.169.123` | Amazon Time Sync Service (NTP) | the platform | docs |
+| `169.254.169.250` | AWS Windows KMS license activation (`slmgr.vbs /skms 169.254.169.250:1688`) | the platform | docs; a second address `.251` not found in AWS docs |
+| `169.254.169.252:988` | GKE metadata server (`gke-metadata-server` in `kube-system`) for Workload Identity Federation; NetworkPolicies must allow egress to it | a Pod on the node | docs |
+| `169.254.170.2` | AWS ECS task metadata and IAM credentials (`AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`) | the ECS agent | docs; in the AWS SDKs' allowed-host lists (code) |
+| `169.254.170.23` | AWS EKS Pod Identity Agent (`eks-pod-identity-agent`, host network) | a process on the node | docs; SDK code and lab |
+| `169.254.1.1` | Pod default gateway in Calico and the AWS VPC CNI | nobody: proxy ARP | lab (Calico); code (VPC CNI) |
+| `169.254.20.10` | NodeLocal DNSCache: the address commonly used in its manifests | a process on the node | the Kubernetes docs only say to pick a link-local address; the specific value is not verified |
+| `169.254.42.42` | Scaleway instance metadata | the platform | not verified (docs page refused access) |
+| `169.254.x.x/30` | BGP peering addresses inside AWS Site-to-Site VPN tunnels | the two tunnel ends | not verified |
+
+Fargate, CodeBuild and App Runner are also said to use `169.254.170.2`; the CodeBuild environment
+variable page doesn't mention it, and the others weren't checked. **(not verified)**
+
+**IPv6 equivalents** (AWS uses the unique-local `fd00:ec2::/32`, not link-local `fe80::/10`):
+
+| Address | Service | Source |
+|---|---|---|
+| `fd00:ec2::254` | EC2 IMDS | docs |
+| `fd00:ec2::253` | Route 53 Resolver | docs |
+| `fd00:ec2::123` | Time Sync (Nitro instances only) | docs |
+| `fd00:ec2::23` | EKS Pod Identity Agent | SDK code and lab |
+| `fd20:ce::254` | GCP metadata server, IPv6-only instances | docs |
+
+**Look-alikes outside 169.254.0.0/16:**
+
+- **Azure `168.63.129.16`**, "a virtual public IP address that facilitates communication channels
+  to Azure platform resources": the WireServer (VM agent, health probes, Azure DNS). It isn't
+  link-local, so firewall rules have to allow it explicitly.
+- **Alibaba Cloud `100.100.100.200`**, the ECS metadata service. Alibaba's docs call it "a
+  link-local address reachable only from within an ECS instance", but it isn't in
+  `169.254.0.0/16`. It's in `100.64.0.0/10`, the carrier-grade NAT range.
+
+Sources: RFC 3927 (https://www.rfc-editor.org/rfc/rfc3927); AWS VPC DNS
+(https://docs.aws.amazon.com/vpc/latest/userguide/AmazonDNS-concepts.html); AWS Time Sync
+(https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configure-ec2-ntp.html); AWS Windows KMS
+(https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/common-messages.html); EC2 IMDS
+(https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html); ECS task
+roles (https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html); GKE
+Workload Identity (https://docs.cloud.google.com/kubernetes-engine/docs/concepts/workload-identity);
+GCP metadata (https://docs.cloud.google.com/compute/docs/metadata/querying-metadata); Azure IMDS
+(https://learn.microsoft.com/azure/virtual-machines/instance-metadata-service); Azure 168.63.129.16
+(https://learn.microsoft.com/azure/virtual-network/what-is-ip-address-168-63-129-16); OCI
+(https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/gettingmetadata.htm); DigitalOcean
+(https://docs.digitalocean.com/products/droplets/how-to/retrieve-droplet-metadata/); Alibaba
+(https://www.alibabacloud.com/help/en/ecs/user-guide/view-instance-metadata); NodeLocal DNSCache
+(https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/).
