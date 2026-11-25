@@ -1370,6 +1370,63 @@ A managed identity can have at most 20 federated credentials, so it can trust at
 - **Proxy settings must be complete.** With `enableAzureProxy()` and no proxy variables, it uses the direct flow. With partial proxy variables, it fails rather than falling back.
 - **Bindings don't grant access.** A binding only allows getting a token. The managed identity still needs Azure role assignments for the resources.
 
+#### The webhook side of identity bindings (code)
+
+The webhook code for this is the "custom token endpoint". It is in v1.6.1 and unchanged at commit
+`6bc8918` (v1.6.3), in `pkg/webhook/webhook.go`, `pkg/config/config.go` and `cmd/webhook/main.go`.
+It's off unless the webhook is started with both flags:
+
+```text
+--custom-token-endpoint-annotation-suffix=<suffix>   Pod annotation becomes azure.workload.identity/use-<suffix>
+--custom-token-endpoint-audience=<audience>          audience of the Pod's token; must not be api://AzureADTokenExchange
+```
+
+Setting only one of the two, or reusing the default audience, stops the webhook at startup. The SDK
+README's annotation `azure.workload.identity/use-identity-binding` matches a suffix of
+`identity-binding`. That's an inference: AKS's own flag values weren't seen.
+
+For a Pod that has the label **and** that annotation set to `true` (any case):
+
+- **A different token.** The projected token's audience is the custom audience instead of
+  `api://AzureADTokenExchange`. It's still at the same path, `token/azure-identity-token`.
+- **A CA in the same volume.** The proxy's CA is added to the projected volume at `ca-cert/ca.crt`.
+  It comes from exactly one source, configured on the webhook (setting more than one is a startup
+  error):
+  - `AZURE_KUBERNETES_CA_DATA`: inline PEM, passed to the Pod as an environment variable;
+  - `AZURE_KUBERNETES_CA_CONFIGMAP_NAME`: a ConfigMap's `ca.crt` key, projected into the volume;
+  - `AZURE_KUBERNETES_CA_CTB_SIGNER_NAME` (plus an optional `…_CTB_LABEL_SELECTOR`): a
+    `ClusterTrustBundle` projection.
+- **Four more environment variables**, `AZURE_KUBERNETES_TOKEN_PROXY`, `…_SNI_NAME`, `…_CA_FILE`,
+  `…_CA_DATA`, each added only if its value is non-empty. `…_CA_FILE` is always the path
+  `<mount>/ca-cert/ca.crt`, so it's always added. With `AZURE_KUBERNETES_CA_DATA` configured, the
+  Pod gets both `…_CA_FILE` (pointing at a file the volume doesn't contain) and `…_CA_DATA`. The
+  azure-identity README above says to set only one of them. Not tested.
+
+#### Other webhook options the lab didn't use (code)
+
+From the same files, v1.6.1 to v1.6.3:
+
+| Where | Annotation | Effect |
+|---|---|---|
+| ServiceAccount | `azure.workload.identity/tenant-id` | `AZURE_TENANT_ID`; without it, the webhook's own `AZURE_TENANT_ID` (the cluster's tenant) |
+| Pod, then ServiceAccount | `azure.workload.identity/service-account-token-expiration` | the token's `expirationSeconds`. The Pod's annotation wins over the ServiceAccount's; default 3600 |
+| Pod | `azure.workload.identity/skip-containers` | containers (separated by `;`) that get no env vars and no mount |
+| Pod | `azure.workload.identity/inject-proxy-sidecar` | add the IMDS proxy (init container plus sidecar); only its presence is checked; refused for `hostNetwork` Pods ([azure.md](azure.md), "Migrating from aad-pod-identity") |
+| Pod | `azure.workload.identity/proxy-sidecar-port` | the proxy's port, default 8000 |
+
+- **Bad values refuse the Pod.** An expiration outside 3600 to 86400 seconds, or not a number,
+  makes the webhook return an error, so the Pod isn't created. That's stricter than the IRSA
+  webhook, which ignores a non-numeric value and has a minimum of 600 and no maximum
+  ([irsa-walkthrough.md](irsa-walkthrough.md) §4.3).
+- **Existing values are kept.** An environment variable the container already sets is left alone,
+  and one whose value would be empty is not added. A ServiceAccount without `client-id` still gets
+  the volume and the other variables, but no `AZURE_CLIENT_ID`.
+- **v1.6.3 stops dropping unknown Pod fields.** In v1.6.1 the webhook re-serialised the whole Pod
+  from its compiled `corev1.Pod` type and returned the difference from the original. If the API
+  server knew Pod fields that the webhook's Kubernetes library didn't, that difference removed
+  them. v1.6.3 builds a strategic merge patch of only its own changes and applies that to the raw
+  Pod, so unknown fields survive (`mutatedPodResponse`).
+
 ---
 
 ## 3. AWS, IRSA: `/var/run/secrets/eks.amazonaws.com/serviceaccount/token`
@@ -1900,6 +1957,46 @@ The IAM role's trust policy no longer names a cluster. It trusts the EKS service
 }
 ```
 
+### What `AWS_CONTAINER_CREDENTIALS_FULL_URI` is for
+
+It tells the SDK where to fetch credentials instead of calling STS: the Pod Identity agent, on the
+link-local address `169.254.170.23` of every node. What the SDK does with it (code and lab, "The SDK
+side" below):
+
+```http
+GET /v1/credentials HTTP/1.1
+Host: 169.254.170.23
+Authorization: eyJhbGciOiJSUzI1NiIsImtpZCI6IjVxN1JT…    ← the token file, as is, no "Bearer"
+```
+
+The token comes from the second variable the webhook sets, `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`,
+which points to the projected ServiceAccount token (audience `pods.eks.amazonaws.com`). The SDK
+reads the file again on every refresh. The agent answers with temporary credentials:
+
+```json
+{ "AccessKeyId": "ASIA…", "SecretAccessKey": "…", "Token": "…", "AccountId": "…", "Expiration": "…" }
+```
+
+Those are the same three values STS returns for IRSA. The SDK signs requests with them and fetches
+new ones before `Expiration`.
+
+Behind the agent:
+
+```text
+Pod
+ │ GET http://169.254.170.23/v1/credentials
+ │ Authorization: <SA token>
+ ▼
+eks-pod-identity-agent (host network, same node)
+ │ AssumeRoleForPodIdentity(cluster, token)
+ ▼
+EKS Auth API: checks the token and the association (namespace, SA) → role,
+              returns credentials with session tags
+```
+
+The Pod never talks to STS or EKS itself, and never learns which role it has until the credentials
+arrive. The mapping to a role lives in EKS.
+
 ### The SDK side: Java and Python (code + lab)
 
 In the AWS SDK for Java v2 (2.59.7), Pod Identity is handled by `ContainerCredentialsProvider`,
@@ -2138,7 +2235,7 @@ The Secrets Store CSI AWS provider supports both methods. Its chart requests tok
 
 | | Kubernetes default | Azure Workload Identity | AWS IRSA | AWS Pod Identity |
 |---|---|---|---|---|
-| Path under `/var/run/secrets/` | `kubernetes.io/serviceaccount/token` | `azure/tokens/azure-identity-token` | `eks.amazonaws.com/serviceaccount/token` | `pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token` |
+| Path under `/var/run/secrets/` | `kubernetes.io/serviceaccount/token` | `azure/wi/<hash of pod name>/token/azure-identity-token` (v1.6+; `azure/tokens/azure-identity-token` up to v1.5) | `eks.amazonaws.com/serviceaccount/token` | `pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token` |
 | Added by | ServiceAccount admission plugin | Azure Workload Identity webhook | EKS webhook | EKS webhook |
 | Opt-in | automatic, opt out with `automountServiceAccountToken: false` | Pod label `azure.workload.identity/use: "true"` + SA annotation `client-id` | SA annotation `eks.amazonaws.com/role-arn` | Pod Identity association in the EKS API |
 | Audience (`aud`) | the API server | `api://AzureADTokenExchange` | `sts.amazonaws.com` | `pods.eks.amazonaws.com` |
@@ -2150,6 +2247,171 @@ The Secrets Store CSI AWS provider supports both methods. Its chart requests tok
 
 Because the audiences differ, each service rejects a token meant for another. A leaked Azure or AWS token can't be used against the Kubernetes API, and the default token can't be traded for cloud credentials.
 
+### Azure Workload Identity next to IRSA, end to end
+
+IRSA works the same way: the Pod's ServiceAccount token is exchanged for a cloud credential, and the
+cloud trusts the cluster's OIDC issuer for one subject. EKS also has a second method, Pod Identity
+(§4), which Azure has no equivalent for. The real differences are in where the trust is written
+down and in what the exchange returns.
+
+**1. Who may become the identity.** On Azure, a federated credential on the identity. On AWS, a
+trust policy on the role. On AWS you also register the cluster's issuer in the account once.
+
+```text
+Azure: user-assigned identity orders-mi
+  federatedIdentityCredential:
+    issuer   = https://eastus.oic.prod-aks.azure.com/<tenant>/<guid>/
+    subject  = system:serviceaccount:orders:orders-sa
+    audience = api://AzureADTokenExchange
+```
+
+```sh
+# AWS, once per cluster per account
+aws iam create-open-id-connect-provider \
+  --url https://oidc.eks.us-east-1.amazonaws.com/id/49164ADE… --client-id-list sts.amazonaws.com
+```
+
+```jsonc
+// AWS: the role orders-role, trust policy
+{
+  "Effect": "Allow",
+  "Principal": { "Federated": "arn:aws:iam::111122223333:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/49164ADE…" },
+  "Action": "sts:AssumeRoleWithWebIdentity",
+  "Condition": { "StringEquals": {
+    "oidc.eks.us-east-1.amazonaws.com/id/49164ADE…:sub": "system:serviceaccount:orders:orders-sa",
+    "oidc.eks.us-east-1.amazonaws.com/id/49164ADE…:aud": "sts.amazonaws.com" } }
+}
+```
+
+Because the AWS check is a policy condition, it can use wildcards: `StringLike` with
+`system:serviceaccount:orders:*` lets every ServiceAccount in the namespace in. An Azure federated
+credential matches the subject exactly, one credential per ServiceAccount.
+
+**2. The Kubernetes side.** It's almost the same, except that AWS needs no Pod label: the
+annotation on the ServiceAccount is enough.
+
+```yaml
+# Azure                                           # AWS (IRSA)
+kind: ServiceAccount                              kind: ServiceAccount
+metadata:                                         metadata:
+  name: orders-sa                                   name: orders-sa
+  annotations:                                      annotations:
+    azure.workload.identity/client-id: <clientId>     eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/orders-role
+# + Pod label azure.workload.identity/use: "true"
+```
+
+What each webhook injects (lab, §2 and §3):
+
+| | Azure | AWS IRSA |
+|---|---|---|
+| Token audience | `api://AzureADTokenExchange` | `sts.amazonaws.com` |
+| Token file | `/var/run/secrets/azure/wi/<hash of pod name>/token/azure-identity-token` (v1.6+; `/var/run/secrets/azure/tokens/azure-identity-token` up to v1.5) | `/var/run/secrets/eks.amazonaws.com/serviceaccount/token` |
+| Environment | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_FEDERATED_TOKEN_FILE`, `AZURE_AUTHORITY_HOST` | `AWS_ROLE_ARN`, `AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_STS_REGIONAL_ENDPOINTS`, region |
+
+**3. Hop 1, the exchange.** On Azure the token is a client assertion in an OAuth request. On AWS it
+goes to STS in an unsigned request: the token is the only credential. From the lab
+([irsa-walkthrough.md](irsa-walkthrough.md) §7.3; the emulator couldn't fetch the k3s cluster's
+keys, so this run used a Cognito-issued token in its place):
+
+```text
+POST https://sts.us-east-1.amazonaws.com/      (no Authorization header)
+Action           = AssumeRoleWithWebIdentity
+RoleArn          = arn:aws:iam::000000000000:role/s3-reader-cognito
+RoleSessionName  = my-pod
+WebIdentityToken = eyJhbGciOi…                  ← the token file
+```
+
+What comes back is the biggest difference. Entra returns a bearer token that you send as is. STS
+returns three values that make up a temporary key:
+
+```xml
+<Credentials>
+  <AccessKeyId>EMULATORASTMZY22CZHQ</AccessKeyId>     <!-- ASIA… on AWS -->
+  <SecretAccessKey>EfuuwJ…</SecretAccessKey>           <!-- never sent again: used to sign -->
+  <SessionToken>EjQTkE/xyfBk9U6sAeD+…</SessionToken>
+  <Expiration>2026-11-23T09:12:57Z</Expiration>
+</Credentials>
+<AssumedRoleUser><Arn>arn:aws:sts::000000000000:assumed-role/s3-reader-cognito/my-pod</Arn></AssumedRoleUser>
+```
+
+**4. Hop 2, the API call.** On Azure, `Authorization: Bearer <token>`. On AWS, every request is
+signed with SigV4 (lab, [irsa-walkthrough.md](irsa-walkthrough.md) §7.4):
+
+```http
+X-Amz-Security-Token: EjQTkE/xyfBk9U6sAeD+…
+Authorization: AWS4-HMAC-SHA256 Credential=EMULATORASTMZY22CZHQ/20261123/us-east-1/sts/aws4_request, SignedHeaders=…, Signature=<64 hex>
+```
+
+So on Azure a stolen access token can be replayed by anyone until it expires. On AWS a request on
+its own can't be replayed for long: its signature covers its time stamp and expires within
+minutes. To make new requests, an attacker needs the secret key, which never goes over the wire.
+
+**5. The application code** is the same idea on both: the default credential chain finds the
+environment variables.
+
+```python
+# Azure
+from azure.identity import DefaultAzureCredential      # → WorkloadIdentityCredential
+from azure.keyvault.secrets import SecretClient
+SecretClient("https://orders-kv.vault.azure.net", DefaultAzureCredential()).get_secret("db-password")
+
+# AWS
+import boto3                                           # → AssumeRoleWithWebIdentityProvider
+boto3.client("secretsmanager").get_secret_value(SecretId="db-password")
+```
+
+Both read the token file again at each exchange, so they pick up the kubelet's rotated token, and
+both cache the result until shortly before it expires.
+
+**Where the two differ:**
+
+| | Azure Workload Identity | AWS IRSA |
+|---|---|---|
+| The identity | a user-assigned managed identity or an app registration (two kinds) | an IAM role (one kind) |
+| Where the trust is | on the identity: a federated credential, up to 20 per identity | on the role: its trust policy, plus one IAM OIDC provider per cluster per account |
+| Subject matching | exact | any IAM condition operator, so wildcards work |
+| What the exchange returns | an OAuth bearer token, one per audience (Key Vault, ARM, Storage…) | one set of temporary keys, valid for every AWS service the role allows |
+| How it's used | `Authorization: Bearer` | SigV4 signature |
+| Who the API sees | `oid` of the identity | `assumed-role/orders-role/<session name>` |
+
+On Azure each resource needs its own token: one for Key Vault, another for ARM. On AWS one set of
+credentials covers every service, and the role's permissions policy decides what's allowed.
+
+**EKS Pod Identity: the AWS method Azure doesn't have.** AWS's newer method doesn't use an OIDC
+provider at all (docs, §4):
+
+```sh
+aws eks create-pod-identity-association --cluster-name prod \
+  --namespace orders --service-account orders-sa --role-arn arn:aws:iam::111122223333:role/orders-role
+```
+
+```jsonc
+// orders-role trust policy: no cluster URL in it, reusable by any cluster
+{ "Effect": "Allow", "Principal": { "Service": "pods.eks.amazonaws.com" },
+  "Action": ["sts:AssumeRole", "sts:TagSession"] }
+```
+
+1. The Pod gets a token with audience `pods.eks.amazonaws.com`, plus
+   `AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/v1/credentials`.
+2. The SDK sends the token to the node-local agent.
+3. The agent calls the EKS Auth API `AssumeRoleForPodIdentity`, and EKS itself checks the
+   association.
+4. The credentials come back with session tags (`kubernetes-namespace`,
+   `kubernetes-service-account`, `eks-cluster-name`…) that policies can match on.
+
+In this method the link from ServiceAccount to role is stored in EKS, not on the identity or the
+role. Azure always keeps it on the identity: a federated credential per cluster issuer.
+
+**The node problem is the same on both.** An EC2 node's instance profile is available to every Pod
+through EC2 IMDS, just as a scale set's managed identities are through Azure IMDS
+([azure.md](azure.md), "Can a managed identity be assigned to a Pod?"). The common fix differs:
+
+- **AWS:** IMDSv2 with a hop limit of 1, so a reply never reaches a Pod's network namespace.
+- **Azure:** a NetworkPolicy, or AKS's IMDS restriction.
+
+Either way, IRSA, Pod Identity and Workload Identity all exist to give each ServiceAccount its own
+identity instead of the node's.
+
 ### Does `automountServiceAccountToken: false` remove the cloud tokens?
 
 The cloud webhooks add their own projected volumes, separate from `kube-api-access-…`. So turning off the automatic mount should leave the cloud token in place, and the app can still reach Azure or AWS without being able to call the Kubernetes API **(not tested)**.
@@ -2158,7 +2420,7 @@ The cloud webhooks add their own projected volumes, separate from `kube-api-acce
 
 ```sh
 # inside the container: print the claims (the middle part of the JWT)
-cut -d. -f2 /var/run/secrets/azure/tokens/azure-identity-token | base64 -d 2>/dev/null; echo
+cut -d. -f2 "$AZURE_FEDERATED_TOKEN_FILE" | base64 -d 2>/dev/null; echo   # the path has a per-Pod hash from v1.6
 # look for "aud", "sub", "iss" and "exp"
 ```
 

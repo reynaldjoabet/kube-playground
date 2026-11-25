@@ -1015,15 +1015,24 @@ From Microsoft Graph's `servicePrincipal` reference; not tested in a real tenant
 Mixing these up is a common mistake: a role assignment needs the `principalId`, while choosing which
 identity to sign in as needs the `clientId`.
 
-**Application service principal vs managed identity:**
+**Application service principal vs managed identity.** A managed identity is a service principal.
+The difference is who holds the credential and where it can be used:
 
-| | Application (app registration + SP) | Managed identity |
+- A plain service principal (from an app registration) has a credential that you create, store and
+  rotate. Code running anywhere can use it.
+- A managed identity's service principal has a credential Azure keeps for you. Code can only get a
+  token from the Azure resource the identity is attached to.
+
+| | Service principal (app registration) | Managed identity |
 |---|---|---|
-| Credential | secret or certificate **you** create, store and rotate | created and rotated by Azure; you never see it |
-| How it gets a token | sends its secret or certificate to Entra | asks the platform (IMDS, App Service's identity endpoint) from inside an Azure resource |
-| Usable from outside Azure | yes, anywhere the secret is | only through a **federated identity credential** (AKS Workload Identity, GitHub Actions, another cloud) on a user-assigned identity |
-| Multi-tenant | can be | no, single tenant |
-| Lifecycle | until you delete it | **system-assigned**: created and deleted with its resource. **user-assigned**: a resource of its own, attachable to many resources |
+| What you create | an app registration, which gives an application object plus a service principal | a system-assigned identity on a resource, or a user-assigned identity resource; Azure creates the service principal |
+| Entra `servicePrincipalType` | `Application` | `ManagedIdentity` |
+| Credential | a client secret, a certificate, or a federated credential; you store and rotate it | none you ever see; Azure manages and rotates it |
+| How code gets a token | `client_credentials` at `login.microsoftonline.com`, authenticated with that credential | a local endpoint on the resource: IMDS `169.254.169.254/metadata/identity/oauth2/token` on VMs, `IDENTITY_ENDPOINT` + `IDENTITY_HEADER` on App Service and Functions |
+| Where it works | anywhere: on-premises, CI, another cloud, your laptop | only on the Azure resource it's attached to; a user-assigned identity can also be used from outside through a **federated identity credential** (AKS Workload Identity, GitHub Actions, another cloud) |
+| Lifetime | until you delete it | system-assigned: deleted with its resource. User-assigned: a separate resource that can be shared by several resources |
+| Tenants | can be multi-tenant | only in its own tenant |
+| Signing users in, delegated permissions, exposing an API | yes, it's a full application | no, it only acts as itself |
 | Typical use | CI/CD outside Azure, multi-tenant SaaS, apps that sign in users | anything running on Azure calling Azure (Key Vault, Storage, SQL, ARM) |
 
 In Entra (from Microsoft's docs, not tested in a real tenant): managed identities appear under
@@ -1031,6 +1040,333 @@ In Entra (from Microsoft's docs, not tested in a real tenant): managed identitie
 `az ad sp show --id <principalId>` returns `"servicePrincipalType": "ManagedIdentity"`, and its
 `alternativeNames` include the identity's resource id (with `isExplicit=True` for a user-assigned
 identity, `isExplicit=False` for a system-assigned one).
+
+### Can a managed identity be assigned to a Pod?
+
+Not directly. A managed identity can only be attached to an Azure resource, such as a VM, a scale
+set or an App Service. A Pod isn't one, so Azure has nothing to attach it to. A Pod can still act as
+a managed identity in two ways, and only the second gives each workload its own.
+
+**1. The node's identity (any Pod on the node can use it)** (docs)
+
+- An AKS node is a VM in a scale set, and the scale set has managed identities: the kubelet
+  identity, plus any you add.
+- Any Pod on that node can call IMDS (`169.254.169.254`) and get a token for them, exactly as the
+  node does.
+- That's one identity for every Pod on the node, so it's usually treated as something to block (with
+  a NetworkPolicy or `--enable-imds-restriction`), not something to rely on.
+
+What an IMDS token request looks like (docs):
+
+```http
+GET /metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/&client_id=<kubelet identity clientId> HTTP/1.1
+Host: 169.254.169.254
+Metadata: true
+```
+
+There's no credential in it: no ServiceAccount token, no secret, nothing that says which Pod is
+asking.
+
+- `Metadata: true` only blocks SSRF, where a server is tricked into fetching a URL and can't add
+  custom headers.
+- `client_id` only chooses *which* of the VM's identities you want. It doesn't prove you're allowed
+  to have it.
+
+What comes back is an ordinary access token for the managed identity. IMDS on a VM couldn't be run
+here; floci-az's App Service–style endpoint (`/msi/token`) returns the same response format, so this
+is the lab capture from [azure-identity-flows.md](azure-identity-flows.md):
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUz…",
+  "client_id": "7099e2ca-3234-401c-a986-d7276d6f39d2",
+  "expires_in": "3599",
+  "expires_on": "1795429036",
+  "resource": "https://vault.azure.net",
+  "token_type": "Bearer"
+}
+```
+
+The decoded token:
+
+```jsonc
+{
+  "aud": "https://vault.azure.net",
+  "oid": "9796b2da-…",          // the identity's principalId: what role assignments match
+  "appid": "7099e2ca-…",        // its clientId
+  "idtyp": "app",
+  "xms_mirid": "/subscriptions/…/userAssignedIdentities/orders-id",   // which managed identity
+  "tid": "…", "iss": "…", "exp": …
+}
+```
+
+Nothing in the token says which process or Pod asked.
+
+How Azure decides to hand it out without a credential (docs):
+
+1. `169.254.169.254` isn't a server inside your network. The Azure host under the VM picks up
+   packets sent to it.
+2. The host knows exactly which VM a packet came from, because it runs that VM. The VM can't claim
+   to be another VM. That is the authentication: the VM's placement, not anything in the request.
+3. The host looks up which managed identities are attached to that VM or scale set, and checks that
+   `client_id` (if given) is one of them.
+4. Azure gets a token from Entra for that identity, using a credential that Azure holds and you
+   never see, and passes it back.
+
+**2. Workload Identity (the current way, per ServiceAccount)**
+
+The managed identity stays a standalone user-assigned resource. You tell it to trust tokens issued
+for one Kubernetes ServiceAccount:
+
+```text
+user-assigned managed identity "orders-mi"
+  federated identity credential:
+    issuer   = <the AKS cluster's OIDC issuer URL>
+    subject  = system:serviceaccount:orders:orders-sa
+    audience = api://AzureADTokenExchange
+```
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orders-sa
+  namespace: orders
+  annotations:
+    azure.workload.identity/client-id: <orders-mi clientId>
+---
+# Pod template
+metadata:
+  labels:
+    azure.workload.identity/use: "true"
+spec:
+  serviceAccountName: orders-sa
+```
+
+At runtime (lab, [workload-identity.md](workload-identity.md)):
+
+1. The webhook adds four env vars to the Pod (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+   `AZURE_FEDERATED_TOKEN_FILE`, `AZURE_AUTHORITY_HOST`) and a projected ServiceAccount token with
+   audience `api://AzureADTokenExchange`.
+2. The SDK's `WorkloadIdentityCredential` (part of `DefaultAzureCredential`) posts that token to
+   `login.microsoftonline.com` as a `client_assertion` in a `client_credentials` request.
+3. Entra checks the token's issuer, subject and audience against the federated credential, then
+   returns a token **as `orders-mi`**. Its `oid` is the identity's `principalId`, so role
+   assignments made to `orders-mi` apply.
+
+IMDS isn't involved at any step: the Pod proves its identity with its ServiceAccount token, not with
+the node it runs on.
+
+**Two hops: the ServiceAccount token never reaches an Azure API.** The ServiceAccount token goes only
+to Entra ID. What goes to Key Vault, Storage or ARM is the Azure token that Entra gives back in
+exchange.
+
+```text
+Pod
+ │ 1  POST login.microsoftonline.com/<tenant>/oauth2/v2.0/token
+ │      client_credentials, client_assertion = the ServiceAccount token
+ ▼
+Entra ID ── checks the token, returns an Azure access token as orders-mi
+ │
+ │ 2  GET https://orders-kv.vault.azure.net/secrets/db-password
+ │      Authorization: Bearer <the Azure token>
+ ▼
+Key Vault ── sees only the Azure token (oid = orders-mi's principalId)
+```
+
+Hop 1, the exchange (lab, [workload-identity.md](workload-identity.md)): what Entra received from the
+Java SDK in a Pod:
+
+```text
+POST /<tenant>/oauth2/v2.0/token
+grant_type            = client_credentials
+scope                 = https://management.azure.com/.default openid profile offline_access
+client_id             = 11111111-2222-3333-4444-555555555555    ← AZURE_CLIENT_ID (the identity's clientId)
+client_assertion      = eyJhbGciOiJSUzI1NiIsImtpZCI6IjVxN1JT…  ← the token file, byte for byte
+client_assertion_type = urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+```
+
+The ServiceAccount token takes the place of a client secret: it's how the Pod proves to Entra that it
+may act as `orders-mi`. To verify it, Entra:
+
+1. fetches the cluster's OIDC discovery document and signing keys from the issuer URL (AKS hosts
+   these publicly; Entra never calls your API server);
+2. checks the token's signature and expiry;
+3. matches its issuer, subject (`system:serviceaccount:orders:orders-sa`) and audience
+   (`api://AzureADTokenExchange`) against the federated credential on `orders-mi`.
+
+Hop 2, the API call. It uses Entra's token, which is the same kind of token IMDS returns (the `oid`,
+`appid`, `xms_mirid` example above). From here on, Key Vault can't tell whether the token came from
+Workload Identity, IMDS or a client secret.
+
+Why the Pod can't send the ServiceAccount token to Key Vault directly:
+
+- Its audience is `api://AzureADTokenExchange`, and Key Vault only accepts `https://vault.azure.net`.
+- Its issuer is your cluster, and Azure services only trust Entra as an issuer.
+
+Both checks would fail. The ServiceAccount token is only good for asking Entra for a token.
+
+In practice the app code doesn't see either hop. `DefaultAzureCredential` (or
+`WorkloadIdentityCredential`) does both:
+
+- it reads `AZURE_FEDERATED_TOKEN_FILE` again on each exchange, so it picks up the kubelet's rotated
+  token;
+- it caches the Azure token until shortly before it expires.
+
+Compared with IMDS, the difference is only in hop 1. IMDS gets the Azure token by trusting the VM.
+Workload Identity gets it by having the Pod present a per-ServiceAccount credential.
+
+What follows from this:
+
+- **The unit is the ServiceAccount, not the Pod.** Every Pod using `orders-sa` acts as `orders-mi`,
+  and Pods using other ServiceAccounts can't.
+- **Only user-assigned identities (or app registrations) can have federated credentials.** A
+  system-assigned identity can't. So the choice is a user-assigned identity or an app registration.
+  The Kubernetes side is the same for both: `azure.workload.identity/client-id` on the
+  ServiceAccount is set to the identity's `clientId` or to the app's client id.
+- **The trust is in the cluster's issuer, not in Azure placement.** The same federated credential
+  would work for the same subject from any cluster with that issuer, inside Azure or not. That's the
+  exception in "Where it works" in the
+  [application service principal vs managed identity table](#a-managed-identity-is-a-service-principal).
+- **The older ways to put a managed identity on a Pod are retired.** Both `aad-pod-identity` and AKS
+  "pod-managed identity" (preview) intercepted IMDS calls per Pod and needed the identity attached to
+  the node's scale set. Workload Identity replaced them.
+
+#### Migrating from aad-pod-identity: `azwi podidentity detect` (code)
+
+The Workload Identity CLI has a command that reads a namespace's `aad-pod-identity` setup and writes
+Workload Identity manifests for it (`pkg/cmd/podidentity/detect.go`, azure-workload-identity
+v1.6.1; read, not run). At commit `6bc8918` (v1.6.3) the file is the same apart from the proxy
+image tag:
+
+```sh
+azwi podidentity detect --namespace orders --output-dir ./migration [--tenant-id <tenant>]
+```
+
+What `run()` does:
+
+1. Lists the namespace's `AzureIdentityBinding`s and `AzureIdentity`s, keeping only identities of
+   type `UserAssignedMSI`.
+2. Finds the Pods carrying each binding's `aadpodidbinding` label, and for each Pod its controlling
+   owner (Deployment, StatefulSet, Job, …). A Pod with no owner is migrated as itself.
+3. For each owner, writes a ServiceAccount file and a workload file.
+
+The ServiceAccount file comes from this function:
+
+```go
+// createServiceAccountFile will create a service account yaml file
+//  1. If the resource is using default service account, then a new service account yaml is generated
+//     with the resource name as service account name
+//  2. If the resource is already using a non-default service account, then we modify that service account
+//     to generate the desired yaml file
+//
+// The service account yaml will contain the workload identity use label ("azure.workload.identity/use: true")
+// and the client-id annotation ("azure.workload.identity/client-id: <client-id from AzureIdentity>")
+func (dc *detectCmd) createServiceAccountFile(name, ownerName, clientID string) (*corev1.ServiceAccount, error) {
+	sa := &corev1.ServiceAccount{}
+	var err error
+	if name == "" || name == "default" {
+		mlog.Debug("generating a new service account instead of using default service account", "owner", ownerName)
+		// generate a new service account yaml file with owner name as service account name
+		sa.SetName(ownerName)
+		sa.SetNamespace(dc.namespace)
+	} else {
+		// get service account referenced by the owner
+		if sa, err = kuberneteshelper.GetServiceAccount(context.TODO(), dc.kubeClient, dc.namespace, name); err != nil {
+			return nil, err
+		}
+	}
+	// set the annotations for the service account
+	saAnnotations := make(map[string]string)
+	if sa.GetAnnotations() != nil {
+		saAnnotations = sa.GetAnnotations()
+	}
+	saAnnotations[webhook.ClientIDAnnotation] = clientID
+	// Round to the nearest second before converting to a string
+	saAnnotations[webhook.ServiceAccountTokenExpiryAnnotation] = fmt.Sprintf("%.0f", dc.serviceAccountTokenExpiration.Round(time.Second).Seconds())
+	if dc.tenantID != "" {
+		saAnnotations[webhook.TenantIDAnnotation] = dc.tenantID
+	}
+	sa.SetAnnotations(saAnnotations)
+	...
+}
+```
+
+- **A workload on the `default` ServiceAccount gets its own.** A new ServiceAccount named after the
+  owner (Deployment `orders` → ServiceAccount `orders`) is generated, and the workload file is
+  pointed at it. A workload with its own ServiceAccount keeps it, with annotations added. This keeps
+  identities per workload, instead of giving every Pod on `default` the same one.
+- **What the ServiceAccount gets:** only annotations:
+  - `azure.workload.identity/client-id`: the `AzureIdentity`'s client id;
+  - `azure.workload.identity/service-account-token-expiration`: the
+    `--service-account-token-expiration` flag in seconds, 3600 by default;
+  - `azure.workload.identity/tenant-id`, only with `--tenant-id`.
+- **The comment is out of date.** It says the ServiceAccount gets the `azure.workload.identity/use`
+  label, but the code sets no labels. The workload file doesn't get it either (`createResourceFile`
+  only adds containers and sets `serviceAccountName`). The v1.6.1 webhook only mutates Pods that
+  carry that label (lab, [workload-identity.md](workload-identity.md) §2), so add it to the Pod
+  template yourself before applying. The command's "Next steps" message doesn't mention it. Without
+  the label the proxy below doesn't even start: it needs `AZURE_TENANT_ID`, which only the webhook
+  sets (`NewProxy` returns "AZURE_TENANT_ID not set").
+
+The workload file also gets two containers, so apps that still call IMDS keep working during the
+migration (code: `init/init-iptables.sh`, `pkg/proxy/proxy.go`, `docker/proxy.Dockerfile`):
+
+- **`azwi-proxy-init`**: an init container, root, privileged, with `NET_ADMIN`. It adds these NAT
+  rules in the Pod's network namespace:
+
+  ```sh
+  iptables -t nat -N AZWI_PROXY_OUTPUT
+  iptables -t nat -N AZWI_PROXY_REDIRECT
+  iptables -t nat -A AZWI_PROXY_REDIRECT -p tcp -j REDIRECT --to-port 8000
+  iptables -t nat -A OUTPUT -p tcp -d 169.254.169.254 --dport 80 -j AZWI_PROXY_OUTPUT
+  iptables -t nat -A AZWI_PROXY_OUTPUT -m owner --uid-owner 1501 -j ACCEPT    # the proxy itself
+  iptables -t nat -A AZWI_PROXY_OUTPUT -j AZWI_PROXY_REDIRECT
+  ```
+
+  Every container's TCP traffic to `169.254.169.254:80` goes to `localhost:8000`, except traffic
+  from UID 1501, which is the user the proxy image runs as (`USER 1501:1501`). That exception is how
+  the proxy can still reach the real IMDS.
+- **`azwi-proxy`**: a sidecar listening on `localhost:8000` that behaves like IMDS for tokens:
+  - **It checks requests like IMDS does.** It accepts only `GET`, requires `Metadata: true`, and
+    refuses requests with `X-Forwarded-For`.
+  - **Token requests** (`/metadata/identity/oauth2/token`, any case of `metadata`) take `client_id`
+    from the query string, or `AZURE_CLIENT_ID` if there is none, and `resource`, which becomes
+    the scope `<resource>/.default`. It gets the token with the Go SDK's
+    `azidentity.WorkloadIdentityCredential`, so with the Pod's own ServiceAccount token, and
+    answers in IMDS's format (`access_token`, `expires_in`, `expires_on`, `resource`,
+    `token_type`). `expires_in` is shortened by 10 seconds. The response has no `client_id` field,
+    and the IMDS parameters `object_id` and `msi_res_id` are ignored: a request using them gets the
+    `AZURE_CLIENT_ID` identity.
+  - **Any other path** (`/metadata/instance`, …) is forwarded to the real IMDS unchanged, so instance
+    metadata still comes from the node.
+  - **Credentials are cached** per client id and tenant (up to 128 entries, kept 25 hours). Token
+    refresh is left to the SDK.
+
+The app still sends the credential-free IMDS request, but now the answer is decided inside its own
+Pod, with that Pod's ServiceAccount token. A `client_id` the app names only works if that identity
+has a federated credential for this ServiceAccount, because Entra checks it. Once the app uses an
+SDK that supports `WorkloadIdentityCredential`, the two containers can be removed.
+
+**The webhook can add the same two containers itself.** Instead of the static containers `detect`
+writes, put the annotation `azure.workload.identity/inject-proxy-sidecar: "true"` on the Pod. Only
+its presence is checked, so any value works. The port comes from
+`azure.workload.identity/proxy-sidecar-port`, default 8000. The webhook's version is better
+locked down (code, `pkg/webhook/webhook.go`):
+
+- **The proxy container is hardened.** It runs as non-root with a read-only root filesystem, no
+  privilege escalation and all capabilities dropped. `detect`'s copy sets no `securityContext`.
+- **It's a native sidecar on Kubernetes 1.32+.** It goes into `initContainers` with
+  `restartPolicy: Always`, so it starts before the app and stops after it. On older API servers it's
+  put first in `containers`.
+- **Pods with `hostNetwork: true` are refused.** The iptables rules would change the node's network
+  stack.
+
+The command's next steps: install the webhook, create a federated identity credential for each
+identity used in the namespace, review the files and `kubectl apply` them.
 
 ### Managed identities in AKS: node vs Pod
 
@@ -1047,7 +1383,7 @@ Uses projected ServiceAccount tokens + OIDC federation:
 1. AKS exposes an **OIDC issuer** URL that publishes the keys signing ServiceAccount tokens.
 2. A **federated identity credential** on the managed identity (or app registration) trusts that issuer for one subject, `system:serviceaccount:<namespace>:<serviceaccount>`, with audience `api://AzureADTokenExchange`. This is the link between the Kubernetes ServiceAccount and the Azure identity.
 3. The ServiceAccount is annotated with `azure.workload.identity/client-id: <client ID>`, and the Pod is labelled `azure.workload.identity/use: "true"`.
-4. The Workload Identity webhook injects a projected token at `/var/run/secrets/azure/tokens/azure-identity-token` and the `AZURE_*` env vars.
+4. The Workload Identity webhook injects a projected token and the `AZURE_*` env vars. From v1.6 the file is at `/var/run/secrets/azure/wi/<hash of pod name>/token/azure-identity-token` (`/var/run/secrets/azure/tokens/azure-identity-token` up to v1.5); `AZURE_FEDERATED_TOKEN_FILE` always holds the right path.
 5. The SDK sends that JWT to Entra ID as a client assertion and gets an access token for the managed identity.
 
 No IMDS and no privileged DaemonSet are involved. The full details are in [workload-identity.md](workload-identity.md).
