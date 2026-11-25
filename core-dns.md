@@ -722,3 +722,5 @@ kubectl -n kube-system get endpointslices -l kubernetes.io/service-name=kube-dns
 kubectl -n kube-system logs -l k8s-app=kube-dns                  # errors, loop detection
 kubectl -n kube-system get cm coredns -o yaml                    # Corefile; add `log` temporarily to see queries
 ```
+## DNS- Eks
+![alt text](image-23.png)
