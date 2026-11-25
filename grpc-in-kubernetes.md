@@ -871,6 +871,7 @@ kubectl delete csidriver demo.csi.example.com
 
 ## Related notes
 
+- [grpc-java-http2.md](grpc-java-http2.md): how grpc-java builds these frames, batches writes and interleaves streams
 - [kubernetes.md](kubernetes.md) and [etcd-storage.md](etcd-storage.md): what the API server stores in etcd
 - [watching-the-api-server.md](watching-the-api-server.md): the watches served from the watch cache (§2.6)
 - [azure-local-lab.md](azure-local-lab.md) §7: k3s, kine and `state.db`
