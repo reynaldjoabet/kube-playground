@@ -38,6 +38,14 @@ which v1.86.0 uses; **(lab)** seen in the runs below.
   `UniformStreamByteDistributor` gives each stream a turn of at least 16 KiB, round-robin, and the
   frame writer cuts each turn into frames of at most 16384 bytes. With two large downloads in the
   lab, the server alternated between the streams about every 32 KiB.
+- **Deadlines, cancels, keepalive and shutdown are control frames** (§10–13).
+  - A deadline travels as a `grpc-timeout` header. When it passes, or the client cancels, the
+    client sends RST_STREAM(CANCEL); the server's code keeps running unless it checks.
+  - A client that pings more often than the server allows (once per 5 min by default) is cut off
+    with GOAWAY `ENHANCE_YOUR_CALM`, debug data `too_many_pings`.
+  - A server shutting down sends GOAWAY twice, around a PING, and lets open calls finish.
+  - Over TLS, HTTP/2 is agreed with ALPN `h2`. A client that doesn't offer `h2` is dropped right
+    after the handshake.
 - **Headers shrink after the first call.** HPACK's dynamic table on the connection remembers them:
   the second call's request headers were 8 bytes, against 118 for the first. grpc-java never uses
   Huffman coding, so the first ones are plain ASCII on the wire.
@@ -72,6 +80,9 @@ which v1.86.0 uses; **(lab)** seen in the runs below.
 
 The `:authority` in the logs is `localhost:50552`, the relay's port, because that's what the client
 dialled.
+
+A second program, `Lab2`, covers §10–13: a slow method, a ticking stream and a method that waits,
+run with deadlines, cancellation, keepalive, a server shutdown and TLS.
 
 ### 1.1 How the lab creates the server and the client (code)
 
@@ -632,6 +643,187 @@ relay
 | HPACK Huffman coding | never | `Integer.MAX_VALUE` threshold in `NettyClientHandler` |
 | First client stream id | 3 | Netty `DefaultHttp2Connection` (1 is reserved for upgrade) |
 
+## 10. Deadlines and cancellation: `grpc-timeout` and RST_STREAM (lab + code)
+
+The lab's `Lab2` program adds three methods: `Slow` (sleeps 500 ms, then answers), `Ticks` (a
+message every 100 ms) and `Hang` (answers after the number of seconds in the request).
+
+**A deadline travels as a header.** The client called `Slow` with
+`CallOptions.DEFAULT.withDeadlineAfter(200, MILLISECONDS)`:
+
+```text
+Client OUTBOUND HEADERS: streamId=3 headers=[… user-agent: grpc-java-netty/1.86.0,
+  grpc-accept-encoding: gzip, grpc-timeout: 177006u]
+```
+
+- **The value is the time left when the headers were built,** not the 200 ms asked for. 23 ms had
+  passed between creating the deadline and building the headers (mostly first-call class loading;
+  the channel was already connected).
+- **`GrpcUtil.TimeoutMarshaller` picks the unit** so that the number stays below 100 000 000:
+  `n` below 100 ms, `u` below 100 s, `m` below about 28 h, then `S`, `M`, `H` **(code)**. The
+  header can't be longer than 8 digits plus the unit.
+- **The server turns it back into a deadline of its own,** counted from when it read the header.
+  Its `Context` had "169 ms left" when the handler started. The time the request spent on the
+  network isn't subtracted, so the server's deadline ends slightly after the client's.
+
+**When the deadline passes, the client resets the stream:**
+
+```text
+relay (ms)
+ 1100.7 client→server  HEADERS(s3, END_HEADERS)            grpc-timeout: 177006u
+ 1277.2 client→server  RST_STREAM(s3, error 8 = CANCEL)    the deadline, 177 ms later
+        (nothing from the server on stream 3 after this)
+
+lab log (ms since start)
+  715.1  main                     client: DEADLINE_EXCEEDED, "CallOptions deadline exceeded
+                                  after 0.192662958s"
+  716.9  grpc-default-executor-1  server: Context cancelled
+ 1057.4  grpc-default-executor-0  server: Slow finished sleeping, cancelled=true
+```
+
+- **The status never crosses the wire.** `DEADLINE_EXCEEDED` is made up on the client. What the
+  server gets is RST_STREAM with HTTP/2 error code 8, `CANCEL`.
+- **Cancelling doesn't stop the server's thread.** The handler kept sleeping and finished 340 ms
+  after the cancel. Its late `onNext` and `onCompleted` sent nothing. A server method has to check
+  `Context.current().isCancelled()`, or register a listener, to stop early.
+
+**Cancelling a call looks the same on the wire.** The client cancelled a `Ticks` stream after
+three messages:
+
+```text
+  662.6  client: call.cancel()
+  664.7  client: onClose CANCELLED "enough"
+         relay: client→server RST_STREAM(s3, error 8 = CANCEL)
+  766.9  server: isCancelled() after 3 messages, stop
+  769.2  server: onCancel handler ran
+```
+
+The client's listener closed at once, with the description it passed to `cancel`. The server only
+noticed at its next `isCancelled()` check, one tick later.
+
+## 11. Keepalive: client PINGs and the server's too_many_pings (lab + code)
+
+Keepalive is off on the client unless you set `keepAliveTime` (`KEEPALIVE_TIME_NANOS_DISABLED`).
+When it's on, the client sends a PING after that much time without reading anything, and closes
+the connection if no ack comes within `keepAliveTimeout` (20 s by default). The server has its own
+rule for how often clients may ping.
+
+| Setting | Default | Where **(code)** |
+|---|---|---|
+| Client `keepAliveTime` | off; values under 10 s become 10 s | `KeepAliveManager.MIN_KEEPALIVE_TIME_NANOS` |
+| Client `keepAliveTimeout` | 20 s | `GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS` |
+| Client `keepAliveWithoutCalls` | false: no pings while no call is open | `NettyChannelBuilder` |
+| Server `permitKeepAliveTime` | 5 min between client pings | `GrpcUtil.DEFAULT_SERVER_PERMIT_KEEPALIVE_TIME_NANOS` |
+| Server's allowance of early pings | 2 strikes; the 3rd closes the connection | `KeepAliveEnforcer.MAX_PING_STRIKES` |
+| Server's own keepalive PINGs | every 2 h | `GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS` |
+
+**The lab: client keepalive 10 s against a server with the defaults.** One `Hang` call stayed
+open for 45 s, so the client kept pinging:
+
+```text
+relay (s)
+ 11.0 client→server  PING 0x457           strike 1: under 5 min since the last valid ping
+ 11.0 server→client  PING ack
+ 21.0 client→server  PING 0x457           strike 2
+ 21.0 server→client  PING ack
+ 31.0 client→server  PING 0x457           strike 3: more than MAX_PING_STRIKES
+ 31.0 server→client  PING ack
+ 31.0 server→client  GOAWAY(last 3, error 11 = ENHANCE_YOUR_CALM, debug "too_many_pings")
+
+client log
+ Received GOAWAY with ENHANCE_YOUR_CALM. Debug data: too_many_pings
+ Increased keepalive time nanos to 20,000,000,000
+ 30515.1 ms  client: RESOURCE_EXHAUSTED, "Connection closed after GOAWAY. HTTP/2 error code:
+             ENHANCE_YOUR_CALM (Bandwidth exhausted), debug data: too_many_pings"
+```
+
+- **The ping payload is 1111 (`0x457`):** `NettyClientHandler.USER_PING_PAYLOAD`. The BDP pings of
+  §3.4 carry 1234, and the graceful-shutdown ping in §12 has its own value.
+- **The server answers every ping before it decides.** The third one was acked, then the server
+  sent GOAWAY and closed the connection (`NettyServerHandler.onPingRead`).
+- **The call that was open fails** with `RESOURCE_EXHAUSTED`, even though it did nothing wrong.
+- **The client backs off.** On `too_many_pings` it doubles its keepalive time for the channel
+  (`AtomicBackoff`: 10 s to 20 s).
+- **Strikes reset when the server writes.** `WriteMonitoringFrameWriter` resets the counter on
+  every HEADERS or DATA frame it sends. A call that streams responses never collects strikes;
+  this one was silent on purpose.
+
+**The same run with `permitKeepAliveTime(5, SECONDS)` on the server:** pings at 10.9, 20.9, 30.9
+and 40.9 s, all acked, and the call answered at 45 s. Allow at least the client's interval on the
+server, or don't set client keepalive below the server's limit. This applies to proxies too: a
+client pinging every 10 s through a proxy that allows 5 min gets disconnected the same way.
+
+## 12. Graceful shutdown: two GOAWAYs and a PING (lab + code)
+
+`server.shutdown()` was called while one `Hang` call (1 s) was in flight:
+
+```text
+relay (ms)
+  956.0 client→server  HEADERS(s3)                  the call starts
+ 1269.4 server→client  GOAWAY(last 2147483647, NO_ERROR, debug "app_requested")
+ 1269.4 server→client  PING 0x97acef001
+ 1272.3 client→server  PING ack 0x97acef001
+ 1274.0 server→client  GOAWAY(last 3, NO_ERROR, debug "app_requested")
+ 1979.7 server→client  HEADERS(s3), DATA, HEADERS(s3, END_STREAM)   the call still completes
+```
+
+`NettyServerHandler.GracefulShutdown` **(code)**:
+
+- **The first GOAWAY says "no new streams after this", with last stream id 2³¹−1.** At that
+  moment the client may already have sent a new HEADERS frame that the server hasn't read. A
+  GOAWAY with a real stream id could cut that call off.
+- **The PING (`GRACEFUL_SHUTDOWN_PING = 0x97ACEF001`) measures one round trip.** When its ack
+  comes back, anything the client sent before reading the first GOAWAY has arrived. If no ack
+  comes within 10 s, the server goes ahead anyway.
+- **The second GOAWAY carries the real last stream id (3).** Streams up to it are finished;
+  anything higher would be refused.
+- **Open calls run to the end.** The `Hang` call answered 700 ms later, on the same connection.
+  `shutdownNow()` instead resets the open streams.
+
+The client reacts to the first GOAWAY by using a new connection for new calls; calls already on
+this one finish here. `maxConnectionAge` and `maxConnectionIdle` on the server use the same
+two-GOAWAY sequence, with debug data `max_age` and `max_idle` **(code)**. `maxConnectionAge` is
+how a server makes long-lived clients reconnect, so their load spreads again across a Service's
+Pods.
+
+## 13. TLS and ALPN (lab + code)
+
+The lab's server and client use a self-signed certificate for `localhost`:
+
+```java
+NettyServerBuilder.forPort(50571).useTransportSecurity(certFile, pkcs8KeyFile) …
+NettyChannelBuilder.forAddress("localhost", 50571)
+    .sslContext(GrpcSslContexts.forClient().trustManager(certFile).build()) …
+```
+
+The call worked, with `:scheme: https` in the request headers instead of `http`, and the server saw
+`TLSv1.3 TLS_AES_128_GCM_SHA256` and security level `PRIVACY_AND_INTEGRITY` on the call's
+attributes. The JDK's own TLS provider did the handshake; no `netty-tcnative` was on the classpath.
+
+**HTTP/2 over TLS is agreed during the handshake, with ALPN.** Testing the same server with
+`openssl s_client -alpn …`:
+
+| The client offers | Result |
+|---|---|
+| `h2` | `ALPN protocol: h2`. The server sends its SETTINGS |
+| `h2,http/1.1` | `ALPN protocol: h2` |
+| `http/1.1` | handshake completes, `No ALPN negotiated`; the server sends nothing and closes |
+| nothing | the same: `No ALPN negotiated`, then closed |
+
+- **`GrpcSslContexts` offers only `h2`.** It configures ALPN with that one protocol.
+- **The server checks the result after the handshake.** `ProtocolNegotiators.ServerTlsHandler`
+  fails the connection with "Failed protocol negotiation: Unable to find compatible protocol"
+  when the negotiated protocol isn't `h2`. TLS itself succeeds, which is why openssl reports a
+  normal handshake. No HTTP/2 frame follows.
+- **The client checks too.** `ClientTlsHandler` fails with "Failed ALPN negotiation" if the
+  server picks anything else.
+- **With an `h2` client that sends nothing,** the server's SETTINGS went out, then
+  `GOAWAY(PROTOCOL_ERROR, "HTTP/2 client preface string missing or corrupt")` when openssl
+  closed.
+
+This is why a TLS-terminating proxy in front of a gRPC server has to offer `h2` to the client
+and speak HTTP/2 to the backend. A proxy that negotiates `http/1.1` breaks gRPC at this step.
+
 ## Related notes
 
 - [grpc-in-kubernetes.md](grpc-in-kubernetes.md): the gRPC protocol on the wire, and where
@@ -639,3 +831,4 @@ relay
 - [http.md](http.md): HTTP/1.1 vs HTTP/2 multiplexing.
 - [kubernetes-services.md](kubernetes-services.md): why one long-lived gRPC connection defeats
   connection-level load balancing.
+- [grpc-load-balancing.md](grpc-load-balancing.md): `pick_first` vs `round_robin`, headless Services and `maxConnectionAge` in Kubernetes.
