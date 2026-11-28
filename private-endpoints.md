@@ -1728,3 +1728,4 @@ All of this is (docs) except the IRSA environment variable, which was seen in [i
 - Microsoft Learn, Azure Private Endpoint DNS configuration: https://learn.microsoft.com/azure/private-link/private-endpoint-dns
 - Microsoft Learn, Manage network policies for private endpoints: https://learn.microsoft.com/azure/private-link/disable-private-endpoint-network-policy
 - floci-az, Network service: https://github.com/floci-io/floci-az/blob/main/docs/services/network.md
+- [untested-claims.md](untested-claims.md): the claims here marked "docs" or "not tested", as a checklist.

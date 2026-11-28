@@ -626,3 +626,7 @@ minikube ssh -- 'sudo ls -la /var/lib/minikube/etcd/member/{snap,wal}'
 # API server side
 kubectl get --raw /metrics | grep -E 'apiserver_storage_objects|apiserver_watch_cache_resource_version'
 ```
+
+## Related notes
+
+- [etcd-backup-and-upgrades.md](etcd-backup-and-upgrades.md): snapshots, restores and upgrades.

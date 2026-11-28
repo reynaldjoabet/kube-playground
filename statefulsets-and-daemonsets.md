@@ -515,3 +515,7 @@ It's just the template, stored as a patch that replaces the whole thing. `kubect
 kubectl delete ns wl-demo                      # PVCs are in the namespace, so they go too
 kubectl label node minikube-m04 role-
 ```
+
+## Related notes
+
+- [storage-and-csi.md](storage-and-csi.md): PVCs, StorageClasses and CSI drivers.

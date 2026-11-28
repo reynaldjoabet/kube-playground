@@ -217,6 +217,7 @@ kubectl delete ns sg-lab sg-psa
 - [control-plane-manifests.md](control-plane-manifests.md): `seccompProfile: RuntimeDefault` on the static control-plane Pods
 - [rbac-and-identity.md](rbac-and-identity.md): ServiceAccount tokens, the other half of `automountServiceAccountToken`
 - [deployments-and-replicasets.md](deployments-and-replicasets.md): `securityContext` works the same in a Deployment's Pod template
+- [admission-control.md](admission-control.md): Pod Security Admission, which checks these fields.
 
 ## Sources
 

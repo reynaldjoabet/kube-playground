@@ -1356,6 +1356,7 @@ with `kubectl get endpointslices -n default -l kubernetes.io/service-name=kubern
 - [iptables.md](iptables.md) and [nftables.md](nftables.md): the filter-table hooks policies are enforced in
 - [azure-local-lab.md](azure-local-lab.md): k3s vs upstream Kubernetes, and k3s's bundled policy controller
 - [keycloak-on-kubernetes.md](keycloak-on-kubernetes.md): a real operator-generated NetworkPolicy (§7)
+- [cilium-ebpf.md](cilium-ebpf.md): policy by identity in eBPF, and an L7 HTTP rule.
 
 ## Sources
 
