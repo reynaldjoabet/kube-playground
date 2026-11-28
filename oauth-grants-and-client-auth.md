@@ -330,7 +330,10 @@ How the requests are shown: form bodies are **URL-decoded** for reading (on the 
 
 ## 3. The five methods, one request each (lab)
 
-The same grant, `client_credentials`, so that only the authentication differs.
+The same grant, `client_credentials`, so that only the authentication differs. How each method works,
+and why the private-key ones are stronger, is in
+[oauth-client-authentication.md §2](oauth-client-authentication.md#2-the-two-types-of-client-credential);
+this section shows what Keycloak receives and returns for each.
 
 ### 3.1 `client_secret_basic`
 

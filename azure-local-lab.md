@@ -1015,10 +1015,10 @@ refer to each other by resource id:
 
 ```
 load balancer (sku Standard)
-├── frontendIPConfigurations   the address clients connect to: a public IP, or a private IP in a subnet
-├── backendAddressPools        where traffic goes: NIC ipConfigurations (or IP addresses) join a pool
+├── frontendIPConfigurations   the address clients connect to: a public IP, or a subnet's private IP
+├── backendAddressPools        where traffic goes: NIC ipConfigurations (or IPs) join a pool
 ├── probes                     health checks on each backend (TCP, HTTP, HTTPS)
-├── loadBalancingRules         frontend:port → pool:port, only to backends the probe says are healthy
+├── loadBalancingRules         frontend:port → pool:port, only to backends the probe marks healthy
 ├── inboundNatRules            frontend:port → ONE backend:port (e.g. SSH to a single VM)
 └── outboundRules              SNAT for the pool's outbound traffic through the frontend's IP
 ```

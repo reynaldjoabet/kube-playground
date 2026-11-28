@@ -4,11 +4,13 @@ A Pod can have several ServiceAccount tokens mounted under `/var/run/secrets/`. 
 
 ```text
 /var/run/secrets/
-├── kubernetes.io/serviceaccount/token                         ← every Pod; sent to the kube-apiserver
-├── azure/tokens/azure-identity-token                          ← AKS Workload Identity; sent to Entra ID
+├── kubernetes.io/serviceaccount/token                         ← every Pod; sent to kube-apiserver
+├── azure/tokens/azure-identity-token                          ← AKS Workload Identity;
+│                                                                sent to Entra ID
 │   (webhook v1.6+: azure/wi/<hash>/token/azure-identity-token, see §2)
 ├── eks.amazonaws.com/serviceaccount/token                     ← EKS IRSA; sent to AWS STS
-└── pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token ← EKS Pod Identity; sent to the node's Pod Identity agent
+└── pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token ← EKS Pod Identity;
+                                                                  sent to the node's agent
 ```
 
 "Sent to" means the service that receives the token and checks it. Only that service accepts it, because the token's audience (`aud`) names it.
@@ -820,7 +822,7 @@ kube-apiserver
 
 ---
 
-## 2. Azure Workload Identity: `/var/run/secrets/azure/tokens/azure-identity-token`
+## 2. Azure Workload Identity: `/var/run/secrets/azure/wi/<hash>/token/azure-identity-token`
 
 This one comes from the **Azure Workload Identity mutating webhook**, which runs on AKS when the workload identity feature is on. Two things opt a Pod in:
 
@@ -1179,7 +1181,9 @@ Read `AZURE_FEDERATED_TOKEN_FILE` instead, as the SDKs do.
 
 ### How `volumes`, `volumeMounts`, `mountPath` and `path` fit together
 
-Think of it as two separate questions, answered in two separate places.
+Think of it as two separate questions, answered in two separate places. The example is the v1.5
+layout because it's the simplest. v1.6 puts the file one level deeper
+(`path: token/azure-identity-token`) and mounts the volume at `/var/run/secrets/azure/wi/<hash>`.
 
 **1. `volumes`: what's in the folder?**
 
@@ -2527,16 +2531,18 @@ The receiver is the API server itself, which accepts the token only if `aud` is 
 
 #### Entra ID: `api://AzureADTokenExchange` (public cloud)
 
-The Azure Workload Identity webhook adds this to Pods labelled `azure.workload.identity/use: "true"` (see §2):
+The Azure Workload Identity webhook adds this to Pods labelled `azure.workload.identity/use: "true"`
+(see §2). This is the v1.6.1 volume from the lab; up to v1.5 it was called `azure-identity-token`,
+with `path: azure-identity-token`:
 
 ```yaml
-- name: azure-identity-token
+- name: azure-workload-identity-reserved-a172cedcae47474b615c54d510a5d8
   projected:
     sources:
     - serviceAccountToken:
         audience: api://AzureADTokenExchange
         expirationSeconds: 3600
-        path: azure-identity-token
+        path: token/azure-identity-token
 ```
 
 ```json
@@ -2569,7 +2575,7 @@ From the same code:
 
 In Kubernetes the SDK doesn't choose the audience. `WorkloadIdentityCredential` just reads whatever token is in `AZURE_FEDERATED_TOKEN_FILE`, so the audience is fixed by whoever wrote the projected volume, normally the webhook. The audience mapping is used by `GitHubActionsCredential`, which requests its own token from GitHub. For a Pod, three things must belong to the same cloud: the projected volume's audience, `AZURE_AUTHORITY_HOST`, and the federated credential's audience.
 
-Each example below shows the Pod part the webhook injects, written out for a hand-written Pod, and the federated credential **(not tested)**.
+Each example below shows the Pod part the webhook injects, written out for a hand-written Pod, and the federated credential **(not tested)**. They use the short v1.5 mount path, `/var/run/secrets/azure/tokens`. In a hand-written Pod any path works, as long as `AZURE_FEDERATED_TOKEN_FILE` points to the file. The v1.6+ webhook uses `/var/run/secrets/azure/wi/<hash>/token/azure-identity-token`.
 
 ##### Global: `api://AzureADTokenExchange`
 
@@ -2888,6 +2894,7 @@ The issuer here is the cluster's own, because nothing outside the cluster needs 
 - [rbac-and-identity.md](rbac-and-identity.md): ServiceAccounts, RBAC and workload identity federation
 - [irsa-walkthrough.md](irsa-walkthrough.md): the IRSA walkthrough end to end, with the wire traffic (emulator + lab cluster)
 - [gke-and-google-identity.md](gke-and-google-identity.md): GKE: creating clusters, `kubectl` with Google tokens, Workload Identity Federation with the Java SDK (floci-gcp)
+- [untested-claims.md](untested-claims.md): the claims here marked "docs" or "not tested", as a checklist.
 
 ## Sources
 

@@ -162,16 +162,17 @@ almost everywhere. CoreDNS has to be able to answer:
 
 ```
  ┌──── kube-apiserver (listens :8443) ────┐  1 CoreDNS DIALS IN (10.96.0.1:443)
- │ Services, EndpointSlices, Pods, NS     │◄──── GET ?watch=true ─────────────── CoreDNS (2 pods, kube-system)
- │                                        │───── 2 events stream BACK ─────────►   │  in-memory index of names
- └────────────────────────────────────────┘      on that same connection          │  forward . /etc/resolv.conf
-                                                                                  ▼   (node's resolver, for the rest)
+ │ Services, EndpointSlices, Pods, NS     │◄──── GET ?watch=true ──── CoreDNS (2 pods, kube-system)
+ │                                        │──── 2 events stream BACK ─►│  in-memory index of names
+ └────────────────────────────────────────┘   on that same connection  │  forward . /etc/resolv.conf
+                                                                       ▼
+                                                                 node's resolver (the rest)
  kubelet ── writes /etc/resolv.conf into every pod ──┐
    clusterDNS: 10.96.0.10                            │
    clusterDomain: cluster.local                      ▼
-                                       pod: nameserver 10.96.0.10
-                                            search <ns>.svc.cluster.local svc.cluster.local cluster.local
-                                            options ndots:5
+                                  pod: nameserver 10.96.0.10
+                                       search <ns>.svc.cluster.local svc.cluster.local cluster.local
+                                       options ndots:5
                                                      │ UDP/TCP 53 to 10.96.0.10
                                                      ▼
                          kube-proxy NAT: KUBE-SVC for kube-dns:dns  ──►  one CoreDNS pod
@@ -214,7 +215,8 @@ CoreDNS, Corefile:
       cache 30                       ← upstream answers cached up to 30 s (not cluster.local, §4)
   }
         ▼
-reply: web.default.svc.cluster.local A 10.106.133.73   (src rewritten back to 10.96.0.10 by conntrack)
+reply: web.default.svc.cluster.local A 10.106.133.73
+                                                     (src rewritten back to 10.96.0.10 by conntrack)
 ```
 
 The kubelet config on this node:
@@ -722,5 +724,7 @@ kubectl -n kube-system get endpointslices -l kubernetes.io/service-name=kube-dns
 kubectl -n kube-system logs -l k8s-app=kube-dns                  # errors, loop detection
 kubectl -n kube-system get cm coredns -o yaml                    # Corefile; add `log` temporarily to see queries
 ```
-## DNS- Eks
-![alt text](image-23.png)
+
+## DNS on EKS
+
+![EKS service discovery: the Pod's resolv.conf (nameserver 172.20.0.10, search domains, ndots:5) sends queries through NodeLocal DNSCache (169.254.20.10) to the kube-dns Service and the CoreDNS Pods, which forward external names to the VPC resolver at 169.254.169.253; the Service ClusterIP then reaches the backend Pods through kube-proxy](image-23.png)

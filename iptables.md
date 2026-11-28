@@ -574,9 +574,12 @@ The conntrack table records the rewrite for each connection. Each entry holds
 the *original* direction followed by the expected *reply* direction:
 
 ```
-tcp 6 119 TIME_WAIT src=10.0.1.2 dst=10.0.1.1 sport=41504 dport=8080 src=10.0.2.2 dst=10.0.1.2 sport=8000 dport=41504
-tcp 6 119 TIME_WAIT src=10.0.1.2 dst=10.0.1.1 sport=41508 dport=8080 src=10.0.2.2 dst=10.0.2.1 sport=8000 dport=41508
-                    └──────────────── what the client sent ─────┘ └──── what the reply will look like ─────────┘
+tcp 6 119 TIME_WAIT src=10.0.1.2 dst=10.0.1.1 sport=41504 dport=8080 \
+                    └──────────── what the client sent ────────────┘
+                    src=10.0.2.2 dst=10.0.1.2 sport=8000 dport=41504
+                    └─────── what the reply will look like ────────┘
+tcp 6 119 TIME_WAIT src=10.0.1.2 dst=10.0.1.1 sport=41508 dport=8080 \
+                    src=10.0.2.2 dst=10.0.2.1 sport=8000 dport=41508
 ```
 
 On the reply side, the first entry shows only DNAT (the reply goes back to the
@@ -810,3 +813,5 @@ Practices that matter in production:
 - **Consider writing nftables directly** for new work. It has native sets and
   maps, atomic replacement of the whole ruleset, a single tool for IPv4 and
   IPv6, and it's where kube-proxy is heading ([nftables.md](nftables.md)).
+
+![alt text](image-24.png)

@@ -99,13 +99,17 @@ its own conntrack table.
 ## 3. Reading an entry
 
 ```
-tcp  6 118 TIME_WAIT src=10.0.1.2 dst=10.0.2.2 sport=39588 dport=8000 src=10.0.2.2 dst=10.0.1.2 sport=8000 dport=39588 [ASSURED] mark=0 use=1
-│    │ │   │         └──────────── original direction ───────────┘ └───────────── reply direction ──────────────┘  │         │      │
-│    │ │   │                                                                                                   │         │      └ references
-│    │ │   └ TCP state (conntrack's own copy of the TCP state machine)                                          │         └ connmark
-│    │ └ seconds until it expires if no more packets arrive                                                    └ seen traffic in both directions
+tcp  6 118 TIME_WAIT src=10.0.1.2 dst=10.0.2.2 sport=39588 dport=8000 \
+│    │ │   │         └───────────── original direction ─────────────┘
+│    │ │   └ TCP state (conntrack's own copy of the TCP state machine)
+│    │ └ seconds until it expires if no more packets arrive
 │    └ protocol number
 └ protocol name
+
+                     src=10.0.2.2 dst=10.0.1.2 sport=8000 dport=39588 [ASSURED] mark=0 use=1
+                     └────────────── reply direction ───────────────┘ │         │      └ references
+                                                                      │         └ connmark
+                                     seen traffic in both directions ─┘
 ```
 
 | Field | Meaning |

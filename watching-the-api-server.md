@@ -236,7 +236,7 @@ It lists (500 per page), then watches from the list's RV.
  |                                                                               |
  |  watchCache                                                                   |
  |  +--------------------------+   +-------------------------------------------+ |
- |  | store: every configmap,  |    | history ring buffer: recent events        || 
+ |  | store: every configmap,  |   | history ring buffer: recent events        | |
  |  | current version          |   | [ ...57961 ADDED, 57962 MOD, 57963 DEL ]  | |
  |  +--------------------------+   | size 100 .. 102400 (grows/shrinks)        | |
  |                                 +-------------------------------------------+ |
@@ -557,7 +557,7 @@ kubectl apply / create
    ├─(A) BEFORE storing: admission
    │       mutating and validating webhooks, ValidatingAdmissionPolicy
    │       synchronous, inside the request; can change or reject the object
-   │       (ingress-nginx's webhook; the replicaset policy test in deployments-and-replicasets.md §2.3)
+   │       (ingress-nginx's webhook; the replicaset policy test: deployments-and-replicasets §2.3)
    │
    ├─(B) INSIDE the API server: work done in the request itself, no controller
    │       Service: ClusterIP (and nodePort) allocated before the response returns
@@ -667,7 +667,8 @@ The API server dials out only to serve a request that's in progress, never to pu
 
 ```
                 ┌──────── dial IN, then list + watch (the normal case) ────────┐
- controller-manager, scheduler, kubelet, kube-proxy, CoreDNS, CCM, operators, ingress/Gateway controllers
+ controller-manager, scheduler, kubelet, kube-proxy, CoreDNS, CCM, operators,
+ ingress/Gateway controllers
                                        │
                                        ▼
                                kube-apiserver ───────► etcd   (storage, always)
@@ -736,31 +737,32 @@ kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations
 `ps` on the minikube node, grouped. A "cluster" is just these processes. Only some of them talk to the API server, and the API server is the only one that talks to etcd.
 
 ```
- ┌─ outside Kubernetes: host services, not Pods ─────────────────────────────────────────────────────┐
- │  dockerd ─ containerd ─ containerd-shim ×75 (one per container)    the container runtime          │
- │  cri-dockerd        CRI adapter: kubelet ⇄ Docker over a unix socket                              │
- │  kubelet            the node agent; starts everything below                                       │
- └───────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ┌─ outside Kubernetes: host services, not Pods ───────────────────────────────────────────────────┐
+ │  dockerd ─ containerd ─ containerd-shim ×75 (one per container)    the container runtime        │
+ │  cri-dockerd        CRI adapter: kubelet ⇄ Docker over a unix socket                            │
+ │  kubelet            the node agent; starts everything below                                     │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
           │ kubelet reads /etc/kubernetes/manifests/*.yaml  →  STATIC Pods (control plane)
           ▼
- ┌─ control plane (static Pods, hostNetwork) ─────────────────────────────────────────────────────────┐
- │  etcd                      storage; only the API server talks to it                                │
- │  kube-apiserver            the hub; everything below dials it                                      │
- │  kube-controller-manager   ~30 control loops (Deployment, ReplicaSet, EndpointSlice, Node, …)      │
- │  kube-scheduler            picks a node for each new Pod (writes pods/binding)                     │
- └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-          │ kube-controller-manager / scheduler create the rest as ordinary Pods (DaemonSets, Deployments)
+ ┌─ control plane (static Pods, hostNetwork) ──────────────────────────────────────────────────────┐
+ │  etcd                      storage; only the API server talks to it                             │
+ │  kube-apiserver            the hub; everything below dials it                                   │
+ │  kube-controller-manager   ~30 control loops (Deployment, ReplicaSet, EndpointSlice, Node, …)   │
+ │  kube-scheduler            picks a node for each new Pod (writes pods/binding)                  │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+          │ kube-controller-manager / scheduler create the rest as ordinary Pods
+          │ (DaemonSets, Deployments)
           ▼
- ┌─ node add-ons (DaemonSets, hostNetwork) ──────┐   ┌─ cluster add-ons (Deployments, Pod network) ─────┐
- │  kube-proxy     Services → iptables rules     │   │  coredns ×2               cluster DNS            │
- │  calico-node    Pod network, policy           │   │  calico-kube-controllers  Calico's own GC loops  │
- │    + bird, bird6 BGP daemons (no API access)  │   │  envoy-gateway            Gateway API controller │
- └───────────────────────────────────────────────┘   │  envoy (+ shutdown-manager) the Gateway's proxy  │
-                                                     └──────────────────────────────────────────────────┘
- ┌─ workloads ──────────────────────────────────────────────────────────────────────────────────────────┐
- │  agnhost ×16 (the lab's apps: moneystack, lattice, shop, svc-demo, dns-demo, search)                 │
- │  pause ×27   one per Pod: holds the Pod's network namespace while app containers come and go         │
- └──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ┌─ node add-ons (DaemonSets, hostNetwork) ───┐  ┌─ cluster add-ons (Deployments, Pod network) ────┐
+ │  kube-proxy     Services → iptables rules  │  │  coredns ×2              cluster DNS            │
+ │  calico-node    Pod network, policy        │  │  calico-kube-controllers Calico's own GC loops  │
+ │    + bird, bird6: BGP, no API access       │  │  envoy-gateway           Gateway API controller │
+ └────────────────────────────────────────────┘  │  envoy + shutdown-mgr    the Gateway's proxy    │
+                                                 └─────────────────────────────────────────────────┘
+ ┌─ workloads ─────────────────────────────────────────────────────────────────────────────────────┐
+ │  agnhost ×16 (the lab's apps: moneystack, lattice, shop, svc-demo, dns-demo, search)            │
+ │  pause ×27   one per Pod: holds the Pod's network namespace while app containers come and go    │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Who each one talks to:

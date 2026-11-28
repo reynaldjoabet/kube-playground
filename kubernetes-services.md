@@ -705,9 +705,11 @@ that the two differ.
  │     ▲                                         │    │          ▲                            │
  └─────┼─────────────────────────────────────────┘    └──────────┼────────────────────────────┘
        │                                                         │
-       └──── in-cluster caller ─► ClusterIP 10.96.0.50:80 (port) ─DNAT─┘   (the same Pods, a second way in)
+       └──── in-cluster caller ─► ClusterIP 10.96.0.50:80 (port) ─DNAT─┘
+             (the same Pods, a second way in)
 
- There's no "Service" process anywhere in this picture. Only rules, plus the EndpointSlice they're built from.
+ There's no "Service" process anywhere in this picture. Only rules, plus the EndpointSlice
+ they're built from.
 ```
 
 **The slide, run on this cluster** (minikube, kube-proxy iptables mode). This is the slide's Service with two agnhost Pods listening on 80:
@@ -738,7 +740,8 @@ The rules show the two ways in meeting at one chain (`iptables -t nat -S`, trimm
 
 ```
  node port:  KUBE-NODEPORTS  -p tcp "slide/myapp-service"                  -j KUBE-EXT-DCOT4UTR3VANDJ4U
-             KUBE-EXT-DCOT…  -j KUBE-MARK-MASQ        (source rewritten: externalTrafficPolicy Cluster, §4.3)
+             KUBE-EXT-DCOT…  -j KUBE-MARK-MASQ
+                                             (source rewritten: externalTrafficPolicy Cluster, §4.3)
              KUBE-EXT-DCOT…  -j KUBE-SVC-DCOT4UTR3VANDJ4U ─┐
                                                            │
  ClusterIP:  KUBE-SERVICES   -d 10.96.99.212/32 -p tcp     │
@@ -982,18 +985,18 @@ This builds on the NodePort picture in §2.2 ("Reading a typical NodePort diagra
  (B) LoadBalancer   client ─► cloud LB 203.0.113.10:80 ───► node:30008 ─DNAT─► app Pod:80
                               (made by the CCM, one per Service; it knows ports, not paths)
 
- (C) Ingress        client ─► cloud LB :80/:443 ─► node:3xxxx ─DNAT─► ingress-nginx Pod
-                                                                          │ reads Host + path,
-                                                                          │ Ingress rule → Service "app"
-                                                                          │ → its EndpointSlice → Pod IPs
-                                                                          ▼
-                                                                      app Pod:80   (ClusterIP skipped)
+ (C) Ingress   client ─► cloud LB :80/:443 ─► node:3xxxx ─DNAT─► ingress-nginx Pod
+                                                                     │ reads Host + path,
+                                                                     │ Ingress rule → Service "app"
+                                                                     │ → its EndpointSlice → Pod IPs
+                                                                     ▼
+                                                                 app Pod:80   (ClusterIP skipped)
 
- (D) Gateway        client ─► cloud LB :80/:443 ─► node:3xxxx ─DNAT─► Envoy Pod
-                                                                          │ HTTPRoute rule → Service "app"
-                                                                          │ → its EndpointSlice → Pod IPs
-                                                                          ▼
-                                                                      app Pod:80   (ClusterIP skipped)
+ (D) Gateway  client ─► cloud LB :80/:443 ─► node:3xxxx ─DNAT─► Envoy Pod
+                                                                    │ HTTPRoute rule → Service "app"
+                                                                    │ → its EndpointSlice → Pod IPs
+                                                                    ▼
+                                                                app Pod:80   (ClusterIP skipped)
 ```
 
 In (C) and (D) there are two kinds of Service:
@@ -1173,12 +1176,14 @@ HETZNER, use-private-ip: "true"  (LB and nodes in one Hetzner Network)
    │ TCP to 203.0.113.10:80                        (Hetzner LB public IP)
    ▼
  Hetzner LB  "service": listen 80 → destination 31845
-   │ opens its OWN TCP connection to a target:      (it's a proxy: a second connection, not a forwarded packet)
+   │ opens its OWN TCP connection to a target:
+   │                                     (it's a proxy: a second connection, not a forwarded packet)
    │   default:              <node PUBLIC IP>:31845
    │   use-private-ip=true:  <node PRIVATE IP>:31845   (LB attached to the same Hetzner Network)
    ▼
  node, in the kernel (kube-proxy's rules):
-   KUBE-NODEPORTS  --dport 31845        → KUBE-EXT-…   (+ masquerade if externalTrafficPolicy: Cluster)
+   KUBE-NODEPORTS  --dport 31845        → KUBE-EXT-…
+                                                    (+ masquerade if externalTrafficPolicy: Cluster)
    KUBE-EXT-…                          → KUBE-SVC-…    (the SAME chain the ClusterIP uses)
    KUBE-SVC-…   pick one endpoint       → KUBE-SEP-…
    KUBE-SEP-…   DNAT → 10.244.1.23:8080                ← Pod IP : targetPort
@@ -1438,7 +1443,7 @@ Before any request, this is how the ClusterIP gets from etcd to the places that 
 kubectl expose → API server
    ├─ allocates 10.106.133.73 from the ServiceCIDR
    ├─ writes /registry/ipaddresses/10.106.133.73 and /registry/services/specs/default/web   (etcd)
-   └─ EndpointSlice controller (kube-controller-manager) writes the ready Pod IPs: 10.244.120.71:8080, ...
+   └─ EndpointSlice controller (kube-controller-manager) writes ready Pod IPs: 10.244.120.71:8080, …
 
         API server ── watch events ──┬──► CoreDNS     (kubernetes plugin, in memory)
                                      │      web.default.svc.cluster.local → 10.106.133.73
@@ -1536,7 +1541,7 @@ read one rule:
 
 ```
 -A KUBE-SERVICES -d 10.107.59.191/32 -p tcp -m tcp --dport 80 -j KUBE-SVC-IGTRU775QHYZG4VA
-│  │             │                   │      │                 └─ if all of it matches: jump to this chain
+│  │             │                   │      │                 └─ if all match: jump to this chain
 │  │             │                   │      └─ and destination port 80
 │  │             │                   └─ and the protocol is TCP
 │  │             └─ match: destination address is exactly 10.107.59.191
@@ -5840,17 +5845,17 @@ on FORWARD:
 ```text
 struct net
 └─ nf  (struct netns_nf)
-   ├─ hooks_ipv4[0] ──► ┌─ nf_hook_entries ─────────────────────────────┐   PRE_ROUTING
-   │                    │ num_hook_entries = 2                          │
-   │                    │ hooks[0] { ipt_do_table,        &raw    }     │   -300 runs first
-   │                    │ hooks[1] { iptable_mangle_hook, &mangle }     │   -150
-   │                    │ orig_ops[0], orig_ops[1]   (the trailer)      │
-   │                    │ rcu_head                                      │
-   │                    └───────────────────────────────────────────────┘
-   ├─ hooks_ipv4[1] ──► ┌─ nf_hook_entries … ┐                               LOCAL_IN
-   ├─ hooks_ipv4[2] ──► NULL                                                 FORWARD (nothing registered)
-   ├─ hooks_ipv4[3] ──► ┌─ nf_hook_entries … ┐                               LOCAL_OUT
-   ├─ hooks_ipv4[4] ──► ┌─ nf_hook_entries … ┐                               POST_ROUTING
+   ├─ hooks_ipv4[0] ──► ┌─ nf_hook_entries ──────────────────────────┐ PRE_ROUTING
+   │                    │ num_hook_entries = 2                       │
+   │                    │ hooks[0] { ipt_do_table,        &raw    }  │ -300 runs first
+   │                    │ hooks[1] { iptable_mangle_hook, &mangle }  │ -150
+   │                    │ orig_ops[0], orig_ops[1]   (the trailer)   │
+   │                    │ rcu_head                                   │
+   │                    └────────────────────────────────────────────┘
+   ├─ hooks_ipv4[1] ──► ┌─ nf_hook_entries … ┐                          LOCAL_IN
+   ├─ hooks_ipv4[2] ──► NULL                                            FORWARD (nothing registered)
+   ├─ hooks_ipv4[3] ──► ┌─ nf_hook_entries … ┐                          LOCAL_OUT
+   ├─ hooks_ipv4[4] ──► ┌─ nf_hook_entries … ┐                          POST_ROUTING
    └─ hooks_ipv6[0..4] ──► the same, for IPv6
 ```
 
@@ -5872,55 +5877,55 @@ it has no PREROUTING or POSTROUTING chain:
 ```text
 net->nf.hooks_ipv4[0]   (NF_INET_PRE_ROUTING)
   │
-  ┌─ struct nf_hook_entries ────────────────────────────────────────────────────────────────────────┐
-  │ num_hook_entries = 5                                                                            │
-  │                                                                                                 │
-  │ hooks[0] { .hook = ipv4_conntrack_defrag,   .priv = NULL    }  -400 NF_IP_PRI_CONNTRACK_DEFRAG  │
-  │ hooks[1] { .hook = ipt_do_table,            .priv = &raw    }  -300 NF_IP_PRI_RAW               │
-  │ hooks[2] { .hook = ipv4_conntrack_in,       .priv = NULL    }  -200 NF_IP_PRI_CONNTRACK         │
-  │ hooks[3] { .hook = iptable_mangle_hook,     .priv = &mangle }  -150 NF_IP_PRI_MANGLE            │
-  │ hooks[4] { .hook = nf_nat_ipv4_pre_routing, .priv = lpriv   }  -100 NF_IP_PRI_NAT_DST           │
-  │                                                                                                 │
-  │ trailer:                                                                                        │
-  │ orig_ops[0] ─► &ipv4_defrag_ops[0]     static, nf_defrag_ipv4.c                                 │
-  │ orig_ops[1] ─► &raw->ops[0]            copy made by ipt_register_table                          │
-  │ orig_ops[2] ─► &ipv4_conntrack_ops[0]  static, nf_conntrack_proto.c                             │
-  │ orig_ops[3] ─► &mangle->ops[0]         copy made by ipt_register_table                          │
-  │ orig_ops[4] ─► &nat_hook_ops[0]        the NAT core's copy (nf_nat_proto.c)                     │
-  │ rcu_head                                                                                        │
-  └┬────────────────────────────────────────────────────────────────────────────────────────────────┘
+  ┌─ struct nf_hook_entries ───────────────────────────────────────────────────────────────────────┐
+  │ num_hook_entries = 5                                                                           │
+  │                                                                                                │
+  │ hooks[0] { .hook = ipv4_conntrack_defrag,   .priv = NULL    }  -400 NF_IP_PRI_CONNTRACK_DEFRAG │
+  │ hooks[1] { .hook = ipt_do_table,            .priv = &raw    }  -300 NF_IP_PRI_RAW              │
+  │ hooks[2] { .hook = ipv4_conntrack_in,       .priv = NULL    }  -200 NF_IP_PRI_CONNTRACK        │
+  │ hooks[3] { .hook = iptable_mangle_hook,     .priv = &mangle }  -150 NF_IP_PRI_MANGLE           │
+  │ hooks[4] { .hook = nf_nat_ipv4_pre_routing, .priv = lpriv   }  -100 NF_IP_PRI_NAT_DST          │
+  │                                                                                                │
+  │ trailer:                                                                                       │
+  │ orig_ops[0] ─► &ipv4_defrag_ops[0]     static, nf_defrag_ipv4.c                                │
+  │ orig_ops[1] ─► &raw->ops[0]            copy made by ipt_register_table                         │
+  │ orig_ops[2] ─► &ipv4_conntrack_ops[0]  static, nf_conntrack_proto.c                            │
+  │ orig_ops[3] ─► &mangle->ops[0]         copy made by ipt_register_table                         │
+  │ orig_ops[4] ─► &nat_hook_ops[0]        the NAT core's copy (nf_nat_proto.c)                    │
+  │ rcu_head                                                                                       │
+  └┬───────────────────────────────────────────────────────────────────────────────────────────────┘
    │ hooks[4].priv = lpriv
    ▼
-  ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ───────────────────────────────────────┐
-  │ .entries ─► struct nf_hook_entries                                                              │
-  │   num_hook_entries = 1                                                                          │
-  │   hooks[0] { .hook = ipt_do_table, .priv = &nat }  -100 NF_IP_PRI_NAT_DST                       │
-  │   trailer: orig_ops[0] ─► iptable_nat's ops[0]  (PREROUTING)                                    │
-  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+  ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ──────────────────────────────────────┐
+  │ .entries ─► struct nf_hook_entries                                                             │
+  │   num_hook_entries = 1                                                                         │
+  │   hooks[0] { .hook = ipt_do_table, .priv = &nat }  -100 NF_IP_PRI_NAT_DST                      │
+  │   trailer: orig_ops[0] ─► iptable_nat's ops[0]  (PREROUTING)                                   │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 net->nf.hooks_ipv4[4]   (NF_INET_POST_ROUTING)
   │
-  ┌─ struct nf_hook_entries ────────────────────────────────────────────────────────────────────────┐
-  │ num_hook_entries = 3                                                                            │
-  │                                                                                                 │
-  │ hooks[0] { .hook = iptable_mangle_hook,     .priv = &mangle }  -150 NF_IP_PRI_MANGLE            │
-  │ hooks[1] { .hook = nf_nat_ipv4_out,         .priv = lpriv   }   100 NF_IP_PRI_NAT_SRC           │
-  │ hooks[2] { .hook = nf_confirm,              .priv = NULL    }   max NF_IP_PRI_CONNTRACK_CONFIRM │
-  │                                                                                                 │
-  │ trailer:                                                                                        │
-  │ orig_ops[0] ─► &mangle->ops[4]         mangle's 5th op = POSTROUTING                            │
-  │ orig_ops[1] ─► &nat_hook_ops[1]        the NAT core's POSTROUTING op                            │
-  │ orig_ops[2] ─► &ipv4_conntrack_ops[2]  static, nf_conntrack_proto.c                             │
-  │ rcu_head                                                                                        │
-  └┬────────────────────────────────────────────────────────────────────────────────────────────────┘
+  ┌─ struct nf_hook_entries ───────────────────────────────────────────────────────────────────────┐
+  │ num_hook_entries = 3                                                                           │
+  │                                                                                                │
+  │ hooks[0] { .hook = iptable_mangle_hook,     .priv = &mangle } -150 NF_IP_PRI_MANGLE            │
+  │ hooks[1] { .hook = nf_nat_ipv4_out,         .priv = lpriv   }  100 NF_IP_PRI_NAT_SRC           │
+  │ hooks[2] { .hook = nf_confirm,              .priv = NULL    }  max NF_IP_PRI_CONNTRACK_CONFIRM │
+  │                                                                                                │
+  │ trailer:                                                                                       │
+  │ orig_ops[0] ─► &mangle->ops[4]         mangle's 5th op = POSTROUTING                           │
+  │ orig_ops[1] ─► &nat_hook_ops[1]        the NAT core's POSTROUTING op                           │
+  │ orig_ops[2] ─► &ipv4_conntrack_ops[2]  static, nf_conntrack_proto.c                            │
+  │ rcu_head                                                                                       │
+  └┬───────────────────────────────────────────────────────────────────────────────────────────────┘
    │ hooks[1].priv = lpriv
    ▼
-  ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ───────────────────────────────────────┐
-  │ .entries ─► struct nf_hook_entries                                                              │
-  │   num_hook_entries = 1                                                                          │
-  │   hooks[0] { .hook = ipt_do_table, .priv = &nat }   100 NF_IP_PRI_NAT_SRC                       │
-  │   trailer: orig_ops[0] ─► iptable_nat's ops[1]  (POSTROUTING)                                   │
-  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
+  ┌─ struct nf_nat_lookup_hook_priv  (lpriv, the NAT core's) ──────────────────────────────────────┐
+  │ .entries ─► struct nf_hook_entries                                                             │
+  │   num_hook_entries = 1                                                                         │
+  │   hooks[0] { .hook = ipt_do_table, .priv = &nat }   100 NF_IP_PRI_NAT_SRC                      │
+  │   trailer: orig_ops[0] ─► iptable_nat's ops[1]  (POSTROUTING)                                  │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **`orig_ops[i]` points at the `nf_hook_ops` that created `hooks[i]`.** Some
@@ -6287,8 +6292,9 @@ columns to the right are annotations, added to explain where each entry comes
 from:
 
 ```text
-hooks[2] = { .hook = ipv4_conntrack_in, .priv = NULL }   NF_IP_PRI_CONNTRACK (-200)   nf_conntrack_proto.c: ipv4_conntrack_ops[]
-           └──────────── stored in the entry ─────────┘   └──────────────────── explanation only ─────────────────────────┘
+hooks[2] = { .hook = ipv4_conntrack_in, .priv = NULL }   NF_IP_PRI_CONNTRACK (-200)
+           └──────────── stored in the entry ─────────┘   └─ explanation only: the priority's name
+           (the entry comes from ipv4_conntrack_ops[] in nf_conntrack_proto.c)
 ```
 
 The priority was used to sort the list when the entry was registered, so at
@@ -7111,7 +7117,7 @@ no port. Use `kubectl -n kube-system exec <kube-proxy pod> -- iptables-save -t n
  nat POSTROUTING ─► KUBE-POSTROUTING
    -m mark ! --mark 0x4000/0x4000 -j RETURN          unmarked: leave the source alone
    -j MARK --set-xmark 0x4000/0x0                    clear the mark
-   -j MASQUERADE --random-fully                      marked: SNAT to the outgoing interface's address
+   -j MASQUERADE --random-fully                      marked: SNAT to the outgoing interface's IP
 ```
 
 `KUBE-MARK-MASQ` is just `-j MARK --set-xmark 0x4000/0x4000`. It only flags the
@@ -7359,12 +7365,13 @@ PREROUTING / OUTPUT
         │  -j KUBE-SERVICES          (every packet, both paths)
         ▼
   KUBE-SERVICES
-        ├─ rule: -d 10.43.208.17 --dport 80 ─────────────────────────────► KUBE-SVC-… ─► KUBE-SEP-… (DNAT to a Pod)
+        ├─ rule: -d 10.43.208.17 --dport 80 ─────────────────────────────► KUBE-SVC-… ─► KUBE-SEP-…
         │        (ClusterIP)                                                   ▲
         │                                                                      │
         └─ last rule: --dst-type LOCAL ─► KUBE-NODEPORTS ─► KUBE-EXT-… ────────┘
                  (NodePort: any node IP)    --dport 30080       │
-                                                                └─ KUBE-MARK-MASQ: mark 0x4000, "SNAT this later"
+                                                                └─ KUBE-MARK-MASQ: mark 0x4000,
+                                                                   "SNAT this later"
 ```
 
 **2. The rules kube-proxy wrote (nat table).** Entry: `KUBE-SERVICES`. Its last
@@ -8311,8 +8318,8 @@ to this packet because of the mark. Being forwarded isn't enough.
 *Where: every packet leaving the node passes POSTROUTING.*
 
 ```
-packet arrives ─► PREROUTING ─► routing ─┬─► INPUT ─► a process on the node             (no POSTROUTING)
-                  (DNAT here)            └─► FORWARD ─► POSTROUTING ─► out an interface   ← our packet
+packet arrives ─► PREROUTING ─► routing ─┬─► INPUT ─► a process on the node       (no POSTROUTING)
+                  (DNAT here)            └─► FORWARD ─► POSTROUTING ─► out an interface ← our packet
 a process on the node sends ─► OUTPUT ─► routing ─► POSTROUTING ─► out an interface
 ```
 
@@ -8602,7 +8609,7 @@ didn't change at all.
 
 ```
 PREROUTING → KUBE-SERVICES
-   ├─ -d 10.43.208.17 --dport 80            → KUBE-SVC ───────────────────────────► KUBE-SEP (DNAT to a Pod)
+   ├─ -d 10.43.208.17 --dport 80            → KUBE-SVC ───────────────────────────► KUBE-SEP (DNAT)
    ├─ -d 172.17.0.3   --dport 80  (LB IP)   → KUBE-EXT ─┐ (mark for SNAT)              ▲
    └─ last rule: --dst-type LOCAL           → KUBE-NODEPORTS → --dport 30080 → KUBE-EXT ┘
 ```
@@ -8745,14 +8752,18 @@ Everything below `KUBE-SERVICES` is per port: each port has its own `KUBE-EXT`,
 PREROUTING / OUTPUT → KUBE-SERVICES
   │
   ├─ port http (80)
-  │    10.43.208.17:80 ──────────────────────────────► KUBE-SVC-6V2X… ─┬─► KUBE-SEP-C24B…  DNAT 10.42.0.14:80
-  │    172.17.0.3:80   (LB IP) ─► KUBE-EXT-6V2X… ─────────▲             └─► KUBE-SEP-JE4Z…  DNAT 10.42.0.15:80
-  │    node IP:30080   (NodePort) ─► KUBE-EXT-6V2X… ──────┘
+  │    10.43.208.17:80   (ClusterIP)                     ─► KUBE-SVC-6V2X…
+  │    172.17.0.3:80     (LB IP)    ─► KUBE-EXT-6V2X… ─► KUBE-SVC-6V2X…
+  │    node IP:30080     (NodePort) ─► KUBE-EXT-6V2X… ─► KUBE-SVC-6V2X…
+  │    KUBE-SVC-6V2X… ─┬─► KUBE-SEP-C24B…  DNAT 10.42.0.14:80
+  │                    └─► KUBE-SEP-JE4Z…  DNAT 10.42.0.15:80
   │
   └─ port https (443)
-       10.43.208.17:443 ─────────────────────────────► KUBE-SVC-AFZY… ─┬─► KUBE-SEP-I35W…  DNAT 10.42.0.14:80
-       172.17.0.3:443  (LB IP) ─► KUBE-EXT-AFZY… ─────────▲             └─► KUBE-SEP-IBQQ…  DNAT 10.42.0.15:80
-       node IP:30669   (NodePort) ─► KUBE-EXT-AFZY… ──────┘
+       10.43.208.17:443  (ClusterIP)                     ─► KUBE-SVC-AFZY…
+       172.17.0.3:443    (LB IP)    ─► KUBE-EXT-AFZY… ─► KUBE-SVC-AFZY…
+       node IP:30669     (NodePort) ─► KUBE-EXT-AFZY… ─► KUBE-SVC-AFZY…
+       KUBE-SVC-AFZY… ─┬─► KUBE-SEP-I35W…  DNAT 10.42.0.14:80
+                       └─► KUBE-SEP-IBQQ…  DNAT 10.42.0.15:80
 ```
 
 The chain names are hashes of namespace, name, port name and protocol, so
@@ -8954,13 +8965,17 @@ ClusterIP goes straight to `KUBE-SVC`:
 ```
 nat PREROUTING (or OUTPUT for traffic from the node itself)
  └─ KUBE-SERVICES
-     ├─ -d 10.43.68.115 --dport 80  ──────────────────────────────► KUBE-SVC-…   ClusterIP: skips KUBE-EXT
-     ├─ -d 203.0.113.10 --dport 80  ─────────────► KUBE-EXT-… ────► KUBE-SVC-…   LB IP: address + Service port
+     ├─ -d 10.43.68.115 --dport 80  ──────────────────────────────► KUBE-SVC-…   (1)
+     ├─ -d 203.0.113.10 --dport 80  ─────────────► KUBE-EXT-… ────► KUBE-SVC-…   (2)
      │   … other Services …                         ▲
      └─ (last) --dst-type LOCAL ─► KUBE-NODEPORTS   │
-                                    └─ --dport 32746 ┘                           NodePort: node address, then port only
+                                    └─ --dport 32746 ┘                           (3)
 
 KUBE-SVC-… ─► KUBE-SEP-… ─► DNAT to Pod IP:8080      (all three paths end here)
+
+(1) ClusterIP: skips KUBE-EXT
+(2) LB IP: matched on the address + the Service port
+(3) NodePort: matched on a node address, then on the port only
 ```
 
 - **LB IP:** the rule in `KUBE-SERVICES` matches the LB IP **and** the Service port
@@ -9141,10 +9156,10 @@ target to run. Take this rule from the lab:
 -d 10.43.208.17/32                                 │   source is NOT in 10.42.0.0/16 (not a Pod)
 -p tcp                                             ┘   destination 10.43.208.17, protocol TCP
 
--m comment --comment "np-lab/web:http cluster IP"  ← match module "comment", its one option --comment
-                                                      checks nothing: always true, just a label
+-m comment --comment "np-lab/web:http cluster IP" ← match module "comment", its one option --comment
+                                                     checks nothing: always true, just a label
 
--m tcp --dport 80                                  ← match module "tcp", option --dport: destination port 80
+-m tcp --dport 80                          ← match module "tcp", option --dport: destination port 80
 
 -j KUBE-MARK-MASQ                                  ← target: if everything above matched, jump here
 ```
@@ -9163,8 +9178,10 @@ KUBE-MARK-MASQ  tcp   !10.42.0.0/16   10.43.208.17   /* np-lab/web:http cluster 
 A rule with two modules:
 
 ```
--A KUBE-SVC-6V2X… -m comment --comment "np-lab/web:http -> 10.42.0.7:80" -m statistic --mode random --probability 0.5 -j KUBE-SEP-MX3S…
-                  └──────────── label: which endpoint ──────────────┘ └── module "statistic": true 50% of the time ──┘ └ jump to that endpoint's chain ┘
+-A KUBE-SVC-6V2X… -m comment --comment "np-lab/web:http -> 10.42.0.7:80" \
+                  └────────────── label: which endpoint ───────────────┘
+   -m statistic --mode random --probability 0.5 -j KUBE-SEP-MX3S…
+   └ module "statistic": true 50% of the time ┘ └──── jump ─────┘
 ```
 
 *What `-m comment` does in the kernel.* Nothing to the packet. Its match function
@@ -9637,12 +9654,14 @@ happens depends on how the load balancer forwards traffic.
                     nat KUBE-SERVICES
                     ├── -d ClusterIP:port        → KUBE-SVC   (in-cluster callers)
 packet arrives ───▶ ├── -d externalIP:port       → KUBE-EXT ┐
-on a node           ├── -d LB IP:port            → KUBE-EXT ┤ (or KUBE-FW first,
-                    └── (last) dst-type LOCAL    → KUBE-NODEPORTS → KUBE-EXT ┘  with loadBalancerSourceRanges)
+on a node           ├── -d LB IP:port            → KUBE-EXT ┤ (or KUBE-FW first, see below)
+                    └── (last) dst-type LOCAL    → KUBE-NODEPORTS → KUBE-EXT ┘
                                                                    │
                                      KUBE-EXT: masquerade, or ETP Local sorting
                                                                    ▼
                                                     KUBE-SVC / KUBE-SVL → KUBE-SEP → Pod
+
+KUBE-FW comes first for the LB IP when the Service sets loadBalancerSourceRanges.
 ```
 
 The LB IP, an external IP and the node port all lead into the same

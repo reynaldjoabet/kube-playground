@@ -6,7 +6,7 @@ bridge vlan del dev br0 vid 1 self
 ip link set dev br0 type bridge vlan_filtering 1
 ```
 
-![alt text](image-12.png)
+![A hypervisor with three VMs (.11, .12, .13) on bridge br0, which also holds the host's eth0 to the public network; eth1 (192.168.14.3/24) is outside the bridge, on the infrastructure network](image-12.png)
 
 
 The main expectation of such a setup is that while the virtual hosts should be able to use resources from the public network, they should not be able to access resources from the infrastructure network (including resources hosted on the hypervisor itself, like a SSH server). In other words, we expect total isolation between the green domain and the purple one.

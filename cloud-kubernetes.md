@@ -3950,7 +3950,7 @@ spec:
           weight: 10                 # canary
 ```            
 
-![alt text](image-6.png)
+![Scaleway Kapsule with a dedicated control plane: three etcd members, an API server and its replica, a node pool of worker nodes and a GPU node pool](image-6.png)
 
 ## Ingress or LoadBalancer?
 When considering whether to expose your application via ingress (and an ingress controller) or a LoadBalancer service, consider the following:
@@ -3958,7 +3958,7 @@ When considering whether to expose your application via ingress (and an ingress 
 - A Load Balancer is also most appropriate for dealing with external TCP traffic.
 - Ingress controller with an external Load Balancer may be most appropriate if you have multiple services running in your cluster, and you want to direct HTTP traffic from a single external access point, to different services within your cluster, based on a set of rules.
 
-![alt text](image-7.png)
+![Users reach a load balancer, then an Ingress for mycompany.com that sends /blog to the blog ClusterIP Service (pods blog-01, blog-02) and /shop to the shop Service (shop-01, shop-02)](image-7.png)
 
 ### LoadBalancer Service (Layer 4)
 This approach creates a direct, 1:1 mapping between your Kubernetes service and a cloud provider's external load balancer.

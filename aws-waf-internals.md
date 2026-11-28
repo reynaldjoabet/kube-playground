@@ -25,8 +25,8 @@
  │  cache: POP → regional edge cache → Origin Shield; request collapsing                │  §2
  └──────────────────────────────────────┬───────────────────────────────────────────────┘
                                         ▼ persistent connections, X-Forwarded-For appended
- ┌─ Region: ALB (+ optional regional WAF) ─► targets ─────────────────────────────────┐
- └─────────────────────────────────────────────────────────────────────────────────────┘
+ ┌─ Region: ALB (+ optional regional WAF) ─► targets ───────────────────────────────────┐
+ └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 (In the newer WAF console a web ACL is called a **protection pack**; the docs use both names.)

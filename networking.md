@@ -106,7 +106,7 @@ Now we borrow 2 bits for the subnet. The rule is: borrowed bits come off the lef
    A    B  | C    D    E    F    G    H
  128   64  | 32   16    8    4    2    1
  └subnet┘  |  └────── host bits ──────┘
- ```
+```
 "High positions" just means the two leftmost bits — the ones worth 128 and 64. The host bits are the leftovers, worth 32 down to 1.
 
 
@@ -125,7 +125,7 @@ Now we borrow 2 bits for the subnet. The rule is: borrowed bits come off the lef
    A    B  | C    D    E    F    G    H
  128   64  | 32   16    8    4    2    1
  └subnet┘  |  └────── host bits ──────┘
- ```
+```
 "High positions" just means the two leftmost bits — the ones worth 128 and 64. The host bits are the leftovers, worth 32 down to 1.
 
 `Same address, different mask → different meaning`
@@ -365,11 +365,11 @@ table can only have one default route, so each WAN gets **its own table with its
 own default route**, and **rules pick the table by the client's source subnet**.
 
 ```text
-                       ┌──────────── router ────────────┐
- LAN1 10.100.0.0/24 ──►│ lan1                      wan1 │──► 192.168.10.200 (WAN1 gateway) ──┐
-                       │                                │                                    ├──► internet (8.8.8.8)
- LAN2 10.200.0.0/24 ──►│ lan2                      wan2 │──► 192.168.12.254 (WAN2 gateway) ──┘
-                       └────────────────────────────────┘
+                      ┌────── router ──────┐
+ LAN1 10.100.0.0/24 ─►│ lan1          wan1 │─► 192.168.10.200 (WAN1 gateway) ─┐
+                      │                    │                                  ├─► internet (8.8.8.8)
+ LAN2 10.200.0.0/24 ─►│ lan2          wan2 │─► 192.168.12.254 (WAN2 gateway) ─┘
+                      └────────────────────┘
 ```
 
 The lab rebuilds this inside one throwaway `--privileged` container, with

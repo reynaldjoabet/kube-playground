@@ -283,7 +283,8 @@ a filter for VXLAN, UDP 8472 and IP-in-IP matched nothing):
 ```
 
 ```text
-client 10.244.70.0          cal-server                         cal-agent1                  web1 10.244.189.5
+client 10.244.70.0          cal-server                         cal-agent1               web1
+                                                                                        10.244.189.5
   eth0 ─ default via ──► cali3583acdbfb9                                                ┌─► eth0
   169.254.1.1 (proxy ARP)   route 10.244.189.0/26                 route 10.244.189.5    │
                             via 172.21.0.3 (proto bird) ─eth0──► dev cali9c5947ed78f ───┘
@@ -379,6 +380,7 @@ docker rm -f cal-server cal-agent1 cal-agent2 && docker network rm k3s-cal
 - [network-policy.md](network-policy.md): flannel VXLAN routing tables, and NetworkPolicy with kube-router
 - [kubernetes-services.md](kubernetes-services.md): kube-proxy's chains, which work the same on top of Calico
 - [networking.md](networking.md): routing tables and policy routing
+- [cilium-ebpf.md](cilium-ebpf.md): the other CNI, with kube-proxy replaced by eBPF.
 
 ## Sources
 

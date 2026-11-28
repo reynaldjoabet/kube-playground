@@ -518,7 +518,7 @@ Scaleway takes care of Kubernetes system applications such as CoreDNS, Kubeproxy
 
 Scaleway is also responsible for node provisioning and providing updates of operating system node images.
 
-![alt text](image-5.png)
+![Scaleway Kapsule with a fully managed control plane (etcd, API server, scheduler, cloud controller, controller manager), a node pool of worker nodes with block storage volumes, a load balancer and a container registry](image-5.png)
 
 [Building a Production-Ready Kubernetes Cluster on Scaleway with Terraform](https://hervekhg.medium.com/building-a-production-ready-kubernetes-cluster-on-scaleway-with-terraform-269e9d558128)
 

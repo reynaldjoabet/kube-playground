@@ -26,11 +26,13 @@ $ sudo ls -la /etc/kubernetes/manifests/
 The files are readable only by root. They hold flags and certificate **paths**, not key material: a search for `BEGIN`, `token=` and `password` across all four finds nothing **(lab)**.
 
 ```
- /etc/kubernetes/manifests/         kubelet (staticPodPath)          kubectl get pods -n kube-system
- ├─ etcd.yaml                 ──►   starts containers directly  ──►  etcd-minikube                   (mirror Pod)
- ├─ kube-apiserver.yaml       ──►   restarts them if they die   ──►  kube-apiserver-minikube         OWNER: Node
- ├─ kube-controller-manager.yaml                                ──►  kube-controller-manager-minikube SOURCE: file
- └─ kube-scheduler.yaml                                         ──►  kube-scheduler-minikube
+ /etc/kubernetes/manifests/       kubelet (staticPodPath)          kubectl get pods -n kube-system
+ ├─ etcd.yaml                 ──► starts containers directly  ──►  etcd-minikube
+ ├─ kube-apiserver.yaml       ──► restarts them if they die   ──►  kube-apiserver-minikube
+ ├─ kube-controller-manager.yaml                              ──►  kube-controller-manager-minikube
+ └─ kube-scheduler.yaml                                       ──►  kube-scheduler-minikube
+
+ The Pods on the right are mirror Pods: OWNER Node, SOURCE file.
 ```
 
 ---
@@ -108,7 +110,7 @@ minikube start
    ▼
 kubeadm init --config /var/tmp/minikube/kubeadm.yaml
    ├─ certificates      → /var/lib/minikube/certs/        (ca, apiserver, etcd, sa.key …)
-   ├─ kubeconfigs       → /etc/kubernetes/*.conf          (scheduler.conf, controller-manager.conf …)
+   ├─ kubeconfigs       → /etc/kubernetes/*.conf          (scheduler.conf, kubelet.conf …)
    ├─ static Pod files  → /etc/kubernetes/manifests/      (the four YAMLs)
    ├─ kubelet config    → /var/lib/kubelet/config.yaml    (staticPodPath …)
    └─ once the API is up: CoreDNS Deployment, kube-proxy DaemonSet, bootstrap token,
@@ -645,21 +647,21 @@ It watches Pods with no `spec.nodeName`, picks a node, and writes the choice bac
 
 ```
                       your kubectl, kubelets, CoreDNS, kube-proxy, controllers in Pods …
-                                            │  HTTPS :8443, client cert or token
-                                            ▼
- ┌──────────────────────────── control-plane node (hostNetwork: all on 192.168.49.2) ─────────────────────────┐
- │                                                                                                            │
- │  kube-scheduler ──scheduler.conf──────────►┌──────────────────────┐                                        │
- │   :10259 (127.0.0.1)                        │    kube-apiserver    │──client cert────► etcd                │
- │                                             │    :8443             │  apiserver-etcd-   :2379 clients      │
- │  kube-controller-manager ─controller-──────►│                      │  client.crt        :2380 peers        │
- │   :10257 (127.0.0.1)       manager.conf     │  signs SA tokens     │                    :2381 metrics      │
- │                                             │  with sa.key         │                    data: /var/lib/    │
- │                                             └──────────────────────┘                    minikube/etcd      │
- │                                                    │ apiserver-kubelet-client.crt                          │
- │                                                    ▼                                                       │
- │                                              kubelet :10250 (logs, exec, port-forward)                     │
- └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                        │  HTTPS :8443, client cert or token
+                                                        ▼
+ ┌──────────────────── control-plane node (hostNetwork: all on 192.168.49.2) ──────────────────────┐
+ │                                                                                                 │
+ │  kube-scheduler ──scheduler.conf────────►┌──────────────────────┐                               │
+ │   :10259 (127.0.0.1)                     │    kube-apiserver    │──client cert──► etcd          │
+ │                                          │    :8443             │  apiserver-etcd-client.crt    │
+ │  kube-controller-manager ─controller-───►│                      │                 :2379 clients │
+ │   :10257 (127.0.0.1)       manager.conf  │  signs SA tokens     │                 :2380 peers   │
+ │                                          │  with sa.key         │                 :2381 metrics │
+ │                                          └──────┬───────────────┘  data: /var/lib/minikube/etcd │
+ │                                                 │ apiserver-kubelet-client.crt                  │
+ │                                                 ▼                                               │
+ │                                           kubelet :10250 (logs, exec, port-forward)             │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Only the API server talks to etcd.** The scheduler and controller-manager have no etcd flags at all. They reach the API server through their kubeconfig files and bind their own ports to `127.0.0.1`.
@@ -721,11 +723,15 @@ A static Pod has no `replicas` field. Each control-plane node has its own copy o
  ┌─ cp-1 ────────────────┐ ┌─ cp-2 ────────────────┐ ┌─ cp-3 ────────────────┐
  │ /etc/kubernetes/      │ │ /etc/kubernetes/      │ │ /etc/kubernetes/      │
  │   manifests/          │ │   manifests/          │ │   manifests/          │
- │ kube-apiserver  ACTIVE│ │ kube-apiserver  ACTIVE│ │ kube-apiserver  ACTIVE│  ← all three serve requests
- │ controller-mgr  leader│ │ controller-mgr standby│ │ controller-mgr standby│  ← only ONE works at a time
- │ scheduler      standby│ │ scheduler       leader│ │ scheduler      standby│  ← only ONE works at a time
- │ etcd member ──────────┼─┼─ etcd member ─────────┼─┼─ etcd member          │  ← one raft cluster, quorum 2 of 3
+ │ kube-apiserver  ACTIVE│ │ kube-apiserver  ACTIVE│ │ kube-apiserver  ACTIVE│
+ │ controller-mgr  leader│ │ controller-mgr standby│ │ controller-mgr standby│
+ │ scheduler      standby│ │ scheduler       leader│ │ scheduler      standby│
+ │ etcd member ──────────┼─┼─ etcd member ─────────┼─┼─ etcd member          │
  └───────────────────────┘ └───────────────────────┘ └───────────────────────┘
+
+ kube-apiserver: all three serve requests.
+ controller-manager, scheduler: only ONE works at a time (the leader).
+ etcd: one raft cluster, quorum 2 of 3.
 ```
 
 ### 8.1 How each piece knows about the others
@@ -856,3 +862,7 @@ After `systemctl start kubelet` inside the node, all five static Pods started ag
 | controller-manager / scheduler | 1 active, chosen by Lease | all 3 active (`--leader-elect=false`) |
 | Client address | load balancer | in the cluster: the VIP; from the host: one node's Docker port |
 | Node restart | kubelet restarts the static Pods | same, once the kubelet is running |
+
+## Related notes
+
+- [etcd-backup-and-upgrades.md](etcd-backup-and-upgrades.md): upgrading the static Pods with kubeadm.

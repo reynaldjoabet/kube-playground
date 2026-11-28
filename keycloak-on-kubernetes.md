@@ -666,8 +666,10 @@ When a Pod is deleted (rollout, scale-down, node drain), Kubernetes does two thi
    │
    └─ Auto
          create Job <name>-update-job:
-           initContainer "actual"  = OLD image/config:  kc.sh update-compatibility metadata --file /mnt/.../updates.json
-           container     "desired" = NEW image/config:  kc.sh update-compatibility check    --file /mnt/.../updates.json
+           initContainer "actual"  = OLD image/config:
+             kc.sh update-compatibility metadata --file /mnt/.../updates.json
+           container     "desired" = NEW image/config:
+             kc.sh update-compatibility check --file /mnt/.../updates.json
            (shared emptyDir, backoffLimit 0, TTL 30 min, activeDeadlineSeconds 300)
          exit code of "desired":
            0 → ROLLING   ("Compatible changes detected.")

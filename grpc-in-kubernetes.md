@@ -121,8 +121,9 @@ HTTP/2 sends everything in **frames**. Each frame starts with a 9-byte header:
 
 ```text
 ┌─────────────────┬─────────┬─────────┬───┬────────────────────────────────┐
-│ length (24 bit) │ type (8)│ flags(8)│ R │ stream identifier (31 bit)     │  then `length` bytes of payload
+│ length (24 bit) │ type (8)│ flags(8)│ R │ stream identifier (31 bit)     │
 └─────────────────┴─────────┴─────────┴───┴────────────────────────────────┘
+then `length` bytes of payload
 ```
 
 | Type | Name | Used for in gRPC |
@@ -223,7 +224,8 @@ On a long-lived API server → etcd connection, a whole request header block was
 
 ```text
 Header Block Fragment: 83 86 c6 c5 c4 c3 c2 c1 c0
-                       │  │  └──────────────────┴ dynamic table entries 62–68 (:path, :authority, content-type, …)
+                       │  │  └──────────────────┴ dynamic table entries 62–68
+                       │  │                       (:path, :authority, content-type, …)
                        │  └ static 6: :scheme: http
                        └ static 3: :method: POST
 ```
@@ -877,6 +879,7 @@ kubectl delete csidriver demo.csi.example.com
 - [azure-local-lab.md](azure-local-lab.md) §7: k3s, kine and `state.db`
 - [network-policy.md](network-policy.md) §6: the k3s lab cluster
 - [secrets-and-env.md](secrets-and-env.md): KMS-based encryption at rest, another gRPC plugin
+- [grpc-load-balancing.md](grpc-load-balancing.md): why a gRPC client behind a ClusterIP uses one Pod, and the fixes.
 
 ## Sources
 

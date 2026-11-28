@@ -1342,6 +1342,7 @@ The answer is OIDC Federation :
          | | SDK re-reads the new JWT and calls STS again (step 2).             |   |
          | | Zero downtime. Zero human intervention.                            |   |
          | +--------------------------------------------------------------------+   |
+```
 
 ```json
 {
@@ -1445,133 +1446,99 @@ Kubernetes has no built-in user database. The only native ways to authenticate a
 
 OIDC is the cleanest standards-based path, and it lets you say: "If Okta says you are jane@company.com and you belong to the platform-team group, I trust you." But it's not the only escape from certs and static tokens — webhook auth and authenticating proxies solve the same problem differently, and they're what most managed Kubernetes services use under the hood
 
-```sh
-┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
-│   EKS Pod Identity  │  │   Pod in EKS        │  │   AWS SDK           │  │   AWS STS           │  │  EKS OIDC Provider  │
-│   Mutating Webhook  │  │   (Application)     │  │   (inside Pod)      │  │   (us-east-1)       │  │  (public HTTPS URL  │
-│   (one-time setup)  │  │                     │  │                     │  │                     │  │  set up by EKS)     │
-└──────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘
-           │                        │                        │                        │                        │
-═══════════ POD ADMISSION (one-time, when pod is created) ════════════════════════════════════════════════════════
-           │                        │                        │                        │                        │
-           │ ServiceAccount has annotation:                  │                        │                        │
-           │   eks.amazonaws.com/role-arn=arn:...:role/MyApp │                        │                        │
-           │                        │                        │                        │                        │
-           │ Webhook MUTATES pod spec to inject:             │                        │                        │
-           │   - projected SA token volume                   │                        │                        │
-           │     audience: sts.amazonaws.com                 │                        │                        │
-           │     expirationSeconds: 86400 (default)          │                        │                        │
-           │   - env vars:                                   │                        │                        │
-           │       AWS_ROLE_ARN                              │                        │                        │
-           │       AWS_WEB_IDENTITY_TOKEN_FILE               │                        │                        │
-           │       AWS_STS_REGIONAL_ENDPOINTS=regional       │                        │                        │
-           │                        │                        │                        │                        │
-═══════════ POD STARTS ═══════════════════════════════════════════════════════════════════════════════════════════
-           │                        │                        │                        │                        │
-           │ Kubelet uses TokenRequest API to mint JWT,      │                        │                        │
-           │ writes it to:                                   │                        │                        │
-           │   /var/run/secrets/eks.amazonaws.com/serviceaccount/token                │                        │
-           │                        │                        │                        │                        │
-           │                        │ 1. app calls           │                        │                        │
-           │                        │    s3.ListBuckets()    │                        │                        │
-           │                        │───────────────────────>│                        │                        │
-           │                        │                        │                        │                        │
-           │                        │ (no creds yet — SDK    │                        │                        │
-           │                        │  uses WebIdentity-     │                        │                        │
-           │                        │  Provider chain;       │                        │                        │
-           │                        │  AWS_WEB_IDENTITY_     │                        │                        │
-           │                        │  TOKEN_FILE is set)    │                        │                        │
-           │                        │                        │                        │                        │
-           │                        │                        │ 2. AssumeRoleWith-     │                        │
-           │                        │                        │    WebIdentity(        │                        │
-           │                        │                        │      RoleArn=          │                        │
-           │                        │                        │        $AWS_ROLE_ARN,  │                        │
-           │                        │                        │      WebIdentityToken= │                        │
-           │                        │                        │        <JWT from file>)│                        │
-           │                        │                        │───────────────────────>│                        │
-           │                        │                        │                        │                        │
-           │                        │                        │                        │ ┌──── VERIFICATION ───┐│
-           │                        │                        │                        │ │  3. Decode JWT       ││
-           │                        │                        │                        │ │     header → kid     ││
-           │                        │                        │                        │ │     payload → iss    ││
-           │                        │                        │                        │ │                      ││
-           │                        │                        │                        │ │  4. JWKS CACHE?      ││
-           │                        │                        │                        │ │     YES → skip 5-8   ││
-           │                        │                        │                        │ │     NO  → fetch:     ││
-           │                        │                        │                        │ │  5. GET              ││
-           │                        │                        │                        │ │  /.well-known/       ││
-           │                        │                        │                        │ │  openid-config       ││
-           │                        │                        │                        │ │ ────────────────────>││
-           │                        │                        │                        │ │  6. { jwks_uri:.. }  ││
-           │                        │                        │                        │ │ <────────────────────││
-           │                        │                        │                        │ │  7. GET <jwks_uri>   ││
-           │                        │                        │                        │ │ ────────────────────>││
-           │                        │                        │                        │ │  8. { keys: [...] }  ││
-           │                        │                        │                        │ │ <────────────────────││
-           │                        │                        │                        │ │     (cached ~24h)    ││
-           │                        │                        │                        │ │                      ││
-           │                        │                        │                        │ │  9. Find key by kid  ││
-           │                        │                        │                        │ │ 10. Verify signature ││
-           │                        │                        │                        │ │ 11. Check exp/nbf    ││
-           │                        │                        │                        │ │ 12. Check aud ==     ││
-           │                        │                        │                        │ │     sts.amazonaws.com││
-           │                        │                        │                        │ └──────────────────────┘│
-           │                        │                        │                        │ ┌──── AUTHORIZATION ──┐│
-           │                        │                        │                        │ │ 13. Load IAM Role's  ││
-           │                        │                        │                        │ │     trust policy     ││
-           │                        │                        │                        │ │                      ││
-           │                        │                        │                        │ │ 14. Match conditions:││
-           │                        │                        │                        │ │   StringEquals:      ││
-           │                        │                        │                        │ │    oidc.eks.<region>.││
-           │                        │                        │                        │ │     amazonaws.com/   ││
-           │                        │                        │                        │ │     id/<ID>:sub      ││
-           │                        │                        │                        │ │      == system:      ││
-           │                        │                        │                        │ │       serviceaccount:││
-           │                        │                        │                        │ │       prod:my-app-sa ││
-           │                        │                        │                        │ │    .../aud           ││
-           │                        │                        │                        │ │      == sts.amazon.. ││
-           │                        │                        │                        │ └──────────────────────┘│
-           │                        │                        │                        │                        │
-           │                        │                        │ 15. Temporary creds:   │                        │
-           │                        │                        │   AccessKeyId          │                        │
-           │                        │                        │   SecretAccessKey      │                        │
-           │                        │                        │   SessionToken         │                        │
-           │                        │                        │   Expiration (~1h)     │                        │
-           │                        │                        │<───────────────────────│                        │
-           │                        │                        │                        │                        │
-           │                        │                        │  (SDK caches creds in memory until 5 min before expiry)
-           │                        │                        │                                                 │
-           │                        │                        │                ┌─────────────────────┐         │
-           │                        │                        │                │     AWS S3          │         │
-           │                        │                        │                └──────────┬──────────┘         │
-           │                        │                        │ 16. ListBuckets(Authorization: AWS4-HMAC-SHA256 │
-           │                        │                        │     signed with temporary creds)               │
-           │                        │                        │───────────────────────────────────────────────>│
-           │                        │                        │                                                 │
-           │                        │                        │ 17. { Buckets: [...] }                          │
-           │                        │                        │<───────────────────────────────────────────────│
-           │                        │                        │                                                 │
-           │                        │ 18. Result             │                                                 │
-           │                        │<───────────────────────│                                                 │
-           │                        │                        │                                                 │
-═══════════ FAILURE PATH (any check 9–14 fails) ══════════════════════════════════════════════════════════════
-           │                        │                        │                        │                        │
-           │                        │                        │ InvalidIdentityToken / │                        │
-           │                        │                        │ AccessDenied           │                        │
-           │                        │                        │<───────────────────────│                        │
-           │                        │ Error propagates       │                        │                        │
-           │                        │<───────────────────────│                        │                        │
-           │                        │                        │                        │                        │
-═══════════ ROTATION (continuous) ═════════════════════════════════════════════════════════════════════════════
-           │                        │                        │                        │                        │
-           │ Kubelet rotates JWT file at ~80% of TTL         │                        │                        │
-           │ (default TTL 24h → refreshes every ~19h)        │                        │                        │
-           │                        │                        │                        │                        │
-           │ AWS creds expire ~1h; SDK re-reads the JWT file │                        │                        │
-           │ and calls AssumeRoleWithWebIdentity again       │                        │                        │
-           │ (steps 2–15). No app code change needed.        │                        │                        │
-           │                        │                        │                        │                        │
-
+```text
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   IRSA webhook  │ │    Pod in EKS   │ │     AWS SDK     │ │     AWS STS     │ │ EKS OIDC issuer │
+│ (amazon-eks-pod-│ │  (application)  │ │ (inside the Pod)│ │    (regional)   │ │(public HTTPS URL│
+│identity-webhook)│ │                 │ │                 │ │                 │ │  set up by EKS) │
+└────────┬────────┘ └────────┬────────┘ └────────┬────────┘ └────────┬────────┘ └────────┬────────┘
+         │                   │                   │                   │                   │
+══ POD ADMISSION (once, when the Pod is created) ══════════════════════════════════════════════════
+         │                   │                   │                   │                   │
+         │ The ServiceAccount has the annotation │                   │                   │
+         │   eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/MyApp               │
+         │                   │                   │                   │                   │
+         │ The webhook mutates the Pod spec and adds:                │                   │
+         │   - a projected ServiceAccount token volume               │                   │
+         │       audience: sts.amazonaws.com, expirationSeconds: 86400 (default)         │
+         │   - env AWS_ROLE_ARN, AWS_WEB_IDENTITY_TOKEN_FILE,        │                   │
+         │     AWS_STS_REGIONAL_ENDPOINTS=regional                   │                   │
+         │                   │                   │                   │                   │
+══ POD STARTS ═════════════════════════════════════════════════════════════════════════════════════
+         │                   │                   │                   │                   │
+         │ The kubelet gets a JWT with the TokenRequest API and writes it to             │
+         │   /var/run/secrets/eks.amazonaws.com/serviceaccount/token │                   │
+         │                   │                   │                   │                   │
+         │                   │ 1. s3.ListBuckets()                   │                   │
+         │                   │──────────────────►│                   │                   │
+         │                   │                   │ no credentials yet: the SDK's web identity
+         │                   │                   │ provider sees AWS_WEB_IDENTITY_TOKEN_FILE
+         │                   │                   │                   │                   │
+         │                   │                   │ 2. AssumeRoleWithWebIdentity(         │
+         │                   │                   │      RoleArn=$AWS_ROLE_ARN,           │
+         │                   │                   │      WebIdentityToken=<JWT from the file>)
+         │                   │                   │──────────────────►│                   │
+         │                   │                   │                   │                   │
+         │                   │                   │                   │ VERIFICATION      │
+         │                   │                   │                   │ 3. decode the JWT │
+         │                   │                   │                   │    header: kid    │
+         │                   │                   │                   │    payload: iss   │
+         │                   │                   │                   │ 4. JWKS cached?   │
+         │                   │                   │                   │    yes: skip 5-8  │
+         │                   │                   │                   │ 5. GET <iss>/.well-known/
+         │                   │                   │                   │    openid-configuration
+         │                   │                   │                   │──────────────────►│
+         │                   │                   │                   │ 6. { jwks_uri }   │
+         │                   │                   │                   │◄──────────────────│
+         │                   │                   │                   │ 7. GET <jwks_uri> │
+         │                   │                   │                   │──────────────────►│
+         │                   │                   │                   │ 8. { keys: [..] } │
+         │                   │                   │                   │◄──────────────────│
+         │                   │                   │                   │    (cached ~24h)  │
+         │                   │                   │                   │                   │
+         │                   │                   │                   │ 9. key by kid     │
+         │                   │                   │                   │ 10. signature     │
+         │                   │                   │                   │ 11. exp, nbf      │
+         │                   │                   │                   │ 12. aud ==        │
+         │                   │                   │                   │     sts.amazonaws.com
+         │                   │                   │                   │                   │
+         │                   │                   │                   │ AUTHORIZATION     │
+         │                   │                   │                   │ 13. the role's    │
+         │                   │                   │                   │     trust policy: │
+         │                   │                   │                   │ 14. StringEquals  │
+         │                   │                   │                   │   <issuer>:sub == │
+         │                   │                   │                   │     system:serviceaccount:
+         │                   │                   │                   │     prod:my-app-sa│
+         │                   │                   │                   │   <issuer>:aud == │
+         │                   │                   │                   │     sts.amazonaws.com
+         │                   │                   │                   │                   │
+         │                   │                   │ 15. temporary credentials:            │
+         │                   │                   │     AccessKeyId, SecretAccessKey,     │
+         │                   │                   │     SessionToken, Expiration (~1h)    │
+         │                   │                   │◄──────────────────│                   │
+         │                   │                   │ cached in memory until 5 min          │
+         │                   │                   │ before they expire│                   │
+         │                   │                   │                   │                   │
+         │                   │                   │ 16. ListBuckets to S3, signed with    │
+         │                   │                   │     SigV4 and the temporary credentials
+         │                   │                   │ 17. { Buckets: [...] }                │
+         │                   │                   │                   │                   │
+         │                   │ 18. result        │                   │                   │
+         │                   │◄──────────────────│                   │                   │
+         │                   │                   │                   │                   │
+══ FAILURE (any of checks 9-14 fails) ═════════════════════════════════════════════════════════════
+         │                   │                   │                   │                   │
+         │                   │                   │ InvalidIdentityToken or AccessDenied  │
+         │                   │                   │◄──────────────────│                   │
+         │                   │ the error reaches the app             │                   │
+         │                   │◄──────────────────│                   │                   │
+         │                   │                   │                   │                   │
+══ ROTATION (continuous) ══════════════════════════════════════════════════════════════════════════
+         │                   │                   │                   │                   │
+         │ The kubelet rewrites the JWT file at 80% of its TTL (24h TTL: about every 19h).
+         │ The AWS credentials last about 1h. The SDK then reads the JWT file again      │
+         │ and repeats steps 2-15. The application doesn't change.   │                   │
+         │                   │                   │                   │                   │
 ```
 The two critical AWS-side resources that make this work:
 - `IAM OIDC Identity Provider` — a resource in your AWS account that says "trust JWTs from `oidc.eks.<region>.amazonaws.com/id/<cluster-id>` with these CA fingerprints"
@@ -2004,7 +1971,7 @@ Kubernetes has a `type` field on every Secret that controls validation:
 ### Production Secrets Architecture
 Here is what a mature production cluster's secrets landscape looks like:
 ```sh
-+------------------------------------------------------------------+
++-------------------------------------------------------------------+
 |                    EXTERNAL VAULTS                                |
 |  +------------------+  +------------------+  +------------------+ |
 |  | AWS Secrets Mgr  |  | HashiCorp Vault  |  | Let's Encrypt    | |
@@ -2012,7 +1979,7 @@ Here is what a mature production cluster's secrets landscape looks like:
 +-----------|----------------------|----------------------|---------+
             |                      |                      |
             v                      v                      v
-+------------------------------------------------------------------+
++-------------------------------------------------------------------+
 |                    OPERATORS (Controllers)                        |
 |  +------------------+  +------------------+  +------------------+ |
 |  | External Secrets |  | CSI Secret Store |  | cert-manager     | |
@@ -2021,24 +1988,24 @@ Here is what a mature production cluster's secrets landscape looks like:
 +-----------|----------------------|----------------------|---------+
             |                      |                      |
             v                      v                      v
-+------------------------------------------------------------------+
-|                    KUBERNETES SECRETS (etcd)                     |
-|                    Encrypted at rest (AES-256)                   |
-|                                                                  |
-|  +-------------+  +-------------+  +-------------+  +---------+  |
-|  | DB Creds    |  | API Keys    |  | TLS Certs   |  | Registry|  |
-|  | (Opaque)    |  | (Opaque)    |  | (tls type)  |  | (docker)|  |
-|  +------+------+  +------+------+  +------+------+  +----+----+  |
++-------------------------------------------------------------------+
+|                    KUBERNETES SECRETS (etcd)                      |
+|                    Encrypted at rest (AES-256)                    |
+|                                                                   |
+|  +-------------+  +-------------+  +-------------+  +---------+   |
+|  | DB Creds    |  | API Keys    |  | TLS Certs   |  | Registry|   |
+|  | (Opaque)    |  | (Opaque)    |  | (tls type)  |  | (docker)|   |
+|  +------+------+  +------+------+  +------+------+  +----+----+   |
 +---------|----------------|----------------|---------------|-------+
           |                |                |               |
           v                v                v               v
-+------------------------------------------------------------------+
-|                    PODS                                          |
-|  +------------------------------------------------------------+  |
-|  | env: DB_PASSWORD     | env: STRIPE_KEY  | volumeMount:     |  |
-|  |   (from secretKeyRef)|  (from secretRef)| /etc/tls (cert)  |  |
-|  +------------------------------------------------------------+  |
-+------------------------------------------------------------------+
++-------------------------------------------------------------------+
+|                    PODS                                           |
+|  +------------------------------------------------------------+   |
+|  | env: DB_PASSWORD     | env: STRIPE_KEY  | volumeMount:     |   |
+|  |   (from secretKeyRef)|  (from secretRef)| /etc/tls (cert)  |   |
+|  +------------------------------------------------------------+   |
++-------------------------------------------------------------------+
 ```
 CSI (Container Storage Interface) is for volumes only (persistent disks, NFS, etc.). But there is a specific project called the Secrets Store CSI Driver that cleverly uses the CSI plugin mechanism to mount secrets as volumes
 ### The Plugin Way: kubelogin (Most Common for Developers)
@@ -2195,8 +2162,8 @@ BAD: Node-level IAM Role
 |  Node (EC2 Instance with IAM Role: FullS3Access + FullRDSAccess) |
 |                                                                  |
 |  +------------------+  +------------------+  +------------------+|
-|  | Payment Pod      |  | Logging Pod      |  | Hacker's        | |
-|  | (needs S3)       |  | (needs CloudWatch)|  | compromised Pod| |
+|  | Payment Pod      |  | Logging Pod      |  | Hacker's         ||
+|  | (needs S3)       |  | (needs CW Logs)  |  | compromised Pod  ||
 |  +------------------+  +------------------+  +------------------+|
 |                                                                  |
 |  ALL THREE PODS get FullS3Access + FullRDSAccess                 |
@@ -2208,10 +2175,10 @@ GOOD: Pod-level IAM Role (IRSA / Pod Identity)
 |  Node (EC2 Instance with NO IAM Role)                            |
 |                                                                  |
 |  +------------------+  +------------------+  +------------------+|
-|  | Payment Pod      |  | Logging Pod      |  | Hacker's        | |
-|  | SA: payment-sa   |  | SA: logging-sa   |  | compromised Pod | |
-|  | Role: S3 only    |  | Role: CW only    |  | SA: default     | |
-|  +------------------+  +------------------+  | Role: NONE      | |
+|  | Payment Pod      |  | Logging Pod      |  | Hacker's         ||
+|  | SA: payment-sa   |  | SA: logging-sa   |  | compromised Pod  ||
+|  | Role: S3 only    |  | Role: CW only    |  | SA: default      ||
+|  +------------------+  +------------------+  | Role: NONE       ||
 |                                              +------------------+|
 |  Each Pod gets ONLY what it needs. The hacker gets nothing.      |
 +------------------------------------------------------------------+
@@ -2263,8 +2230,8 @@ metadata:
 +------------------------------------------------------------------+
 ```
 
-Instance Metadata: `http://169.254.169.254/latest/meta-data/iam/security-credential`
+Instance Metadata: `http://169.254.169.254/latest/meta-data/iam/security-credentials/`
 
 Pod Identity: `http://169.254.170.23/v1/credentials`
 
-![alt text](image-8.png)
+![EKS Pod Identity: the webhook injects environment variables into the Pod, the AWS SDK fetches credentials from the Pod Identity Agent at http://169.254.170.23/v1/credentials, then calls AWS services with the temporary credentials](image-8.png)

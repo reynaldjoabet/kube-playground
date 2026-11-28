@@ -90,17 +90,32 @@ WAF **can't** be attached directly to NLB, Global Accelerator, S3, Lambda functi
 **Diagram 2: where AWS WAF can and can't be attached**
 
 ```
-┌─ Global scope (us-east-1) ─────┐ ┌─ Regional scope (same region as the resource) ───────────────────┐ ┌─ Can't attach directly ──────────────────────────┐
-│                                │ │                                                                  │ │                                                  │
-│   CloudFront   AWS WAF (Global)│ │   ALB            API Gateway REST API   AppSync   Cognito user   │ │   NLB          Global Accelerator   S3           │
-│                                │ │                                                   pools          │ │                                                  │
-│                                │ │   App Runner     Verified Access        Amplify   AgentCore      │ │   Lambda       API Gateway          Lambda Web   │
-│  A web ACL associated with     │ │                                                   Gateway        │ │   function URL HTTP API             Functions    │
-│  CloudFront can't be used for  │ │                                                                  │ │                                                  │
-│  any other kind of resource    │ │  Body inspection limit: ALB / AppSync fixed at 8 KB;             │ │ → put CloudFront in front                        │
-│                                │ │  everything else 16 KB by default (max 64 KB)                    │ │   (S3, function URLs, Web Functions, HTTP API)   │
-│                                │ │                                                                  │ │ → attach to an ALB behind it (NLB, GA)           │
-└────────────────────────────────┘ └──────────────────────────────────────────────────────────────────┘ └──────────────────────────────────────────────────┘
+┌─ Global scope (us-east-1) ───────────────────────────────────────────────────┐
+│                                                                              │
+│   CloudFront   (with AWS WAF, Global)                                        │
+│                                                                              │
+│   A web ACL associated with CloudFront can't be used for any other kind      │
+│   of resource.                                                               │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌─ Regional scope (same region as the resource) ───────────────────────────────┐
+│                                                                              │
+│   ALB          API Gateway REST API   AppSync          Cognito user pools    │
+│   App Runner   Verified Access        Amplify          AgentCore Gateway     │
+│                                                                              │
+│   Body inspection limit: ALB and AppSync fixed at 8 KB; everything else      │
+│   16 KB by default (max 64 KB).                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌─ Can't attach directly ──────────────────────────────────────────────────────┐
+│                                                                              │
+│   NLB                    Global Accelerator     S3                           │
+│   Lambda function URL    API Gateway HTTP API   Lambda Web Functions         │
+│                                                                              │
+│   → put CloudFront in front (S3, function URLs, Web Functions, HTTP API)     │
+│   → attach to an ALB behind it (NLB, Global Accelerator)                     │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 How to read it:
@@ -128,10 +143,10 @@ Legend: thick arrow = high volume · ✕ = rejected · `[? … ?]` = optional.
  │      are dropped by CloudFront first          │           │
  │  Shield Standard                              │           │
  └───────────────────────────────────────────────┼───────────┘
-                                                 │ ✕ ──► ┌─ Rejected (403) ──────────────────────────┐
-                                                 │       │ no CloudFront request or data-transfer    │
-                 only requests that passed       │       │ charges for it                            │
-                 inspection                      ▼       └───────────────────────────────────────────┘
+                                                 │ ✕ ──► ┌─ Rejected (403) ────────────────────────┐
+                                                 │       │ no CloudFront request or data-transfer  │
+                 only requests that passed       │       │ charges for it                          │
+                 inspection                      ▼       └─────────────────────────────────────────┘
  ┌─ REGION (inside the VPC) ───────────────────────────────────────────────┐
  │  ALB  ───►  [? AWS WAF (Regional), if needed ?]  ───►  App              │
  └─────────────────────────────────────────────────────────────────────────┘
@@ -184,21 +199,28 @@ The Bot Control and Anti-DDoS managed rule groups recognise traffic coming throu
 The attacker can send their own `X-Forwarded-For`. CloudFront appends the connecting IP to the end of it.
 
 ```
- Attacker                    X-Forwarded-For: 203.0.113.10 (forged)        X-Forwarded-For: 203.0.113.10, 198.51.100.7
- (real IP: 198.51.100.7) ─────────────────────────────────────► CloudFront ──────────────────────────────────────────────► ALB
-                                                                    ┊         source IP: CloudFront's IP                    ┊
-                                                                    ┊                                                       ┊
-                                                              WAF (Global)                                            WAF (Regional)
+ Attacker (real IP 198.51.100.7)
+    │  X-Forwarded-For: 203.0.113.10                  (forged by the attacker)
+    ▼
+ CloudFront ── WAF (Global) inspects here
+    │  X-Forwarded-For: 203.0.113.10, 198.51.100.7    (CloudFront appends the connecting IP)
+    │  TCP source IP: CloudFront's IP
+    ▼
+ ALB ── WAF (Regional) inspects here
 
-  ┌─ Edge WAF ─────────────────────────────┐       ┌─ ALB's WAF (default) ────────────────────────────┐
-  │ source IP = 198.51.100.7               │       │ source IP = CloudFront's IP                      │
-  │ → IP, country and rate rules work      │       │ → everyone appears to come from the same range   │
-  │   correctly                            │       └──────────────────────────────────────────────────┘
-  └────────────────────────────────────────┘       ┌─ ALB's WAF (forwarded IP configured) ────────────┐
-                                                    │ first IP in the header = 203.0.113.10           │
-                                                    │ → judged on a value the attacker wrote           │
-                                                    │ if the header is missing, the rule isn't applied │
-                                                    └──────────────────────────────────────────────────┘
+ ┌─ Edge WAF ─────────────────────────────────────────┐
+ │ source IP = 198.51.100.7                           │
+ │ → IP, country and rate rules work correctly        │
+ └────────────────────────────────────────────────────┘
+ ┌─ ALB's WAF (default) ──────────────────────────────┐
+ │ source IP = CloudFront's IP                        │
+ │ → everyone appears to come from the same range     │
+ └────────────────────────────────────────────────────┘
+ ┌─ ALB's WAF (forwarded IP configured) ──────────────┐
+ │ first IP in the header = 203.0.113.10              │
+ │ → judged on a value the attacker wrote             │
+ │ if the header is missing, the rule isn't applied   │
+ └────────────────────────────────────────────────────┘
 ```
 
 - Put IP-set, geo and rate-based rules on the **edge (CloudFront) WAF**.
@@ -221,13 +243,13 @@ If WAF hits an internal error and can't decide in time, CloudFront usually **let
 The default behaviour when an internal WAF error delays the decision:
 
 ```
- Request ───► CloudFront ───► WAF error ───────────────► ┌─ Let through (leans to availability, fail-open) ─┐
-                                                          └──────────────────────────────────────────────────┘
+ Request ───► CloudFront ───► WAF error ──────► ┌─ Let through (leans to availability, fail-open) ─┐
+                                                └──────────────────────────────────────────────────┘
 
- Request ───► ALB, etc.  ───► WAF error ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄► ┌─ Reject (leans fail-closed) ─────────────────────┐
-                                                          │ ALB: changeable with waf.fail_open.enabled       │
-                                                          │ (default false)                                   │
-                                                          └──────────────────────────────────────────────────┘
+ Request ─► ALB, etc. ─► WAF error ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄► ┌─ Reject (leans fail-closed) ───────────────┐
+                                                     │ ALB: changeable with waf.fail_open.enabled │
+                                                     │ (default false)                            │
+                                                     └────────────────────────────────────────────┘
 ```
 
 The edge WAF prioritises **not stopping** traffic; the regional WAF prioritises **not letting it through**. Because there can be moments when the edge WAF can't decide, don't make WAF your only defence: keep authentication and input validation in the app.
@@ -251,10 +273,10 @@ Cheaper checks at the top remove attacks early; lower rules inspect content in d
     └┬──────────────────────────────────────────────────────┬┘     ├─ DDoS and reputation
      │ 5. Amazon IP reputation list                         │      │
      └┬────────────────────────────────────────────────────┬┘      ┘
-      │ 6. Global rate-based rule (higher threshold)        │       ┐
+      │ 6. Global rate-based rule (higher threshold)       │       ┐
       └┬──────────────────────────────────────────────────┬┘       ├─ judged by volume
-       │ 7. Targeted rate-based rules (API, URI, JA3/JA4,  │        │
-       │    … lower thresholds)                            │        │
+       │ 7. Targeted rate-based rules (API, URI, JA3/JA4, │        │
+       │    … lower thresholds)                           │        │
        └┬────────────────────────────────────────────────┬┘        ┘
         │ 8. Core rule set                               │         ┐
         └┬──────────────────────────────────────────────┬┘         ├─ inspect content (expensive)
@@ -272,14 +294,29 @@ For rate-based rules, the recommendation is one rule with a fairly high threshol
 Never switch straight to Block. Watch the effect in Count mode first, and go round this loop every time you add a rule.
 
 ```
- ┌─────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────┐   ┌──────────────┐
- │ 1 Count mode in │──►│ 2 Count mode on  │──►│ 3 Check logs and │──►│ 4 Add exceptions │──►│ 5 Switch to  │──►│ 6 Monitor    │
- │   staging       │   │   production     │   │   metrics for    │   │   (scope-down,   │   │   Block      │   │   with logs  │
- │                 │   │   traffic        │   │   false positives│   │   labels)        │   │              │   │              │
- └────────▲────────┘   └──────────────────┘   └────────▲─────────┘   └────────┬─────────┘   └──────────────┘   └──────┬───────┘
-          │                                            └── false positives ───┘                                      │
-          │                                                 remain                                                   │
-          └───────────────────────────────────── when you add a new rule ────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────┐
+ │ 1 Count mode in staging                     │◄──────────────────────────┐
+ └──────────────────────┬──────────────────────┘                           │
+                        ▼                                                  │
+ ┌─────────────────────────────────────────────┐                           │
+ │ 2 Count mode on production traffic          │                           │
+ └──────────────────────┬──────────────────────┘                           │
+                        ▼                                                  │
+ ┌─────────────────────────────────────────────┐                           │
+ │ 3 Check logs and metrics for false positives│◄────────┐                 │
+ └──────────────────────┬──────────────────────┘         │                 │
+                        ▼                                │ false positives │
+ ┌─────────────────────────────────────────────┐         │ remain          │
+ │ 4 Add exceptions (scope-down, labels)       │─────────┘                 │
+ └──────────────────────┬──────────────────────┘                           │
+                        ▼                                                  │
+ ┌─────────────────────────────────────────────┐                           │
+ │ 5 Switch to Block                           │                           │
+ └──────────────────────┬──────────────────────┘                           │
+                        ▼                                                  │
+ ┌─────────────────────────────────────────────┐   when you add a new rule │
+ │ 6 Monitor with logs                         │───────────────────────────┘
+ └─────────────────────────────────────────────┘
 ```
 
 What to watch:

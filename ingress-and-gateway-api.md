@@ -585,13 +585,15 @@ The same path, hop by hop. The LB doesn't point at nginx, and nginx doesn't send
    │  points at: every node, on the proxy Service's nodePort
    ▼
  node:32053 ── kube-proxy rule (kernel, no process) ── DNAT ──► proxy Pod IP:443
-   │                                                    (Service ingress-nginx-controller → its one/few Pods)
+   │
+   │                                           (Service ingress-nginx-controller → its one/few Pods)
    ▼
  nginx / HAProxy process, listening :443 in that Pod
    │  TLS ends, Host + path matched
    │
    │  rule says "Service api:80"  ──► used only as a LOOKUP, done earlier by the controller:
-   │                                   Service api → EndpointSlice → [10.244.120.79:8080, 10.244.120.80:8080]
+   │
+   │                          Service api → EndpointSlice → [10.244.120.79:8080, 10.244.120.80:8080]
    ▼
  api Pod 10.244.120.79:8080          ← a new connection, straight to the Pod
                                        (the api Service's ClusterIP and kube-proxy aren't used)
@@ -655,10 +657,12 @@ controller reads. In iptables terms, an Ingress request is two separate TCP conn
 kube-proxy's rules apply only to the first:
 
 ```text
-leg 1: client ──► node:NodePort ──[kube-proxy DNAT (+SNAT)]──► Traefik Pod :8000        (kernel, iptables)
+leg 1: client ──► node:NodePort ──[kube-proxy DNAT (+SNAT)]──► Traefik Pod :8000
+                                                                                  (kernel, iptables)
                                                                    │  ends TCP, reads Host/path,
                                                                    │  picks a backend Pod itself
-leg 2:                                       Traefik Pod ─────────► backend Pod IP :8080  (plain routing, no DNAT)
+leg 2:                                       Traefik Pod ─────────► backend Pod IP :8080
+                                                                            (plain routing, no DNAT)
 ```
 
 **Setup.** The three-node k3s cluster from [network-policy.md](network-policy.md) §6, with
@@ -763,7 +767,7 @@ the ingress controller. The app Services behind it (`wear-service`,
         │                                            │
         └──────────────┬─────────────────────────────┘
                        ▼
-          ingress controller Pods (nginx): TLS 🔒, host/path rules
+          ingress controller Pods (nginx): TLS termination, host/path rules
                        │
            ┌───────────┴────────────┐
            ▼                        ▼
@@ -804,7 +808,7 @@ helm install ingress-nginx   (or kubectl apply -f deploy.yaml)
           writes the IP into the Service's status              forward to every node : nodePort
                                                                          │
                                                                          ▼
-                                                     kube-proxy ─► nginx Pods (the controller's Deployment)
+                                                     kube-proxy ─► the controller's nginx Pods
 
  the controller itself:  watches Ingresses, Services, EndpointSlices, Secrets ...
                          configures nginx, writes ADDRESS into each Ingress
@@ -1170,8 +1174,8 @@ The same picture with what's really there:
                                 │          │  nodePort + kube-proxy
                                 │          ▼
                                 │   controller Pod (nginx)  ◄── reads the Ingress OBJECT (the rules)
-                                │      /foo ─► looks up 2 foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
-                                │      /bar ─► looks up 3 bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
+                                │    /foo ─► 2 foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
+                                │    /bar ─► 3 bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
                                 │          │
                                 │          └──► connects straight to a foo-app or bar-app Pod IP
 ```
@@ -1498,7 +1502,8 @@ local peer = balancer:balance()                      -- one Pod IP:port (round-r
 The whole chain:
 
 ```
- Ingress  /api → service {name: api, port: 80}       API server: a Service is required, but not checked to exist
+ Ingress  /api → service {name: api, port: 80}       API server: a Service is required,
+     │                                               but not checked to exist
      │
  controller (Go), from its informer cache:
      Service shop/api ── port 80 → targetPort ──┐
@@ -1667,7 +1672,8 @@ web-v1-5fdb5559d6-h4xrg
  balancer_by_lua → balancers["shop-api-80"]          (Half 2)
    │ round-robin → 10.244.120.121:8080
    ▼
- nginx connects to 10.244.120.121:8080              (the Pod; the api ClusterIP 10.102.111.187 isn't used)
+ nginx connects to 10.244.120.121:8080
+                                              (the Pod; the api ClusterIP 10.102.111.187 isn't used)
 ```
 
 (The `/api/hostname` request reached the api Pod. That Pod answers unknown paths with the time, because the path isn't rewritten. Routing is all this shows.)
@@ -2414,23 +2420,23 @@ The paste's line "by including annotations … you can create a custom Ingress c
 **What one Ingress becomes.** These are Google Cloud resources, created and owned by the controller:
 
 ```
- Ingress "shop"                                    Google Cloud (outside the cluster)
- ─────────────                                     ─────────────────────────────────
-                                                   forwarding rule     34.120.0.10:443   ← the IP in ADDRESS
-                                                        │
- spec.tls (Secret) ─────────────────────────────►  target HTTPS proxy  (holds the certificate)
-                                                        │
- rules:                                                 ▼
-   host shop.example.com ───────────────────────►  URL map
-     /api → Service api:80 ───────────────────────►   host rule  shop.example.com
-     /    → Service web:80                              path matcher  /api/* → backend service A
-                                                                      /*     → backend service B
-                                                        │
- Service api (port 80) ─────────────────────────►  backend service A ── health check A (from api's readinessProbe)
- Service web (port 80) ─────────────────────────►  backend service B ── health check B (from web's readinessProbe)
-                                                        │
-                                                        ▼
-                                                   backends: instance groups (nodes)  OR  NEGs (Pod IPs)
+ Ingress "shop"                      Google Cloud (outside the cluster)
+ ─────────────                       ─────────────────────────────────
+                                     forwarding rule     34.120.0.10:443   ← the IP in ADDRESS
+                                          │
+ spec.tls (Secret) ───────────────►  target HTTPS proxy  (holds the certificate)
+                                          │
+ rules:                                   ▼
+   host shop.example.com ─────────►  URL map
+     /api → Service api:80 ─────────►   host rule  shop.example.com
+     /    → Service web:80                path matcher  /api/* → backend service A
+                                                        /*     → backend service B
+                                          │
+ Service api (port 80) ───────────►  backend service A ── health check A (from api's readinessProbe)
+ Service web (port 80) ───────────►  backend service B ── health check B (from web's readinessProbe)
+                                          │
+                                          ▼
+                                     backends: instance groups (nodes)  OR  NEGs (Pod IPs)
 ```
 
 Here's how it maps:
@@ -2932,15 +2938,16 @@ Ingress needs only the second, because its kinds are built in (§2.1, "Helm or h
 
 ```text
                          ONE per cluster, the same for everyone
+                   (kubernetes-sigs/gateway-api: standard- or experimental-install.yaml)
                     ┌─────────────────────────────────────────────────┐
- 1st install        │  Gateway API CRDs  (gateway.networking.k8s.io)  │   from kubernetes-sigs/gateway-api
-                    │  Gateway, GatewayClass, HTTPRoute, GRPCRoute,   │   standard-install.yaml or
-                    │  ReferenceGrant, BackendTLSPolicy, …            │   experimental-install.yaml
+ 1st install        │  Gateway API CRDs  (gateway.networking.k8s.io)  │
+                    │  Gateway, GatewayClass, HTTPRoute, GRPCRoute,   │
+                    │  ReferenceGrant, BackendTLSPolicy, …            │
                     └─────────────────────────────────────────────────┘
                           ▲                ▲                 ▲
                    all read the same kinds, all claim their own GatewayClass
                           │                │                 │
- 2nd install      Envoy Gateway        Traefik             HUG            ← differs per implementation
+ 2nd install      Envoy Gateway        Traefik             HUG     ← differs per implementation
                   + its own CRDs       + its own CRDs      + its own CRDs
                   (gateway.envoyproxy.io: EnvoyProxy,   (traefik.io: …)   (HAProxy's)
                    BackendTrafficPolicy, SecurityPolicy…)
@@ -2985,21 +2992,21 @@ whose class names it. In short:
 
 ```text
                          shared Gateway API CRDs (one bundle)
-                                       │
-          ┌────────────────────────────┼─────────────────────────────┐
-          ▼                            ▼                             ▼
- GatewayClass envoy           GatewayClass traefik          GatewayClass gke-l7-global-external-managed
- controllerName:              controllerName:               controllerName:
- gateway.envoyproxy.io/       traefik.io/                   networking.gke.io/gateway
- gatewayclass-controller      gateway-controller
-          │                            │                             │
- claimed by Envoy Gateway     claimed by Traefik            claimed by GKE's controller
-          │                            │                             │
- Gateway public               Gateway internal              Gateway edge
- (gatewayClassName: envoy)    (gatewayClassName: traefik)   (gatewayClassName: gke-l7-…)
-          │                            │                             │
- its own Envoy Pods + LB      a listener on Traefik's       a Google Cloud LB
- (one IP per Gateway)         shared Pods (Traefik's IP)    (Google's IP)
+                                    │
+          ┌─────────────────────────┼─────────────────────────────┐
+          ▼                         ▼                             ▼
+ GatewayClass envoy        GatewayClass traefik          GatewayClass gke-l7-global-external-managed
+ controllerName:           controllerName:               controllerName:
+ gateway.envoyproxy.io/    traefik.io/                   networking.gke.io/gateway
+ gatewayclass-controller   gateway-controller
+          │                         │                             │
+ claimed by Envoy Gateway  claimed by Traefik            claimed by GKE's controller
+          │                         │                             │
+ Gateway public            Gateway internal              Gateway edge
+ (gatewayClassName: envoy) (gatewayClassName: traefik)   (gatewayClassName: gke-l7-…)
+          │                         │                             │
+ its own Envoy Pods + LB   a listener on Traefik's       a Google Cloud LB
+ (one IP per Gateway)      shared Pods (Traefik's IP)    (Google's IP)
 ```
 
 How they avoid stepping on each other:
@@ -3225,14 +3232,13 @@ GatewayClass **kind** (one CRD, from the shared bundle in §3.2), but you can
 create as many GatewayClass **objects** as you need:
 
 ```text
- the KIND  (1 CRD, from the shared bundle)                     GatewayClass
-                                                                    │
- the OBJECTS (as many as you create)     ┌─────────────┬───────────┼──────────────┬──────────────────┐
-                                         ▼             ▼           ▼              ▼                  ▼
-                                       envoy     envoy-public  envoy-internal   traefik             hug
-                                         │             │           │              │                  │
- controllerName              gateway.envoyproxy.io/gatewayclass-controller   traefik.io/        gate.haproxy.org/
-                             (one controller, three classes)                 gateway-controller  hug
+ the KIND       GatewayClass   (1 CRD, from the shared bundle)
+                     │                   controllerName
+ the OBJECTS         ├─► envoy           ┐
+ (as many as         ├─► envoy-public    ├─ gateway.envoyproxy.io/gatewayclass-controller
+  you create)        ├─► envoy-internal  ┘  (one controller, three classes)
+                     ├─► traefik         ── traefik.io/gateway-controller
+                     └─► hug             ── gate.haproxy.org/hug
 ```
 
 Each part has to be stated:
@@ -3545,7 +3551,8 @@ config, run in Docker"), but no HUG controller generated them.
 ##### The three layers, with HUG
 
 ```text
-LAYER 1  Gateway API CRDs (shared)          Gateway, GatewayClass, HTTPRoute, …     ← from kubernetes-sigs/gateway-api
+LAYER 1  Gateway API CRDs (shared)          Gateway, GatewayClass, HTTPRoute, …
+                                                                  ← from kubernetes-sigs/gateway-api
             │
 LAYER 2  HUG install (shared by every HUG Gateway)
             Deployment hug   ── one container: the HUG controller + HAProxy
@@ -3641,8 +3648,8 @@ The name chain, as HAProxy sees it:
 ```text
 HTTPRoute.parentRefs: infra/public, sectionName https
       └─► Gateway infra/public, listener https  =  frontend infra_public_https
-             └─► gatewayClassName: hug  ──►  GatewayClass hug  ──►  controllerName gate.haproxy.org/hug
-                                                                      └─► the HUG controller writes it all
+             └─► gatewayClassName: hug ──► GatewayClass hug ──► controllerName gate.haproxy.org/hug
+                                                                └─► the HUG controller writes it all
 ```
 
 ##### Telling instances apart, with HUG
@@ -4163,16 +4170,17 @@ apps behind them, live in their own namespaces:
 ```text
 namespace infra
 └── Gateway demo          ← ONE object, ONE namespace, ONE proxy, ONE IP
-      ├── listener same              (same.example.com)        admits routes from: infra only
-      ├── listener all               (all.example.com)         admits routes from: every namespace
-      ├── listener public            (public.example.com)      admits routes from: namespaces labelled gateway-access=public
-      ├── listener only-shop         (shop-only.example.com)   admits routes from: shop
+      ├── listener same       (same.example.com)       admits routes from: infra only
+      ├── listener all        (all.example.com)        admits routes from: every namespace
+      ├── listener public     (public.example.com)     admits routes from: namespaces labelled
+      │                                                                    gateway-access=public
+      ├── listener only-shop  (shop-only.example.com)  admits routes from: shop
       └── …
 
-namespace shop                         namespace search                    namespace infra
-├── HTTPRoute (parentRef: demo,        ├── HTTPRoute (parentRef: demo,     ├── HTTPRoute (parentRef: demo,
-│   sectionName: only-shop)            │   sectionName: public)            │   sectionName: same)
-└── Service web → Pods                 └── Service web → Pods              └── Service …
+namespace shop                     namespace search                  namespace infra
+├── HTTPRoute (parentRef: demo,    ├── HTTPRoute (parentRef: demo,   ├── HTTPRoute (parentRef: demo,
+│   sectionName: only-shop)        │   sectionName: public)          │   sectionName: same)
+└── Service web → Pods             └── Service web → Pods            └── Service …
 ```
 
 To give teams listeners of their own, use separate Gateways, or a
@@ -4192,7 +4200,8 @@ same         :80  same.example.com       ┐
 all          :80  all.example.com        │
 public       :80  public.example.com     ├──►   0.0.0.0:10080   (one socket for port 80)
 only-shop    :80  shop-only.example.com  │        reads the Host header
-…            :80  …                      ┘        → that listener's routes (a "virtual host" per hostname)
+…            :80  …                      ┘
+                                            → that listener's routes (a "virtual host" per hostname)
 ```
 
 How it looks in each implementation:
@@ -4611,7 +4620,7 @@ client ──(1) http://www.example.com
                                    │ (4) path / header / method / query matches → one rule
                                    │ (5) filters: add/remove headers, rewrite, redirect, mirror
                                    ▼
-                              (6) backendRefs → Service → EndpointSlice → a Pod IP (weights if several)
+                           (6) backendRefs → Service → EndpointSlice → a Pod IP (weights if several)
 ```
 
 A common picture of the same flow:
@@ -4704,19 +4713,24 @@ Draw the Ingress picture from §2.1 for Gateway API, and the single "Ingress" bo
 ```
                                    │ cluster
                                    │
- curl ─► cloud LB (provider) ──────┼─► 1 envoy-infra-public-8d55c10f   (LoadBalancer, created by Envoy Gateway)
+ curl ─► cloud LB (provider) ──────┼─► 1 envoy-infra-public-8d55c10f
+                                   │       type LoadBalancer, created by Envoy Gateway
          ADDRESS of the Gateway    │       selector: owning-gateway-name=public → Envoy Pods
                                    │          │  nodePort 32053 + kube-proxy
                                    │          ▼
                                    │   Envoy Pod  ◄── xDS ── envoy-gateway (controller)
-                                   │      │                     reads: GatewayClass envoy     (infra provider)
-                                   │      │                            Gateway public         (platform team: ports, TLS, who may attach)
-                                   │      │                            HTTPRoute shop         (app team: hosts, paths, weights)
+                                   │      │                     reads: GatewayClass envoy   (1)
+                                   │      │                            Gateway public       (2)
+                                   │      │                            HTTPRoute shop       (3)
                                    │      │
-                                   │      ├─ /foo ─► looks up 2 foo-service (ClusterIP) → EndpointSlice → foo Pod IPs
-                                   │      └─ /bar ─► looks up 3 bar-service (ClusterIP) → EndpointSlice → bar Pod IPs
+                                   │      ├─ /foo ─► 2 foo-service → EndpointSlice → foo Pod IPs
+                                   │      └─ /bar ─► 3 bar-service → EndpointSlice → bar Pod IPs
                                    │      │
                                    │      └──► connects straight to a foo-app or bar-app Pod IP
+
+ (1) written by the infra provider
+ (2) written by the platform team: ports, TLS, who may attach
+ (3) written by the app team: hosts, paths, weights
 ```
 
 **How many Services?** The same three as the Ingress picture, plus one for the control plane:
@@ -4817,7 +4831,8 @@ Envoy's access log for the same request (fields trimmed):
 The whole path, with who touches each hop:
 
 ```
- curl ─► 192.168.49.2:32053                                 (on a cloud: LB IP:443 → node:32053 first)
+ curl ─► 192.168.49.2:32053
+                                                          (on a cloud: LB IP:443 → node:32053 first)
    │  kernel, kube-proxy's rules for Service 1  — no process involved
    │  DNAT → 10.244.120.112:10443, SNAT → 10.244.120.64
    ▼
@@ -4875,12 +4890,14 @@ So the xDS connection seen in watching-the-api-server.md §8.2 (`10.109.166.162:
 **The chain inside Envoy, from the config dump** (trimmed):
 
 ```
- LISTENER  infra/public/https   0.0.0.0:10443                    ← Gateway listener "https" (port 443 → 10443)
+ LISTENER  infra/public/https   0.0.0.0:10443
+                                                       ← Gateway listener "https" (port 443 → 10443)
    filter chain  infra/public/https   SNI ['*.example.com']       ← TLS ends here, cert from SDS
      http_connection_manager → rds route_config_name: infra/public/https  (via ads)
         │
  ROUTE CONFIG  infra/public/https
-   virtual_host infra/public/https/shop_example_com   domains ['shop.example.com']    ← one per hostname
+   virtual_host infra/public/https/shop_example_com   domains ['shop.example.com']
+                                                                                  ← one per hostname
      route httproute/shop/shop/rule/0/match/0/shop_example_com
            match {path_separated_prefix: /api}
            regex_rewrite ^/api\/* → /                                ← the URLRewrite filter
@@ -4992,10 +5009,10 @@ header filters below were run on Envoy Gateway (§3.9, object 6).
  Ingress (§2.1)                              Gateway API (here)
 
  one object, one owner:                      split by owner (§3.1):
-   listener + TLS + hosts + paths              GatewayClass   which controller          (provider)
-                                               Gateway        listener, TLS, who may    (platform team)
+   listener + TLS + hosts + paths              GatewayClass   which controller       (provider)
+                                               Gateway        listener, TLS, who may (platform team)
                                                               attach
-                                               HTTPRoute      hosts, paths, backends    (app teams)
+                                               HTTPRoute      hosts, paths, backends (app teams)
               │                                          │
               └──────────────► the same proxy table ◄────┘
                     listener → rules (Host + path) → pools of Pod IPs

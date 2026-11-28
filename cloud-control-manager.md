@@ -1279,14 +1279,15 @@ The two clouds split an LB into different parts. That's why the code looks diffe
  HETZNER                                         SCALEWAY
  Load Balancer  (labels: hcloud-ccm/service-uid) Load Balancer  (name: SCW_CCM_PREFIX + Service UID;
   │  type lb11/21/31, location, algorithm         │   Service gets annotation scw-loadbalancer-id)
-  │  public IPv4/IPv6, optional private network   │  IPs (ephemeral or reserved), optional private networks
+  │  public IPv4/IPv6, optional private network   │  IPs (ephemeral or reserved), private networks
   │                                               │
   ├─ "services"  ← one per Service port           ├─ frontends  ← one per Service port
-  │    listen_port      80                        │    inbound_port 80, ACLs (loadBalancerSourceRanges)
+  │    listen_port      80                        │    inbound_port 80
+  │                                               │    ACLs from loadBalancerSourceRanges
   │    destination_port 31845  (the nodePort)     │      │ points at ↓
   │    protocol tcp | http | https (+certs)       ├─ backends   ← one per Service port
   │    health check → 31845                       │    forward_port 31845 (the nodePort)
-  │                                               │    pool: [node IP, node IP, ...]   ← targets live HERE
+  │                                               │    pool: [node IPs]   ← targets live HERE
   └─ targets     ← shared by all services         │    health check → 31845
        server by ID (Cloud) / IP (Robot)          │
        use_private_ip true|false                  └─ (no LB-wide target list)
@@ -1388,7 +1389,8 @@ So a cluster that outgrows its LB type, for example 25 targets on `lb11`, keeps 
 ```
 1. nodesInitialized()          wait until nodes have the IPs it needs (internal or external)
 2. attachPrivateNetworks()
-3. desired = serviceToLB(...)  per TCP port: frontend{inbound 80} + backend{pool node IPs, forward 31845}
+3. desired = serviceToLB(...)
+                          per TCP port: frontend{inbound 80} + backend{pool node IPs, forward 31845}
                                (non-TCP ports skipped: "skipping unsupported protocol")
 4. diff (compareFrontends / compareBackends), only objects whose name starts with the Service UID
 5. delete stale frontends      ─┐

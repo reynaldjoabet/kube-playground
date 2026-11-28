@@ -851,17 +851,17 @@ tenant.
 **Two permission systems, and a service principal can hold both.** "IAM" usually means the first:
 
 ```
-                       ┌─ Azure RBAC: "Access control (IAM)" on a management group, subscription,
-                       │   resource group or resource
-                       │     role assignment = principalId (SP object id) + role + scope
-                       │     → ARM actions ("Contributor") and data actions ("Key Vault Secrets User")
-service principal ─────┤
-                       ├─ Entra API permissions: on the app registration, granted by admin consent
-                       │     application permissions (app roles, e.g. Graph User.Read.All) → roles claim
-                       │     delegated permissions (e.g. User.Read)                        → scp claim
-                       │
-                       └─ Entra directory roles: e.g. "Application Administrator"
-                             → manage Entra itself (users, apps), not Azure resources
+                   ┌─ Azure RBAC: "Access control (IAM)" on a management group, subscription,
+                   │   resource group or resource
+                   │     role assignment = principalId (SP object id) + role + scope
+                   │     → ARM actions ("Contributor") and data actions ("Key Vault Secrets User")
+service principal ─┤
+                   ├─ Entra API permissions: on the app registration, granted by admin consent
+                   │     application permissions (app roles, e.g. Graph User.Read.All) → roles claim
+                   │     delegated permissions (e.g. User.Read)                        → scp claim
+                   │
+                   └─ Entra directory roles: e.g. "Application Administrator"
+                         → manage Entra itself (users, apps), not Azure resources
 ```
 
 So "can this app read that Key Vault secret?" is an **Azure RBAC** question, while "can this app
@@ -976,7 +976,7 @@ directory objects that can sign in
 └── service principals                 (software)
     ├── Application                    from an app registration
     │   ├── your own apps              you created the app registration in this tenant
-    │   ├── other publishers' apps     a multi-tenant app (SaaS, a partner's API) consented in this tenant
+    │   ├── other publishers' apps     multi-tenant (SaaS, partner API), consented in this tenant
     │   └── Microsoft's own apps       Microsoft Graph, Azure Portal, Azure CLI, … (in every tenant)
     ├── ManagedIdentity                created by Azure for a resource; Azure holds the credential
     │   ├── system-assigned            tied to one resource, deleted with it
@@ -1427,12 +1427,16 @@ federation is set up correctly.
 
 ```
 azurerm provider ──POST /{tenant}/oauth2/v2.0/token──► TokenEndpoint
-  grant_type=client_credentials                          ├─ ClientAuthenticator (permissive by default)
-  scope=https://management.azure.com/.default            ├─ ClientCredentialsGrant: aud = management.azure.com, idtyp=app
-                                                         └─ TokenIssuer: RS256 JWT signed with SigningKeyProvider's key
+  grant_type=client_credentials                          ├─ ClientAuthenticator
+                                                         │    (permissive by default)
+  scope=https://management.azure.com/.default            ├─ ClientCredentialsGrant:
+                                                         │    aud = management.azure.com, idtyp=app
+                                                         ├─ TokenIssuer: RS256 JWT signed with
+                                                         │    SigningKeyProvider's key
          ◄──────────── access_token ──────────────────────┘
 azurerm ──PUT /subscriptions/…  Authorization: Bearer …──► ARM handler
-                                                         └─ (strict only) TokenValidator: kid, signature, exp, iss↔tid, aud
+                                                         └─ (strict only) TokenValidator:
+                                                              kid, signature, exp, iss↔tid, aud
 ```
 
 Read from the source at commit `6e52c73` (2026-11-14). Every service was then tried against a running

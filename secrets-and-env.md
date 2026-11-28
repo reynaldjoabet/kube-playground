@@ -2120,7 +2120,7 @@ Calling a remote key service for every write would be slow, and handing the mast
  DEK (data encryption key)     encrypts the Secret. Local, used often.
  KEK (key encryption key)      encrypts the DEK. Lives in the KMS and never leaves it.
 
- Write:   Secret ──encrypt with DEK──► ciphertext ─────────────┐
+ Write:   Secret ──encrypt with DEK──► ciphertext ──────────────┐
           DEK    ──send to KMS, encrypt with KEK──► wrapped DEK ┴─► stored together in etcd
 
  Read:    wrapped DEK ──send to KMS──► DEK ──decrypt──► Secret
@@ -2834,13 +2834,15 @@ Use the version without `secretObjects` unless something can only read a Kuberne
 `secretObjects` is an instruction to the **CSI driver**, not to Kubernetes itself. The driver then creates the Secret through the Kubernetes API, the same way `kubectl create secret` would.
 
 ```text
-SecretProviderClass.secretObjects   ← you declare "I want a Secret named db-creds-k8s with these keys"
+SecretProviderClass.secretObjects
+                                  ← you declare "I want a Secret named db-creds-k8s with these keys"
         │
         ▼
 CSI driver Pod (sync controller, a DaemonSet Pod on the node)
   reads the mounted files (db-username, db-password)
         │
-        │  POST /api/v1/namespaces/<ns>/secrets      ← an ordinary API call, as the driver's ServiceAccount
+        │  POST /api/v1/namespaces/<ns>/secrets
+        │                                     ← an ordinary API call, as the driver's ServiceAccount
         ▼
 API server  ── checks RBAC: can secrets-store-csi-driver create Secrets?
         │        (only if the chart was installed with syncSecret.enabled=true)
@@ -3452,10 +3454,10 @@ The same links in more detail:
   └─ volumes[].csi
        ├─ driver: secrets-store.csi.k8s.io ──────► LINK 1: kubelet finds the CSI driver by this name
        └─ volumeAttributes:
-            secretProviderClass: db-secrets ─────► LINK 2: driver gets SPC by name, in the POD's namespace
+            secretProviderClass: db-secrets ─────► LINK 2: SPC by name, in the Pod's namespace
                                                         │
                                   SecretProviderClass "db-secrets"
-                                    provider: aws ─────► LINK 3: driver opens the socket <provider>.sock
+                                    provider: aws ─────► LINK 3: driver opens <provider>.sock
                                                         │
                        /etc/kubernetes/secrets-store-csi-providers/aws.sock
                                                         │
@@ -3603,25 +3605,30 @@ Pod volume:  csi.driver = secrets-store.csi.k8s.io          (always this)
 SecretProviderClass my-spc:  provider: aws | azure | gcp | vault
                  │
                  ▼  driver tries <dir>/<provider>.sock in each of its two node directories:
-                    --provider-volume                   = /var/run/secrets-store-csi-providers        (default)
-                    --additional-provider-volume-paths  = /etc/kubernetes/secrets-store-csi-providers
+                --provider-volume                   = /var/run/secrets-store-csi-providers (default)
+                --additional-provider-volume-paths  = /etc/kubernetes/secrets-store-csi-providers
 
  secrets-store CSI driver (DaemonSet Pod on the node)
    │
-   ├─gRPC over unix:///var/run/secrets-store-csi-providers/aws.sock ───────► AWS provider ──network──► Secrets Manager / Parameter Store
-   │                                          (provider flag --provider-volume=…, writes <dir>/aws.sock)
+   ├─gRPC over unix:///var/run/secrets-store-csi-providers/aws.sock
+   │    ─► AWS provider ──network──► Secrets Manager / Parameter Store
+   │       (provider flag --provider-volume=…, writes <dir>/aws.sock)
    │
-   ├─gRPC over unix:///var/run/secrets-store-csi-providers/azure.sock ─────► Azure provider ─network──► Key Vault
-   │                                          (provider sees it as unix:///provider/azure.sock: hostPath mounted at /provider)
+   ├─gRPC over unix:///var/run/secrets-store-csi-providers/azure.sock
+   │    ─► Azure provider ──network──► Key Vault
+   │       (provider sees it as unix:///provider/azure.sock: hostPath mounted at /provider)
    │
-   ├─gRPC over unix:///etc/kubernetes/secrets-store-csi-providers/gcp.sock ► GCP provider ──network──► Secret Manager
-   │                                          (provider env TARGET_DIR=/etc/kubernetes/…, PROVIDER_NAME default "gcp")
+   ├─gRPC over unix:///etc/kubernetes/secrets-store-csi-providers/gcp.sock
+   │    ─► GCP provider ──network──► Secret Manager
+   │       (provider env TARGET_DIR=/etc/kubernetes/…, PROVIDER_NAME default "gcp")
    │
-   └─gRPC over unix:///var/run/secrets-store-csi-providers/vault.sock ─────► Vault provider ─network──► Vault
-                                              (provider sees it as /provider/vault.sock: hostPath mounted at /provider)
+   └─gRPC over unix:///var/run/secrets-store-csi-providers/vault.sock
+        ─► Vault provider ──network──► Vault
+           (provider sees it as /provider/vault.sock: hostPath mounted at /provider)
 
- All on the same node. No TLS on the socket: "only secured through filesystem ACLs" (driver comment).
- The provider Pods hold the cloud credentials / workload identity; the driver never talks to the cloud.
+ All on the same node. No TLS on the socket (driver comment: "only secured through
+ filesystem ACLs"). The provider Pods hold the cloud credentials / workload identity;
+ the driver never talks to the cloud.
 ```
 
 **(code)** Where each path comes from:
@@ -3845,13 +3852,15 @@ The **provider never writes to the Pod's filesystem**. It returns file contents 
 ```
  0. INSTALL
     ebs-csi-controller Deployment (1+ replicas, anywhere)
-      ├─ ebs-plugin        listens on unix:///var/lib/csi/sockets/pluginproxy/csi.sock   (emptyDir, shared in the Pod)
+      ├─ ebs-plugin        listens on unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+      │                    (emptyDir, shared in the Pod)
       ├─ csi-provisioner ─┐
       ├─ csi-attacher    ─┼─ sidecars: watch Kubernetes objects, call ebs-plugin over that socket
       ├─ csi-resizer     ─┤
       └─ csi-snapshotter ─┘
     ebs-csi-node DaemonSet (every node)
-      ├─ ebs-plugin              listens on /csi/csi.sock = node: /var/lib/kubelet/plugins/ebs.csi.aws.com/csi.sock
+      ├─ ebs-plugin              listens on /csi/csi.sock
+      │                          = node: /var/lib/kubelet/plugins/ebs.csi.aws.com/csi.sock
       └─ node-driver-registrar   registers that path with the kubelet (via plugins_registry/)
     CSIDriver object: attachRequired: true, podInfoOnMount: false
 
@@ -3901,19 +3910,19 @@ Three gRPC conversations happen on the node, each over its own Unix socket. In e
 
 ```
                         node N (all of this is on one machine)
- ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
- │                                                                                                        │
- │  kubelet ──── 1 registration────► /var/lib/kubelet/plugins_registry/secrets-store.csi.k8s.io-reg.sock  │
- │    │           (kubelet dials)        ▲ listens: node-driver-registrar (sidecar in the driver Pod)     │
- │    │                                                                                                   │
- │    └───────── 2 CSI────────────────► /var/lib/kubelet/plugins/csi-secrets-store/csi.sock               │
- │                (kubelet dials)        ▲ listens: secrets-store container (the driver)                  │
- │                                       │   the container sees it as /csi/csi.sock                       │
- │                                       │                                                                │
- │  driver ───── 3 provider─────────► /var/run/secrets-store-csi-providers/aws.sock                       │
- │                (driver dials)         ▲ listens: AWS provider Pod                                      │
- │                                                                                                        │
- └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │                                                                                                 │
+ │ kubelet ─ 1 registration──► /var/lib/kubelet/plugins_registry/secrets-store.csi.k8s.io-reg.sock │
+ │   │        (kubelet dials)      ▲ listens: node-driver-registrar (sidecar in the driver Pod)    │
+ │   │                                                                                             │
+ │   └────── 2 CSI──────────────► /var/lib/kubelet/plugins/csi-secrets-store/csi.sock              │
+ │            (kubelet dials)      ▲ listens: secrets-store container (the driver)                 │
+ │                                 │   the container sees it as /csi/csi.sock                      │
+ │                                 │                                                               │
+ │ driver ── 3 provider───────► /var/run/secrets-store-csi-providers/aws.sock                      │
+ │            (driver dials)       ▲ listens: AWS provider Pod                                     │
+ │                                                                                                 │
+ └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 | # | Socket on the node | Server (listens) | Client (dials) | gRPC service | Calls |
@@ -4577,9 +4586,9 @@ Rotation is off by default and marked alpha. There's no rotation controller any 
  CSIDriver requiresRepublish: true
       └─► kubelet calls NodePublishVolume again, periodically, for running Pods
 
- driver flag --enable-secret-rotation=false  (default) ─► already mounted? skip
- driver flag --enable-secret-rotation=true             ─► due? fetch from the provider again
-                                                          (due = --rotation-poll-interval, default 2m)
+ driver flag -enable-secret-rotation=false (default) ─► already mounted? skip
+ driver flag -enable-secret-rotation=true            ─► due? fetch from the provider again
+                                                        (due = --rotation-poll-interval, default 2m)
 ```
 
 From `nodeserver.go`:
